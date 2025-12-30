@@ -7,6 +7,8 @@ from app.models.order import Order, OrderStatus
 from app.models.order_item import OrderItem
 from app.models.payment import Payment, PaymentMethod, PaymentStatus
 from app.models.inventory_log import InventoryLog, InventoryAction
+from app.models.coupon import Coupon  # ← ADD THIS
+
 
 __all__ = [
     "User",
@@ -22,4 +24,5 @@ __all__ = [
     "PaymentStatus",
     "InventoryLog",
     "InventoryAction",
+    "Coupon",  # ← ADD THIS
 ]
