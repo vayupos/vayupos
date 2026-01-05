@@ -5,12 +5,16 @@ from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, EmailStr, validator
+from pydantic import BaseModel, Field, EmailStr, validator, condecimal
 
 from app.models.user import UserRole
 from app.models.order import OrderStatus
 from app.models.payment import PaymentMethod, PaymentStatus
 from app.models.inventory_log import InventoryAction
+
+
+# Common decimal type for money (2 decimal places)
+Money = condecimal(max_digits=10, decimal_places=2)
 
 
 # ============= User Schemas =============
@@ -93,8 +97,8 @@ class ProductBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     barcode: Optional[str] = None
-    price: Decimal = Field(..., decimal_places=2, gt=0)
-    cost_price: Optional[Decimal] = Field(None, decimal_places=2)
+    price: Money = Field(..., gt=0)
+    cost_price: Optional[Money] = None
     min_stock_level: int = Field(default=0, ge=0)
     category_id: Optional[int] = None
     image_url: Optional[str] = None
@@ -111,8 +115,8 @@ class ProductUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     barcode: Optional[str] = None
-    price: Optional[Decimal] = None
-    cost_price: Optional[Decimal] = None
+    price: Optional[Money] = None
+    cost_price: Optional[Money] = None
     min_stock_level: Optional[int] = None
     category_id: Optional[int] = None
     image_url: Optional[str] = None
@@ -219,8 +223,8 @@ class OrderItemCreate(BaseModel):
     """Order item creation schema"""
     product_id: int
     quantity: int = Field(..., gt=0)
-    unit_price: Optional[Decimal] = None
-    discount: Decimal = Field(default=0, ge=0)
+    unit_price: Optional[Money] = None
+    discount: Money = Field(default=0, ge=0)
 
 
 class OrderItemResponse(BaseModel):
@@ -231,9 +235,9 @@ class OrderItemResponse(BaseModel):
     product_name: str
     product_sku: str
     quantity: int
-    unit_price: Decimal
-    discount: Decimal
-    subtotal: Decimal
+    unit_price: Money
+    discount: Money
+    subtotal: Money
     created_at: datetime
 
     class Config:
@@ -245,8 +249,8 @@ class OrderCreate(BaseModel):
     """Order creation schema"""
     customer_id: Optional[int] = None
     order_items: List[OrderItemCreate]
-    discount: Decimal = Field(default=0, ge=0)
-    tax: Decimal = Field(default=0, ge=0)
+    discount: Money = Field(default=0, ge=0)
+    tax: Money = Field(default=0, ge=0)
     notes: Optional[str] = None
 
 
@@ -254,8 +258,8 @@ class OrderUpdate(BaseModel):
     """Order update schema"""
     customer_id: Optional[int] = None
     status: Optional[OrderStatus] = None
-    discount: Optional[Decimal] = None
-    tax: Optional[Decimal] = None
+    discount: Optional[Money] = None
+    tax: Optional[Money] = None
     notes: Optional[str] = None
 
 
@@ -266,10 +270,10 @@ class OrderResponse(BaseModel):
     customer: Optional[CustomerResponse] = None
     user: Optional[UserResponse] = None
     status: OrderStatus
-    subtotal: Decimal
-    tax: Decimal
-    discount: Decimal
-    total: Decimal
+    subtotal: Money
+    tax: Money
+    discount: Money
+    total: Money
     notes: Optional[str] = None
     order_items: List[OrderItemResponse] = []
     created_at: datetime
@@ -285,7 +289,7 @@ class PaymentCreate(BaseModel):
     """Payment creation schema"""
     order_id: int
     payment_method: PaymentMethod
-    amount: Decimal = Field(..., decimal_places=2, gt=0)
+    amount: Money = Field(..., gt=0)
     transaction_id: Optional[str] = None
     reference_number: Optional[str] = None
     notes: Optional[str] = None
@@ -304,7 +308,7 @@ class PaymentResponse(BaseModel):
     order_id: int
     payment_method: PaymentMethod
     status: PaymentStatus
-    amount: Decimal
+    amount: Money
     transaction_id: Optional[str] = None
     reference_number: Optional[str] = None
     notes: Optional[str] = None
