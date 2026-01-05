@@ -142,91 +142,30 @@ const StaffManagement = () => {
     };
 
     const handleExport = () => {
-        // Create CSV content
-        const headers = ['ID', 'Name', 'Phone', 'Role', 'Monthly Salary', 'Salary Amount', 'Joined Date', 'Status', 'Aadhar'];
-        
-        const csvRows = [
-            headers.join(','),
-            ...filteredStaff.map(member => [
-                member.id,
-                `"${member.name}"`,
-                `"${member.phone}"`,
-                member.role,
-                `"${member.salary}"`,
-                member.salaryAmount,
-                member.joined,
-                member.status,
-                `"${member.aadhar || 'N/A'}"`
-            ].join(','))
-        ];
-        
-        const csvContent = csvRows.join('\n');
-        
-        // Create blob and download
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const headers = ['Name', 'Phone', 'Role', 'Salary', 'Joined', 'Status', 'Aadhar'];
+        const rows = staff.map((s) => [
+            s.name,
+            s.phone,
+            s.role,
+            s.salaryAmount,
+            s.joinedDate,
+            s.status,
+            s.aadhar,
+        ]);
+
+        let csvContent = 'data:text/csv;charset=utf-8,';
+        csvContent += headers.join(',') + '\n';
+        rows.forEach((row) => {
+            csvContent += row.join(',') + '\n';
+        });
+
+        const encodedUri = encodeURI(csvContent);
         const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        
-        link.setAttribute('href', url);
-        link.setAttribute('download', `staff_export_${new Date().toISOString().split('T')[0]}.csv`);
-        link.style.visibility = 'hidden';
-        
+        link.setAttribute('href', encodedUri);
+        link.setAttribute('download', 'staff_export.csv');
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        
-        alert('Export completed! CSV file downloaded.');
-    };
-
-    const handleSimulateNextRun = () => {
-        // Calculate next salary dates for all active staff
-        const today = new Date();
-        const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-        
-        const simulations = staff
-            .filter(member => member.status === 'Active')
-            .map(member => {
-                // Parse the joined date
-                const joinedDate = new Date(member.joinedDate);
-                const dayOfMonth = joinedDate.getDate();
-                
-                // Calculate next payment date
-                let nextPaymentDate = new Date(today.getFullYear(), today.getMonth(), dayOfMonth);
-                
-                // If the date has passed this month, move to next month
-                if (nextPaymentDate <= today) {
-                    nextPaymentDate = new Date(today.getFullYear(), today.getMonth() + 1, dayOfMonth);
-                }
-                
-                return {
-                    id: member.id,
-                    name: member.name,
-                    role: member.role,
-                    avatar: member.avatar,
-                    color: member.color,
-                    amount: member.salary,
-                    amountNumber: member.salaryAmount,
-                    nextPaymentDate: nextPaymentDate.toLocaleDateString('en-GB', {
-                        day: '2-digit',
-                        month: 'short',
-                        year: 'numeric'
-                    }),
-                    category: automation.expenseCategory,
-                    account: automation.expenseAccount,
-                    time: automation.autoAddTime,
-                };
-            })
-            .sort((a, b) => new Date(a.nextPaymentDate) - new Date(b.nextPaymentDate));
-        
-        const totalAmount = simulations.reduce((sum, sim) => sum + sim.amountNumber, 0);
-        
-        setSimulationResults({
-            entries: simulations,
-            totalAmount: totalAmount,
-            nextRunDate: simulations.length > 0 ? simulations[0].nextPaymentDate : 'N/A',
-        });
-        
-        setShowSimulationModal(true);
     };
 
     const handleAddStaff = () => {
@@ -240,8 +179,8 @@ const StaffManagement = () => {
             return;
         }
 
-        const salaryNum = parseFloat(newStaff.salary.replace(/[^0-9]/g, ''));
-        const newId = Math.max(...staff.map((s) => s.id), 0) + 1;
+        const salaryNum = parseFloat(newStaff.salary.replace(/[^0-9]/g, '')) || 0;
+        const newId = staff.length ? Math.max(...staff.map((s) => s.id)) + 1 : 1;
         const avatar = newStaff.name.charAt(0).toUpperCase();
         const color = getRandomColor();
 
@@ -305,15 +244,15 @@ const StaffManagement = () => {
             staff.map((s) =>
                 s.id === editingStaff.id
                     ? {
-                        ...s,
-                        name: editingStaff.name,
-                        phone: editingStaff.phone,
-                        role: editingStaff.role,
-                        salary: `₹${salaryNum.toLocaleString('en-IN')} / month`,
-                        salaryAmount: salaryNum,
-                        avatar: editingStaff.name.charAt(0).toUpperCase(),
-                        aadhar: editingStaff.aadhar,
-                    }
+                          ...s,
+                          name: editingStaff.name,
+                          phone: editingStaff.phone,
+                          role: editingStaff.role,
+                          salary: `₹${salaryNum.toLocaleString('en-IN')} / month`,
+                          salaryAmount: salaryNum,
+                          avatar: editingStaff.name.charAt(0).toUpperCase(),
+                          aadhar: editingStaff.aadhar,
+                      }
                     : s
             )
         );
@@ -395,777 +334,509 @@ const StaffManagement = () => {
                     </div>
                 </div>
 
-                {/* Filters Section - Horizontal Cards */}
-                <div className="rounded-xl px-3 sm:px-4 lg:px-5 py-3 sm:py-4 mb-4 sm:mb-6 bg-card border border-border">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 mb-3 sm:mb-4">
-                        <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-card-foreground">Filters</h3>
-                        <button
-                            onClick={handleResetFilters}
-                            className="flex items-center gap-1.5 px-3 py-1.5 sm:py-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 text-xs sm:text-sm w-full sm:w-auto justify-center"
-                        >
-                            <RotateCw size={14} />
-                            Reset
-                        </button>
-                    </div>
-
-                    {/* Search Bar */}
-                    <div className="mb-3 sm:mb-4">
-                        <div className="relative">
-                            <Search
-                                className="absolute left-2.5 sm:left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-                                size={14}
-                            />
-                            <input
-                                type="text"
-                                placeholder="Search name or phone..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full text-xs sm:text-sm pl-8 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 rounded-lg border border-border bg-muted text-foreground placeholder-muted-foreground focus:outline-none focus:border-teal-600"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Horizontal Filter Cards */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-                        {/* Role Filter Card */}
-                        <div className="bg-muted rounded-lg p-2 sm:p-3 border border-border">
-                            <label className="block text-xs font-medium mb-1.5 sm:mb-2 text-muted-foreground">
-                                Role
-                            </label>
-                            <select
-                                value={roleFilter}
-                                onChange={(e) => setRoleFilter(e.target.value)}
-                                className="w-full text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 rounded-md border border-border bg-background text-foreground focus:outline-none focus:border-teal-600 appearance-none cursor-pointer"
-                            >
-                                <option>All</option>
-                                <option>Cashier</option>
-                                <option>Chef</option>
-                                <option>Waiter</option>
-                                <option>Manager</option>
-                            </select>
-                        </div>
-
-                        {/* Status Filter Card */}
-                        <div className="bg-muted rounded-lg p-2 sm:p-3 border border-border">
-                            <label className="block text-xs font-medium mb-1.5 sm:mb-2 text-muted-foreground">
-                                Status
-                            </label>
-                            <select
-                                value={statusFilter}
-                                onChange={(e) => setStatusFilter(e.target.value)}
-                                className="w-full text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 rounded-md border border-border bg-background text-foreground focus:outline-none focus:border-teal-600 appearance-none cursor-pointer"
-                            >
-                                <option>Active</option>
-                                <option>Inactive</option>
-                            </select>
-                        </div>
-
-                        {/* Joined After Card */}
-                        <div className="bg-muted rounded-lg p-2 sm:p-3 border border-border">
-                            <label className="block text-xs font-medium mb-1.5 sm:mb-2 text-muted-foreground">
-                                Joined After
-                            </label>
-                            <input
-                                type="date"
-                                value={joinedAfter}
-                                onChange={(e) => setJoinedAfter(e.target.value)}
-                                className="w-full text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 rounded-md border border-border bg-background text-foreground focus:outline-none focus:border-teal-600"
-                            />
-                        </div>
-
-                        {/* Salary Range Card */}
-                        <div className="bg-muted rounded-lg p-2 sm:p-3 border border-border">
-                            <label className="block text-xs font-medium mb-1.5 sm:mb-2 text-muted-foreground">
-                                Salary Range
-                            </label>
-                            <input
-                                type="text"
-                                value={salaryRange}
-                                onChange={(e) => setSalaryRange(e.target.value)}
-                                className="w-full text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2 rounded-md border border-border bg-background text-foreground focus:outline-none focus:border-teal-600"
-                                placeholder="₹10k - ₹30k"
-                            />
-                        </div>
-                    </div>
-
-                    {/* Apply Button */}
-                    <div className="flex justify-end mt-3 sm:mt-4">
-                        <button
-                            onClick={() => {
-                                setShowSearch(true);
-                                alert('Filters applied successfully!');
-                            }}
-                            className="flex items-center gap-1.5 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg font-medium transition-colors text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700 w-full sm:w-auto justify-center"
-                        >
-                            <Filter size={14} />
-                            Apply Filters
-                        </button>
-                    </div>
-                </div>
-
-                {/* Staff Members Section */}
-                <div className="rounded-xl px-3 sm:px-4 lg:px-5 py-3 sm:py-4 lg:py-5 mb-4 sm:mb-6 bg-card border border-border">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 mb-3 sm:mb-4">
-                        <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-card-foreground">Staff Members</h2>
-                        <button
-                            onClick={() => setShowSearch(!showSearch)}
-                            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 text-xs sm:text-sm w-full sm:w-auto justify-center"
-                        >
-                            <Search size={14} className="sm:w-4 sm:h-4" />
-                            <span>{showSearch ? 'Hide Search' : 'Search'}</span>
-                        </button>
-                    </div>
-
-                    {showSearch && (
-                        <div className="mb-3 sm:mb-4">
+                {/* Filters */}
+                <div className="bg-card rounded-xl border border-border p-3 sm:p-4 lg:p-5 mb-4 sm:mb-6">
+                    <div className="flex flex-col lg:flex-row gap-3 lg:gap-4 items-start lg:items-center justify-between">
+                        <div className="flex-1 w-full">
                             <div className="relative">
-                                <Search
-                                    className="absolute left-2.5 sm:left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-                                    size={14}
-                                />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
                                 <input
                                     type="text"
-                                    placeholder="Search by name or phone..."
+                                    placeholder="Search staff by name or phone"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full text-xs sm:text-sm pl-8 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 rounded-lg border border-border bg-muted text-foreground placeholder-muted-foreground focus:outline-none"
+                                    className="w-full bg-muted border border-border rounded-lg py-2.5 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
                                 />
                             </div>
+                            <button
+                                onClick={() => setShowSearch(!showSearch)}
+                                className="mt-2 inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                                <Filter className="w-3 h-3" />
+                                <span>{showSearch ? 'Hide advanced filters' : 'Show advanced filters'}</span>
+                            </button>
                         </div>
-                    )}
 
-                    {/* Staff Table */}
-                    <div className="overflow-x-auto -mx-3 sm:mx-0">
-                        <div className="inline-block min-w-full align-middle">
-                            <div className="overflow-hidden">
-                                <table className="min-w-full">
-                                    <thead>
-                                        <tr className="bg-primary/10 border-b border-border">
-                                            <th className="text-left font-semibold py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm text-muted-foreground">#</th>
-                                            <th className="text-left font-semibold py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm text-muted-foreground">
-                                                Name
-                                            </th>
-                                            <th className="text-left font-semibold py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm text-muted-foreground hidden md:table-cell">
-                                                Role
-                                            </th>
-                                            <th className="text-left font-semibold py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm text-muted-foreground hidden lg:table-cell">
-                                                Pay Scale
-                                            </th>
-                                            <th className="text-left font-semibold py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm text-muted-foreground hidden xl:table-cell">
-                                                Joined
-                                            </th>
-                                            <th className="text-right font-semibold py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm text-muted-foreground">
-                                                Actions
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredStaff.map((member, index) => (
-                                            <tr key={member.id} className="border-b border-border">
-                                                <td className="py-2 sm:py-3 lg:py-4 px-2 sm:px-3">
-                                                    <span className="text-xs sm:text-sm text-foreground">{index + 1}</span>
-                                                </td>
-                                                <td className="py-2 sm:py-3 lg:py-4 px-2 sm:px-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <div
-                                                            className="w-7 h-7 sm:w-8 sm:h-8 lg:w-9 lg:h-9 rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 text-white"
-                                                            style={{ backgroundColor: member.color }}
-                                                        >
-                                                            {member.avatar}
-                                                        </div>
-                                                        <div className="min-w-0">
-                                                            <div className="font-semibold text-xs sm:text-sm text-foreground truncate">{member.name}</div>
-                                                            <div className="text-xs text-muted-foreground truncate">{member.phone}</div>
-                                                            <div className="text-xs text-muted-foreground md:hidden mt-0.5">
-                                                                {member.role} • {member.salary}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="py-2 sm:py-3 lg:py-4 px-2 sm:px-3 hidden md:table-cell">
-                                                    <span className="text-xs sm:text-sm text-foreground">{member.role}</span>
-                                                </td>
-                                                <td className="py-2 sm:py-3 lg:py-4 px-2 sm:px-3 hidden lg:table-cell">
-                                                    <span className="text-xs sm:text-sm text-foreground">{member.salary}</span>
-                                                </td>
-                                                <td className="py-2 sm:py-3 lg:py-4 px-2 sm:px-3 hidden xl:table-cell">
-                                                    <span className="text-xs sm:text-sm text-foreground">{member.joined}</span>
-                                                </td>
-                                                <td className="py-2 sm:py-3 lg:py-4 px-2 sm:px-3">
-                                                    <div className="flex items-center justify-end gap-1 sm:gap-2">
-                                                        <button
-                                                            onClick={() => handleEdit(member.id)}
-                                                            className="flex items-center justify-center p-1.5 sm:p-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700"
-                                                            aria-label={`Edit ${member.name}`}
-                                                        >
-                                                            <Edit2 size={12} className="sm:w-3.5 sm:h-3.5" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDelete(member.id)}
-                                                            className="flex items-center justify-center p-1.5 sm:p-2 rounded-lg font-medium transition-colors bg-card text-card-foreground hover:bg-red-600 hover:text-white border border-border"
-                                                            aria-label={`Delete ${member.name}`}
-                                                        >
-                                                            <Trash2 size={12} className="sm:w-3.5 sm:h-3.5" />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                        {showSearch && (
+                            <div className="w-full lg:w-auto flex flex-wrap gap-2 lg:gap-3">
+                                <select
+                                    value={roleFilter}
+                                    onChange={(e) => setRoleFilter(e.target.value)}
+                                    className="bg-muted border border-border rounded-lg px-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                >
+                                    <option value="All">All Roles</option>
+                                    <option value="Cashier">Cashier</option>
+                                    <option value="Waiter">Waiter</option>
+                                    <option value="Chef">Chef</option>
+                                </select>
+
+                                <select
+                                    value={statusFilter}
+                                    onChange={(e) => setStatusFilter(e.target.value)}
+                                    className="bg-muted border border-border rounded-lg px-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                >
+                                    <option value="Active">Active</option>
+                                    <option value="Inactive">Inactive</option>
+                                </select>
+
+                                <div className="flex items-center gap-2 bg-muted border border-border rounded-lg px-3 py-2">
+                                    <Calendar className="w-4 h-4 text-muted-foreground" />
+                                    <input
+                                        type="date"
+                                        value={joinedAfter}
+                                        onChange={(e) => setJoinedAfter(e.target.value)}
+                                        className="bg-transparent text-xs sm:text-sm text-foreground focus:outline-none"
+                                    />
+                                </div>
+
+                                <select
+                                    value={salaryRange}
+                                    onChange={(e) => setSalaryRange(e.target.value)}
+                                    className="bg-muted border border-border rounded-lg px-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                >
+                                    <option value="₹10k - ₹30k">₹10k - ₹30k</option>
+                                    <option value="₹30k - ₹50k">₹30k - ₹50k</option>
+                                    <option value="₹50k+">₹50k+</option>
+                                </select>
+
+                                <button
+                                    onClick={handleResetFilters}
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-muted text-xs sm:text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                                >
+                                    <RotateCw className="w-3 h-3" />
+                                    <span>Reset</span>
+                                </button>
                             </div>
-                        </div>
+                        )}
                     </div>
                 </div>
 
-                {/* Staff Payroll & Automation */}
-                <div className="mb-4 sm:mb-6">
-                    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between mb-3 sm:mb-4 gap-2">
-                        <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-foreground">
-                            Staff Payroll & Automation
+                {/* Staff List */}
+                <div className="bg-card rounded-xl border border-border p-3 sm:p-4 lg:p-5 mb-4 sm:mb-6">
+                    <div className="flex items-center justify-between mb-3 sm:mb-4">
+                        <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-card-foreground">
+                            Staff List
                         </h2>
                         <span className="text-xs sm:text-sm text-muted-foreground">
-                            Payscale auto-added to Expenses monthly
+                            {filteredStaff.length} staff members
                         </span>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
-                        {/* Automation Summary */}
-                        <div className="rounded-xl px-3 sm:px-4 lg:px-5 py-3 sm:py-4 lg:py-5 bg-card border border-border">
-                            <h3 className="text-xs sm:text-sm lg:text-base font-semibold mb-3 sm:mb-4 text-card-foreground">Automation Summary</h3>
+                    <div className="hidden md:grid grid-cols-[2fr,1.5fr,1.5fr,1.5fr,1fr,1fr] gap-3 px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
+                        <span>Name</span>
+                        <span>Role</span>
+                        <span>Salary</span>
+                        <span>Joined</span>
+                        <span>Status</span>
+                        <span className="text-right">Actions</span>
+                    </div>
 
-                            <div className="flex items-start justify-between mb-4 sm:mb-5 pb-3 sm:pb-4 border-b border-border">
-                                <div className="flex items-start gap-2 sm:gap-3">
-                                    <Calendar size={16} className="text-foreground mt-0.5 flex-shrink-0 sm:w-[18px] sm:h-[18px]" />
+                    <div className="divide-y divide-border">
+                        {filteredStaff.map((member) => (
+                            <div
+                                key={member.id}
+                                className="grid md:grid-cols-[2fr,1.5fr,1.5fr,1.5fr,1fr,1fr] gap-3 px-3 py-3 items-center hover:bg-muted/60 transition-colors"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div
+                                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white"
+                                        style={{ backgroundColor: member.color }}
+                                    >
+                                        {member.avatar}
+                                    </div>
                                     <div>
-                                        <div className="text-sm sm:text-base lg:text-lg font-semibold text-foreground">Cycle</div>
-                                        <div className="text-xs sm:text-sm text-muted-foreground">
-                                            Runs on each joining date monthly
+                                        <div className="text-sm font-medium text-card-foreground">
+                                            {member.name}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                            {member.phone}
                                         </div>
                                     </div>
                                 </div>
-                                <span className="inline-block px-2 sm:px-3 py-1 rounded-full text-xs font-medium bg-teal-600 text-white flex-shrink-0">
-                                    Enabled
-                                </span>
-                            </div>
 
-                            <div className="space-y-3 sm:space-y-4">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                                    <div>
-                                        <label className="block text-xs sm:text-sm mb-1.5 sm:mb-2 text-muted-foreground">
-                                            Expense Category
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={automation.expenseCategory}
-                                            onChange={(e) =>
-                                                setAutomation({ ...automation, expenseCategory: e.target.value })
-                                            }
-                                            className="w-full text-xs sm:text-sm px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs sm:text-sm mb-1.5 sm:mb-2 text-muted-foreground">
-                                            Expense Account
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={automation.expenseAccount}
-                                            onChange={(e) =>
-                                                setAutomation({ ...automation, expenseAccount: e.target.value })
-                                            }
-                                            className="w-full text-xs sm:text-sm px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none"
-                                        />
-                                    </div>
+                                <div className="text-sm text-card-foreground md:text-left text-right">
+                                    {member.role}
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                                    <div>
-                                        <label className="block text-xs sm:text-sm mb-1.5 sm:mb-2 text-muted-foreground">
-                                            Auto Add Time
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={automation.autoAddTime}
-                                            onChange={(e) =>
-                                                setAutomation({ ...automation, autoAddTime: e.target.value })
-                                            }
-                                            className="w-full text-xs sm:text-sm px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs sm:text-sm mb-1.5 sm:mb-2 text-muted-foreground">Notes</label>
-                                        <input
-                                            type="text"
-                                            value={automation.notes}
-                                            onChange={(e) =>
-                                                setAutomation({ ...automation, notes: e.target.value })
-                                            }
-                                            className="w-full text-xs sm:text-sm px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none"
-                                        />
-                                    </div>
+                                <div className="text-sm text-card-foreground md:text-left text-right">
+                                    {member.salary}
                                 </div>
 
-                                <div className="flex gap-2 pt-2 sm:pt-4 flex-wrap">
-                                    <button 
-                                        onClick={handleSimulateNextRun}
-                                        className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700"
+                                <div className="text-sm text-card-foreground md:text-left text-right">
+                                    {member.joined}
+                                </div>
+
+                                <div className="flex items-center md:justify-start justify-end">
+                                    <span
+                                        className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-medium ${
+                                            member.status === 'Active'
+                                                ? 'bg-emerald-100 text-emerald-700'
+                                                : 'bg-red-100 text-red-700'
+                                        }`}
                                     >
-                                        <Play size={14} />
-                                        <span className="hidden sm:inline">Simulate Next Run</span>
-                                        <span className="sm:hidden">Simulate</span>
+                                        {member.status}
+                                    </span>
+                                </div>
+
+                                <div className="flex items-center justify-end gap-2">
+                                    <button
+                                        onClick={() => handleEdit(member.id)}
+                                        className="p-1.5 rounded-lg bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                                    >
+                                        <Edit2 className="w-4 h-4" />
                                     </button>
                                     <button
-                                        onClick={handleSaveRules}
-                                        className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700"
+                                        onClick={() => handleDelete(member.id)}
+                                        className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-600 transition-colors"
                                     >
-                                        <Save size={14} />
-                                        Save Rules
+                                        <Trash2 className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>
+                        ))}
+
+                        {filteredStaff.length === 0 && (
+                            <div className="py-6 text-center text-sm text-muted-foreground">
+                                No staff found. Try adjusting your filters.
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Upcoming Salary Entries - full width, automation card removed */}
+                <div className="mt-6">
+                    <div className="bg-card rounded-xl border border-border p-4 lg:p-6 w-full">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-semibold text-card-foreground">
+                                Upcoming Salary Entries
+                            </h2>
                         </div>
 
-                        {/* Upcoming Salary Entries */}
-                        <div className="rounded-xl px-3 sm:px-4 lg:px-5 py-3 sm:py-4 lg:py-5 bg-card border border-border">
-                            <h3 className="text-xs sm:text-sm lg:text-base font-semibold mb-3 sm:mb-4 text-card-foreground">Upcoming Salary Entries</h3>
+                        <div className="space-y-3">
+                            {upcomingSalaries.map((entry) => (
+                                <div
+                                    key={entry.id}
+                                    className="flex items-center justify-between bg-muted rounded-lg px-3 py-3"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div
+                                            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white"
+                                            style={{ backgroundColor: entry.color }}
+                                        >
+                                            {entry.avatar}
+                                        </div>
+                                        <div>
+                                            <div className="text-sm font-medium text-card-foreground">
+                                                {entry.name}
+                                            </div>
+                                            <div className="text-xs text-muted-foreground">
+                                                {entry.role} • {entry.category}
+                                            </div>
+                                        </div>
+                                    </div>
 
-                            <div className="overflow-x-auto -mx-3 sm:mx-0">
-                                <div className="inline-block min-w-full align-middle">
-                                    <div className="overflow-hidden">
-                                        <table className="min-w-full">
-                                            <thead>
-                                                <tr className="bg-primary/10 border-b border-border">
-                                                    <th className="text-left font-semibold py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm text-muted-foreground">
-                                                        Staff
-                                                    </th>
-                                                    <th className="text-left font-semibold py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm text-muted-foreground hidden sm:table-cell">
-                                                        Amount
-                                                    </th>
-                                                    <th className="text-left font-semibold py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm text-muted-foreground hidden md:table-cell">
-                                                        Due On
-                                                    </th>
-                                                    <th className="text-right font-semibold py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm text-muted-foreground">
-                                                        Action
-                                                    </th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {upcomingSalaries.map((salary) => (
-                                                    <tr key={salary.id} className="border-b border-border">
-                                                        <td className="py-2 sm:py-3 lg:py-4 px-2 sm:px-3">
-                                                            <div className="flex items-center gap-2">
-                                                                <div
-                                                                    className="w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8 rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 text-white"
-                                                                    style={{ backgroundColor: salary.color }}
-                                                                >
-                                                                    {salary.avatar}
-                                                                </div>
-                                                                <div className="min-w-0">
-                                                                    <div className="font-semibold text-xs sm:text-sm text-foreground truncate">
-                                                                        {salary.name}
-                                                                    </div>
-                                                                    <div className="text-xs text-muted-foreground">
-                                                                        {salary.role}
-                                                                    </div>
-                                                                    <div className="text-xs text-muted-foreground sm:hidden">
-                                                                        {salary.amount} • {salary.dueDate}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                        <td className="py-2 sm:py-3 lg:py-4 px-2 sm:px-3 hidden sm:table-cell">
-                                                            <span className="text-xs sm:text-sm font-semibold text-foreground">
-                                                                {salary.amount}
-                                                            </span>
-                                                        </td>
-                                                        <td className="py-2 sm:py-3 lg:py-4 px-2 sm:px-3 hidden md:table-cell">
-                                                            <span className="text-xs sm:text-sm text-foreground">{salary.dueDate}</span>
-                                                        </td>
-                                                        <td className="py-2 sm:py-3 lg:py-4 px-2 sm:px-3">
-                                                            <div className="flex justify-end">
-                                                                <button
-                                                                    onClick={() => handleAddSalary(salary.id)}
-                                                                    className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 rounded-lg font-medium transition-colors text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700"
-                                                                >
-                                                                    <PlusCircle size={12} className="sm:w-3.5 sm:h-3.5" />
-                                                                    <span className="hidden sm:inline">Add Now</span>
-                                                                    <span className="sm:hidden">Add</span>
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                    <div className="hidden sm:block text-sm text-card-foreground">
+                                        {entry.amount}
+                                    </div>
+
+                                    <div className="hidden sm:block text-xs text-muted-foreground">
+                                        Due on {entry.dueDate}
+                                    </div>
+
+                                    <button
+                                        onClick={() => handleAddSalary(entry.id)}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs sm:text-sm font-medium hover:bg-teal-700 transition-colors"
+                                    >
+                                        <PlusCircle className="w-4 h-4" />
+                                        <span>Add Now</span>
+                                    </button>
+                                </div>
+                            ))}
+
+                            {upcomingSalaries.length === 0 && (
+                                <div className="py-4 text-center text-sm text-muted-foreground">
+                                    No upcoming salary entries.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* New Staff Modal */}
+                {showNewStaffModal && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-2">
+                        <div className="bg-card rounded-xl border border-border w-full max-w-md p-4 sm:p-5">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
+                                    Add New Staff
+                                </h2>
+                                <button
+                                    onClick={() => setShowNewStaffModal(false)}
+                                    className="text-muted-foreground hover:text-foreground"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                        Name *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={newStaff.name}
+                                        onChange={(e) =>
+                                            setNewStaff({ ...newStaff, name: e.target.value })
+                                        }
+                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                        Phone *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={newStaff.phone}
+                                        onChange={(e) =>
+                                            setNewStaff({ ...newStaff, phone: e.target.value })
+                                        }
+                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs text-muted-foreground mb-1.5">
+                                            Role
+                                        </label>
+                                        <select
+                                            value={newStaff.role}
+                                            onChange={(e) =>
+                                                setNewStaff({ ...newStaff, role: e.target.value })
+                                            }
+                                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                        >
+                                            <option value="Cashier">Cashier</option>
+                                            <option value="Waiter">Waiter</option>
+                                            <option value="Chef">Chef</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs text-muted-foreground mb-1.5">
+                                            Joined On
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={newStaff.joined}
+                                            onChange={(e) =>
+                                                setNewStaff({ ...newStaff, joined: e.target.value })
+                                            }
+                                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                        />
                                     </div>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            {/* New Staff Modal */}
-            {showNewStaffModal && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
-                    <div className="bg-card rounded-xl p-3 sm:p-4 lg:p-6 max-w-md w-full border border-border my-8">
-                        <div className="flex items-center justify-between mb-3 sm:mb-4">
-                            <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-card-foreground">Add New Staff</h3>
-                            <button
-                                onClick={() => setShowNewStaffModal(false)}
-                                className="text-muted-foreground hover:text-foreground"
-                                aria-label="Close new staff modal"
-                            >
-                                <X size={18} className="sm:w-5 sm:h-5" />
-                            </button>
-                        </div>
+                                <div>
+                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                        Salary (₹ / month) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={newStaff.salary}
+                                        onChange={(e) =>
+                                            setNewStaff({ ...newStaff, salary: e.target.value })
+                                        }
+                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                    />
+                                </div>
 
-                        <div className="space-y-3 sm:space-y-4">
-                            <div>
-                                <label className="block text-xs sm:text-sm mb-1.5 sm:mb-2 text-muted-foreground">Name *</label>
-                                <input
-                                    type="text"
-                                    value={newStaff.name}
-                                    onChange={(e) => setNewStaff({ ...newStaff, name: e.target.value })}
-                                    className="w-full text-xs sm:text-sm px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none"
-                                    placeholder="Enter staff name"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs sm:text-sm mb-1.5 sm:mb-2 text-muted-foreground">Phone *</label>
-                                <input
-                                    type="text"
-                                    value={newStaff.phone}
-                                    onChange={(e) => setNewStaff({ ...newStaff, phone: e.target.value })}
-                                    className="w-full text-xs sm:text-sm px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none"
-                                    placeholder="+91 98765 43210"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs sm:text-sm mb-1.5 sm:mb-2 text-muted-foreground">Aadhar Number</label>
-                                <input
-                                    type="text"
-                                    value={newStaff.aadhar}
-                                    onChange={(e) => setNewStaff({ ...newStaff, aadhar: formatAadhar(e.target.value) })}
-                                    className="w-full text-xs sm:text-sm px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none"
-                                    placeholder="1234 5678 9012"
-                                    maxLength={14}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs sm:text-sm mb-1.5 sm:mb-2 text-muted-foreground">Role</label>
-                                <select
-                                    value={newStaff.role}
-                                    onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value })}
-                                    className="w-full text-xs sm:text-sm px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none"
-                                >
-                                    <option>Cashier</option>
-                                    <option>Chef</option>
-                                    <option>Waiter</option>
-                                    <option>Manager</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs sm:text-sm mb-1.5 sm:mb-2 text-muted-foreground">
-                                    Monthly Salary (₹) *
-                                </label>
-                                <input
-                                    type="number"
-                                    value={newStaff.salary}
-                                    onChange={(e) => setNewStaff({ ...newStaff, salary: e.target.value })}
-                                    className="w-full text-xs sm:text-sm px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none"
-                                    placeholder="15000"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs sm:text-sm mb-1.5 sm:mb-2 text-muted-foreground">Joining Date</label>
-                                <input
-                                    type="date"
-                                    value={newStaff.joined}
-                                    onChange={(e) => setNewStaff({ ...newStaff, joined: e.target.value })}
-                                    className="w-full text-xs sm:text-sm px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex gap-2 sm:gap-3 mt-4 sm:mt-6">
-                            <button
-                                onClick={() => setShowNewStaffModal(false)}
-                                className="flex-1 flex items-center justify-center px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-medium transition-colors text-xs sm:text-sm bg-card text-card-foreground hover:bg-muted border border-border"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleAddStaff}
-                                className="flex-1 flex items-center justify-center px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-medium transition-colors text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700"
-                            >
-                                Add Staff
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Edit Staff Modal */}
-            {showEditModal && editingStaff && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
-                    <div className="bg-card rounded-xl p-3 sm:p-4 lg:p-6 max-w-md w-full border border-border my-8">
-                        <div className="flex items-center justify-between mb-3 sm:mb-4">
-                            <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-card-foreground">Edit Staff</h3>
-                            <button
-                                onClick={() => {
-                                    setShowEditModal(false);
-                                    setEditingStaff(null);
-                                }}
-                                className="text-muted-foreground hover:text-foreground"
-                                aria-label="Close edit staff modal"
-                            >
-                                <X size={18} className="sm:w-5 sm:h-5" />
-                            </button>
-                        </div>
-
-                        <div className="space-y-3 sm:space-y-4">
-                            <div>
-                                <label className="block text-xs sm:text-sm mb-1.5 sm:mb-2 text-muted-foreground">Name *</label>
-                                <input
-                                    type="text"
-                                    value={editingStaff.name}
-                                    onChange={(e) =>
-                                        setEditingStaff({
-                                            ...editingStaff,
-                                            name: e.target.value,
-                                        })
-                                    }
-                                    className="w-full text-xs sm:text-sm px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none"
-                                    placeholder="Enter staff name"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs sm:text-sm mb-1.5 sm:mb-2 text-muted-foreground">Phone *</label>
-                                <input
-                                    type="text"
-                                    value={editingStaff.phone}
-                                    onChange={(e) =>
-                                        setEditingStaff({
-                                            ...editingStaff,
-                                            phone: e.target.value,
-                                        })
-                                    }
-                                    className="w-full text-xs sm:text-sm px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none"
-                                    placeholder="+91 98765 43210"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs sm:text-sm mb-1.5 sm:mb-2 text-muted-foreground">Aadhar Number</label>
-                                <input
-                                    type="text"
-                                    value={editingStaff.aadhar || ''}
-                                    onChange={(e) =>
-                                        setEditingStaff({
-                                            ...editingStaff,
-                                            aadhar: formatAadhar(e.target.value),
-                                        })
-                                    }
-                                    className="w-full text-xs sm:text-sm px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none"
-                                    placeholder="1234 5678 9012"
-                                    maxLength={14}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs sm:text-sm mb-1.5 sm:mb-2 text-muted-foreground">Role</label>
-                                <select
-                                    value={editingStaff.role}
-                                    onChange={(e) =>
-                                        setEditingStaff({
-                                            ...editingStaff,
-                                            role: e.target.value,
-                                        })
-                                    }
-                                    className="w-full text-xs sm:text-sm px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none"
-                                >
-                                    <option>Cashier</option>
-                                    <option>Chef</option>
-                                    <option>Waiter</option>
-                                    <option>Manager</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs sm:text-sm mb-1.5 sm:mb-2 text-muted-foreground">
-                                    Monthly Salary (₹) *
-                                </label>
-                                <input
-                                    type="number"
-                                    value={editingStaff.salary}
-                                    onChange={(e) =>
-                                        setEditingStaff({
-                                            ...editingStaff,
-                                            salary: e.target.value,
-                                        })
-                                    }
-                                    className="w-full text-xs sm:text-sm px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none"
-                                    placeholder="15000"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex gap-2 sm:gap-3 mt-4 sm:mt-6">
-                            <button
-                                onClick={() => {
-                                    setShowEditModal(false);
-                                    setEditingStaff(null);
-                                }}
-                                className="flex-1 flex items-center justify-center px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-medium transition-colors text-xs sm:text-sm bg-card text-card-foreground hover:bg-muted border border-border"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleUpdateStaff}
-                                className="flex-1 flex items-center justify-center px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg font-medium transition-colors text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700"
-                            >
-                                Update Staff
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Simulation Results Modal */}
-            {showSimulationModal && simulationResults && (
-                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
-                    <div className="bg-card rounded-xl p-3 sm:p-4 lg:p-6 max-w-2xl w-full border border-border my-8">
-                        <div className="flex items-center justify-between mb-3 sm:mb-4">
-                            <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-card-foreground">
-                                Simulation: Next Payroll Run
-                            </h3>
-                            <button
-                                onClick={() => setShowSimulationModal(false)}
-                                className="text-muted-foreground hover:text-foreground"
-                                aria-label="Close simulation modal"
-                            >
-                                <X size={18} className="sm:w-5 sm:h-5" />
-                            </button>
-                        </div>
-
-                        <div className="mb-4 p-3 sm:p-4 bg-teal-50 dark:bg-teal-950/30 rounded-lg border border-teal-200 dark:border-teal-800">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs sm:text-sm font-medium text-teal-900 dark:text-teal-100">
-                                    Next Run Date
-                                </span>
-                                <span className="text-xs sm:text-sm font-semibold text-teal-900 dark:text-teal-100">
-                                    {simulationResults.nextRunDate}
-                                </span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs sm:text-sm font-medium text-teal-900 dark:text-teal-100">
-                                    Total Amount
-                                </span>
-                                <span className="text-sm sm:text-base lg:text-lg font-bold text-teal-900 dark:text-teal-100">
-                                    ₹{simulationResults.totalAmount?.toLocaleString('en-IN')}
-                                </span>
-                            </div>
-                        </div>
-
-                        <div className="mb-3 sm:mb-4">
-                            <h4 className="text-xs sm:text-sm font-semibold text-card-foreground mb-2">
-                                Scheduled Entries ({simulationResults.entries?.length})
-                            </h4>
-                        </div>
-
-                        <div className="overflow-x-auto -mx-3 sm:mx-0 max-h-96 overflow-y-auto">
-                            <div className="inline-block min-w-full align-middle">
-                                <div className="overflow-hidden">
-                                    <table className="min-w-full">
-                                        <thead className="sticky top-0 bg-card z-10">
-                                            <tr className="bg-primary/10 border-b border-border">
-                                                <th className="text-left font-semibold py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm text-muted-foreground">
-                                                    Staff
-                                                </th>
-                                                <th className="text-left font-semibold py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm text-muted-foreground hidden sm:table-cell">
-                                                    Amount
-                                                </th>
-                                                <th className="text-left font-semibold py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm text-muted-foreground hidden md:table-cell">
-                                                    Payment Date
-                                                </th>
-                                                <th className="text-left font-semibold py-2 sm:py-3 px-2 sm:px-3 text-xs sm:text-sm text-muted-foreground hidden lg:table-cell">
-                                                    Category
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {simulationResults.entries?.map((entry) => (
-                                                <tr key={entry.id} className="border-b border-border">
-                                                    <td className="py-2 sm:py-3 px-2 sm:px-3">
-                                                        <div className="flex items-center gap-2">
-                                                            <div
-                                                                className="w-6 h-6 sm:w-7 sm:h-7 lg:w-8 lg:h-8 rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 text-white"
-                                                                style={{ backgroundColor: entry.color }}
-                                                            >
-                                                                {entry.avatar}
-                                                            </div>
-                                                            <div className="min-w-0">
-                                                                <div className="font-semibold text-xs sm:text-sm text-foreground truncate">
-                                                                    {entry.name}
-                                                                </div>
-                                                                <div className="text-xs text-muted-foreground">
-                                                                    {entry.role}
-                                                                </div>
-                                                                <div className="text-xs text-muted-foreground sm:hidden">
-                                                                    {entry.amount} • {entry.nextPaymentDate}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-2 sm:py-3 px-2 sm:px-3 hidden sm:table-cell">
-                                                        <span className="text-xs sm:text-sm font-semibold text-foreground">
-                                                            {entry.amount}
-                                                        </span>
-                                                    </td>
-                                                    <td className="py-2 sm:py-3 px-2 sm:px-3 hidden md:table-cell">
-                                                        <span className="text-xs sm:text-sm text-foreground">
-                                                            {entry.nextPaymentDate}
-                                                        </span>
-                                                    </td>
-                                                    <td className="py-2 sm:py-3 px-2 sm:px-3 hidden lg:table-cell">
-                                                        <span className="text-xs text-muted-foreground">
-                                                            {entry.category}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                                <div>
+                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                        Aadhar Number
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={newStaff.aadhar}
+                                        onChange={(e) =>
+                                            setNewStaff({
+                                                ...newStaff,
+                                                aadhar: formatAadhar(e.target.value),
+                                            })
+                                        }
+                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                        placeholder="1234 5678 9012"
+                                    />
                                 </div>
                             </div>
-                        </div>
 
-                        <div className="mt-4 sm:mt-6 p-3 bg-muted rounded-lg">
-                            <p className="text-xs sm:text-sm text-muted-foreground">
-                                <strong>Note:</strong> This is a simulation based on current automation rules. 
-                                The system will automatically add these entries to expenses on their respective payment dates at {automation.autoAddTime}.
-                            </p>
-                        </div>
-
-                        <div className="flex justify-end mt-4 sm:mt-6">
-                            <button
-                                onClick={() => setShowSimulationModal(false)}
-                                className="px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg font-medium transition-colors text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700"
-                            >
-                                Close
-                            </button>
+                            <div className="flex justify-end gap-2 mt-5">
+                                <button
+                                    onClick={() => setShowNewStaffModal(false)}
+                                    className="px-3 py-2 rounded-lg text-xs sm:text-sm bg-muted text-foreground hover:bg-accent transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleAddStaff}
+                                    className="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700 transition-colors flex items-center gap-1.5"
+                                >
+                                    <Save className="w-4 h-4" />
+                                    <span>Save</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
+
+                {/* Edit Staff Modal */}
+                {showEditModal && editingStaff && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-2">
+                        <div className="bg-card rounded-xl border border-border w-full max-w-md p-4 sm:p-5">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
+                                    Edit Staff
+                                </h2>
+                                <button
+                                    onClick={() => setShowEditModal(false)}
+                                    className="text-muted-foreground hover:text-foreground"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                        Name *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editingStaff.name}
+                                        onChange={(e) =>
+                                            setEditingStaff({ ...editingStaff, name: e.target.value })
+                                        }
+                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                        Phone *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editingStaff.phone}
+                                        onChange={(e) =>
+                                            setEditingStaff({
+                                                ...editingStaff,
+                                                phone: e.target.value,
+                                            })
+                                        }
+                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs text-muted-foreground mb-1.5">
+                                            Role
+                                        </label>
+                                        <select
+                                            value={editingStaff.role}
+                                            onChange={(e) =>
+                                                setEditingStaff({
+                                                    ...editingStaff,
+                                                    role: e.target.value,
+                                                })
+                                            }
+                                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                        >
+                                            <option value="Cashier">Cashier</option>
+                                            <option value="Waiter">Waiter</option>
+                                            <option value="Chef">Chef</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs text-muted-foreground mb-1.5">
+                                            Joined On
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={editingStaff.joinedDate}
+                                            onChange={(e) =>
+                                                setEditingStaff({
+                                                    ...editingStaff,
+                                                    joinedDate: e.target.value,
+                                                })
+                                            }
+                                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                        Salary (₹ / month) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={editingStaff.salary}
+                                        onChange={(e) =>
+                                            setEditingStaff({
+                                                ...editingStaff,
+                                                salary: e.target.value,
+                                            })
+                                        }
+                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                        Aadhar Number
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editingStaff.aadhar}
+                                        onChange={(e) =>
+                                            setEditingStaff({
+                                                ...editingStaff,
+                                                aadhar: formatAadhar(e.target.value),
+                                            })
+                                        }
+                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                        placeholder="1234 5678 9012"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end gap-2 mt-5">
+                                <button
+                                    onClick={() => {
+                                        setShowEditModal(false);
+                                        setEditingStaff(null);
+                                    }}
+                                    className="px-3 py-2 rounded-lg text-xs sm:text-sm bg-muted text-foreground hover:bg-accent transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleUpdateStaff}
+                                    className="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700 transition-colors flex items-center gap-1.5"
+                                >
+                                    <Save className="w-4 h-4" />
+                                    <span>Save Changes</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

@@ -7,15 +7,15 @@ function Modal({ isOpen, onClose, title, children, maxWidth = "max-w-3xl" }) {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
-      
+
       const handleEscape = (e) => {
         if (e.key === 'Escape') {
           onClose();
         }
       };
-      
+
       document.addEventListener('keydown', handleEscape);
-      
+
       return () => {
         document.body.style.overflow = 'unset';
         document.removeEventListener('keydown', handleEscape);
@@ -32,24 +32,24 @@ function Modal({ isOpen, onClose, title, children, maxWidth = "max-w-3xl" }) {
   };
 
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-3 sm:p-4 animate-fadeIn overflow-y-auto"
       onClick={handleBackdropClick}
     >
-      <div 
+      <div
         className={`bg-card rounded-xl shadow-2xl w-full ${maxWidth} my-8 animate-slideUp`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-3 sm:p-4 lg:p-5 border-b border-border flex-shrink-0">
           <h2 className="text-foreground text-sm sm:text-base lg:text-lg font-semibold pr-4">{title}</h2>
-          <button 
+          <button
             onClick={onClose}
             className="text-muted-foreground hover:text-foreground transition-colors p-1 flex-shrink-0"
           >
             <X size={20} className="sm:w-[22px] sm:h-[22px]" />
           </button>
         </div>
-        
+
         <div className="overflow-y-auto max-h-[calc(90vh-120px)] p-3 sm:p-4 lg:p-6">
           {children}
         </div>
@@ -69,7 +69,7 @@ function Offers() {
   const [statusFilter, setStatusFilter] = useState('All / Active / Expired');
   const [editingId, setEditingId] = useState(null);
   const [showCouponModal, setShowCouponModal] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     code: '',
     discount_type: 'percentage',
@@ -101,7 +101,7 @@ function Offers() {
       const response = await api.get('/coupons/', {
         params: { skip: 0, limit: 100 }
       });
-      
+
       console.log('Coupons response:', response.data);
       const couponData = response.data || [];
       setCoupons(Array.isArray(couponData) ? couponData : []);
@@ -120,41 +120,34 @@ function Offers() {
     try {
       setCategoriesLoading(true);
       console.log('Loading categories...');
-      
+
       // Try the main categories endpoint
       const response = await api.get('/categories/');
-      
+
       console.log('Categories API Response:', response);
       console.log('Categories data:', response.data);
-      
+
       let categoryData = response.data;
-      
+
       // Handle different response formats
       if (categoryData && typeof categoryData === 'object') {
-        // If the response has a 'categories' property
         if (categoryData.categories && Array.isArray(categoryData.categories)) {
           categoryData = categoryData.categories;
-        }
-        // If the response has an 'items' property (paginated response)
-        else if (categoryData.items && Array.isArray(categoryData.items)) {
+        } else if (categoryData.items && Array.isArray(categoryData.items)) {
           categoryData = categoryData.items;
-        }
-        // If the response has a 'data' property
-        else if (categoryData.data && Array.isArray(categoryData.data)) {
+        } else if (categoryData.data && Array.isArray(categoryData.data)) {
           categoryData = categoryData.data;
-        }
-        // If it's directly an array
-        else if (!Array.isArray(categoryData)) {
+        } else if (!Array.isArray(categoryData)) {
           console.warn('Unexpected categories format:', categoryData);
           categoryData = [];
         }
       } else {
         categoryData = [];
       }
-      
+
       console.log('Processed categories:', categoryData);
       setCategories(Array.isArray(categoryData) ? categoryData : []);
-      
+
       if (Array.isArray(categoryData) && categoryData.length > 0) {
         console.log(`✓ Successfully loaded ${categoryData.length} categories`);
       } else {
@@ -168,10 +161,9 @@ function Offers() {
         data: error?.response?.data,
         message: error?.message
       });
-      
+
       if (error?.response?.status === 404) {
         console.warn('Categories endpoint not found. Trying alternative endpoint...');
-        // Try alternative endpoint if main one fails
         try {
           const altResponse = await api.get('/products/categories');
           console.log('Alternative endpoint response:', altResponse.data);
@@ -230,11 +222,11 @@ function Offers() {
       if (formData.valid_from) {
         payload.valid_from = new Date(formData.valid_from).toISOString();
       }
-      
+
       if (formData.valid_until) {
         payload.valid_until = new Date(formData.valid_until).toISOString();
       }
-      
+
       if (formData.description && formData.description.trim()) {
         payload.description = formData.description.trim();
       }
@@ -258,7 +250,7 @@ function Offers() {
       setShowCouponModal(false);
     } catch (error) {
       console.error('SAVE COUPON ERROR:', error?.response?.data || error);
-      
+
       if (error?.response?.data?.detail) {
         const detail = error.response.data.detail;
         if (Array.isArray(detail)) {
@@ -293,7 +285,7 @@ function Offers() {
     setShowCouponModal(true);
   };
 
-  // UPDATED: soft delete in UI
+  // soft delete in UI
   const handleDelete = async (id) => {
     if (!window.confirm('Disable this coupon? Used coupons will be marked inactive.')) {
       return;
@@ -302,9 +294,6 @@ function Offers() {
     try {
       await api.delete(`/coupons/${id}`);
 
-      // Reflect backend behavior:
-      // - If coupon used: it is soft-deleted (is_active = false)
-      // - If coupon never used: it may be hard-deleted
       setCoupons(prev =>
         prev.some(c => c.id === id)
           ? prev.map(c =>
@@ -325,7 +314,23 @@ function Offers() {
     alert('Coupons synced successfully!');
   };
 
+  const isCouponExpired = (coupon) => {
+    if (!coupon.valid_until) return false;
+    return new Date(coupon.valid_until) < new Date();
+  };
+
+  // helper: only active and not expired coupons can be assigned
+  const canAssignCoupon = (coupon) => {
+    if (!coupon) return false;
+    const expired = isCouponExpired(coupon);
+    return coupon.is_active && !expired;
+  };
+
   const handleAssign = (coupon) => {
+    if (!canAssignCoupon(coupon)) {
+      alert('This coupon is inactive or expired and cannot be assigned.');
+      return;
+    }
     setSelectedCoupon(coupon);
     setShowAssignModal(true);
   };
@@ -333,6 +338,11 @@ function Offers() {
   const handleAssignToOrder = async () => {
     if (!assignOrderId) {
       alert('Please enter an order ID');
+      return;
+    }
+
+    if (!canAssignCoupon(selectedCoupon)) {
+      alert('This coupon is inactive or expired and cannot be assigned.');
       return;
     }
 
@@ -345,7 +355,8 @@ function Offers() {
       setAssignOrderId('');
     } catch (error) {
       console.error('ASSIGN ORDER ERROR:', error?.response?.data || error);
-      alert('Failed to assign coupon to order');
+      const msg = error?.response?.data?.detail || 'Failed to assign coupon to order';
+      alert(msg);
     }
   };
 
@@ -354,28 +365,34 @@ function Offers() {
       alert('Please create a coupon first');
       return;
     }
-    
+
     const couponCode = window.prompt('Enter coupon code to assign:');
     if (!couponCode) return;
-    
+
     const coupon = coupons.find(c => c.code.toUpperCase() === couponCode.toUpperCase());
     if (!coupon) {
       alert('Coupon not found');
       return;
     }
-    
+
+    if (!canAssignCoupon(coupon)) {
+      alert('This coupon is inactive or expired and cannot be assigned.');
+      return;
+    }
+
     const orderId = window.prompt('Enter Order ID:');
     if (!orderId) return;
-    
+
     api.post(`/coupons/${coupon.id}/assign-order`, {
       order_id: parseInt(orderId)
     })
     .then(() => {
-      alert(`✓ Coupon \"${coupon.code}\" assigned to Order #${orderId}`);
+      alert(`✓ Coupon "${coupon.code}" assigned to Order #${orderId}`);
     })
     .catch((error) => {
       console.error('QUICK ASSIGN ORDER ERROR:', error);
-      alert('Failed to assign coupon to order');
+      const msg = error?.response?.data?.detail || 'Failed to assign coupon to order';
+      alert(msg);
     });
   };
 
@@ -384,23 +401,25 @@ function Offers() {
       alert('Please create a coupon first');
       return;
     }
-    
-    // Reload categories to ensure we have the latest data
+
     console.log('Reloading categories before showing modal...');
     await loadCategories();
-    
+
     console.log('Current categories state:', categories);
-    
+
     if (categories.length === 0) {
       alert('No categories available. Please create categories in the Products section first.');
       return;
     }
-    
-    // Show coupon selection modal
+
     setShowCouponSelectModal(true);
   };
 
   const handleSelectCouponForCategories = (coupon) => {
+    if (!canAssignCoupon(coupon)) {
+      alert('This coupon is inactive or expired and cannot be assigned to categories.');
+      return;
+    }
     console.log('Selected coupon:', coupon);
     console.log('Available categories:', categories);
     setSelectedCoupon(coupon);
@@ -420,9 +439,14 @@ function Offers() {
       return;
     }
 
+    if (!canAssignCoupon(selectedCoupon)) {
+      alert('This coupon is inactive or expired and cannot be assigned to categories.');
+      return;
+    }
+
     try {
       console.log('Assigning categories:', selectedCategoryIds, 'to coupon:', selectedCoupon.id);
-      
+
       await api.post(`/coupons/${selectedCoupon.id}/assign-categories`, {
         category_ids: selectedCategoryIds
       });
@@ -432,7 +456,7 @@ function Offers() {
         .map(cat => cat.name)
         .join(', ');
 
-      alert(`✓ Coupon \"${selectedCoupon.code}\" assigned to categories:\n${selectedCategoryNames}`);
+      alert(`✓ Coupon "${selectedCoupon.code}" assigned to categories:\n${selectedCategoryNames}`);
       setShowCategoryModal(false);
       setSelectedCategoryIds([]);
       setSelectedCoupon(null);
@@ -444,8 +468,8 @@ function Offers() {
   };
 
   const toggleCategory = (categoryId) => {
-    setSelectedCategoryIds(prev => 
-      prev.includes(categoryId) 
+    setSelectedCategoryIds(prev =>
+      prev.includes(categoryId)
         ? prev.filter(id => id !== categoryId)
         : [...prev, categoryId]
     );
@@ -453,7 +477,7 @@ function Offers() {
 
   const handleExport = () => {
     const headers = ['ID', 'Code', 'Type', 'Value', 'Min Order', 'Max Uses', 'Valid From', 'Valid Until', 'Status'];
-    
+
     const csvRows = [
       headers.join(','),
       ...filteredCoupons.map(coupon => [
@@ -468,37 +492,32 @@ function Offers() {
         coupon.is_active ? 'Active' : 'Inactive'
       ].join(','))
     ];
-    
+
     const csvContent = csvRows.join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
-    
+
     link.setAttribute('href', url);
     link.setAttribute('download', `coupons_export_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
-    
+
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
-    alert('Export completed! CSV file downloaded.');
-  };
 
-  const isCouponExpired = (coupon) => {
-    if (!coupon.valid_until) return false;
-    return new Date(coupon.valid_until) < new Date();
+    alert('Export completed! CSV file downloaded.');
   };
 
   const formatValidity = (coupon) => {
     if (!coupon.valid_from && !coupon.valid_until) return 'No expiration';
-    
+
     const formatDate = (dateStr) => {
       if (!dateStr) return '';
       const date = new Date(dateStr);
       return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     };
-    
+
     if (coupon.valid_from && coupon.valid_until) {
       return `${formatDate(coupon.valid_from)} – ${formatDate(coupon.valid_until)}`;
     } else if (coupon.valid_from) {
@@ -509,17 +528,17 @@ function Offers() {
   };
 
   const filteredCoupons = coupons.filter(coupon => {
-    const matchesSearch = coupon.code.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    const matchesSearch = coupon.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          (coupon.description && coupon.description.toLowerCase().includes(searchQuery.toLowerCase()));
-    
-    const matchesType = typeFilter === 'All / Percentage / Flat' || 
+
+    const matchesType = typeFilter === 'All / Percentage / Flat' ||
                        (typeFilter === 'Percentage' && coupon.discount_type === 'percentage') ||
                        (typeFilter === 'Flat' && coupon.discount_type === 'flat');
-    
+
     const isExpired = isCouponExpired(coupon);
-    const displayStatus = !coupon.is_active ? 'Expired' : (isExpired ? 'Expired' : 'Active');
+    const displayStatus = !coupon.is_active ? 'Inactive' : (isExpired ? 'Expired' : 'Active');
     const matchesStatus = statusFilter === 'All / Active / Expired' || displayStatus === statusFilter;
-    
+
     return matchesSearch && matchesType && matchesStatus;
   });
 
@@ -703,7 +722,8 @@ function Offers() {
             </button>
             <button
               onClick={handleAssignToOrder}
-              className="flex-1 py-2.5 bg-teal-600 text-white rounded-lg text-sm sm:text-base hover:bg-teal-700 transition-colors"
+              disabled={!canAssignCoupon(selectedCoupon)}
+              className="flex-1 py-2.5 bg-teal-600 text-white rounded-lg text-sm sm:text-base hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Assign
             </button>
@@ -726,461 +746,482 @@ function Offers() {
             </div>
           ) : (
             <div className="space-y-2 max-h-[400px] overflow-y-auto">
-              {coupons.map((coupon) => (
-                <button
-                  key={coupon.id}
-                  onClick={() => handleSelectCouponForCategories(coupon)}
-                  className="w-full text-left p-3 bg-muted rounded-lg hover:bg-secondary transition-colors"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-foreground font-semibold text-sm mb-0.5">{coupon.code}</p>
-                      <p className="text-muted-foreground text-xs truncate">
-                        {coupon.discount_type === 'percentage'
-                          ? `${coupon.discount_value}% off`
-                          : `₹${coupon.discount_value} off`}
-                        {coupon.description ? ` • ${coupon.description}` : ''}
-                      </p>
-                    </div>
-                    <div>
-                      <span className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${
-                        coupon.is_active ? 'bg-teal-600 text-white' : 'bg-red-500 text-white'
-                      }`}>
-                        {coupon.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </div>
+              {coupons.map((coupon) => {
+                const disabled = !canAssignCoupon(coupon);
+                return (
+                  <button
+                    key={coupon.id}
+                    onClick={() => !disabled && handleSelectCouponForCategories(coupon)}
+                    disabled={disabled}
+                    className={`w-full text-left p-3 rounded-lg transition-colors ${
+                      disabled
+                        ? 'bg-muted/60 cursor-not-allowed opacity-60'
+                        : 'bg-muted hover:bg-secondary'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0"><p className="text-foreground font-semibold text-sm mb-0.5">{coupon.code}</p>
+                    <p className="text-muted-foreground text-xs truncate">
+                      {coupon.discount_type === 'percentage'
+                        ? `${coupon.discount_value}% off`
+                        : `₹${coupon.discount_value} off`}
+                      {coupon.description ? ` • ${coupon.description}` : ''}
+                    </p>
                   </div>
-                </button>
-              ))}
-            </div>
-          )}
+                  <div>
+                    <span
+                      className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${
+                        coupon.is_active ? 'bg-teal-600 text-white' : 'bg-red-500 text-white'
+                      }`}
+                    >
+                      {coupon.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
+      <button
+        onClick={() => setShowCouponSelectModal(false)}
+        className="w-full py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base hover:bg-secondary transition-colors"
+      >
+        Cancel
+      </button>
+    </div>
+  </Modal>
+
+  {/* Category Selection Modal */}
+  <Modal
+    isOpen={showCategoryModal}
+    onClose={() => {
+      setShowCategoryModal(false);
+      setSelectedCategoryIds([]);
+      setSelectedCoupon(null);
+    }}
+    title={`Assign ${selectedCoupon?.code || ''} to Categories`}
+    maxWidth="max-w-sm sm:max-w-md"
+  >
+    <div className="space-y-4">
+      {categoriesLoading ? (
+        <div className="text-center py-8">
+          <p className="text-muted-foreground text-sm">Loading categories...</p>
+        </div>
+      ) : categories.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-muted-foreground text-sm">No categories available</p>
+          <p className="text-muted-foreground text-xs mt-2">
+            Create categories first in the Products section
+          </p>
           <button
-            onClick={() => setShowCouponSelectModal(false)}
-            className="w-full py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base hover:bg-secondary transition-colors"
+            onClick={loadCategories}
+            className="mt-4 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700 transition-colors"
           >
-            Cancel
+            Retry Loading
           </button>
         </div>
-      </Modal>
-
-      {/* Category Selection Modal */}
-      <Modal
-        isOpen={showCategoryModal}
-        onClose={() => {
-          setShowCategoryModal(false);
-          setSelectedCategoryIds([]);
-          setSelectedCoupon(null);
-        }}
-        title={`Assign ${selectedCoupon?.code || ''} to Categories`}
-        maxWidth="max-w-sm sm:max-w-md"
-      >
-        <div className="space-y-4">
-          {categoriesLoading ? (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground text-sm">Loading categories...</p>
-            </div>
-          ) : categories.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground text-sm">No categories available</p>
-              <p className="text-muted-foreground text-xs mt-2">
-                Create categories first in the Products section
-              </p>
-              <button
-                onClick={loadCategories}
-                className="mt-4 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700 transition-colors"
+      ) : (
+        <>
+          <div className="space-y-2 max-h-[400px] overflow-y-auto">
+            {categories.map((cat) => (
+              <label
+                key={cat.id}
+                className="flex items-center gap-3 p-3 bg-muted rounded-lg cursor-pointer hover:bg-secondary transition-colors"
               >
-                Retry Loading
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                {categories.map((cat) => (
-                  <label
-                    key={cat.id}
-                    className="flex items-center gap-3 p-3 bg-muted rounded-lg cursor-pointer hover:bg-secondary transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedCategoryIds.includes(cat.id)}
-                      onChange={() => toggleCategory(cat.id)}
-                      className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 accent-teal-600"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-foreground text-sm sm:text-base font-medium block">
-                        {cat.name}
-                      </span>
-                      <span className="text-muted-foreground text-xs block mt-0.5">
-                        {cat.description}
-                      </span>
-                    </div>
-                  </label>
-                ))}
-              </div>
-
-              {selectedCategoryIds.length === 0 && (
-                <div className="bg-teal-50 dark:bg-teal-950 border border-teal-200 dark:border-teal-800 rounded-lg p-3">
-                  <p className="text-xs text-teal-700 dark:text-teal-300 font-medium">
-                    {selectedCategoryIds.length} category selected
-                  </p>
+                <input
+                  type="checkbox"
+                  checked={selectedCategoryIds.includes(cat.id)}
+                  onChange={() => toggleCategory(cat.id)}
+                  className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 accent-teal-600"
+                />
+                <div className="flex-1 min-w-0">
+                  <span className="text-foreground text-sm sm:text-base font-medium block">
+                    {cat.name}
+                  </span>
+                  <span className="text-muted-foreground text-xs block mt-0.5">
+                    {cat.description}
+                  </span>
                 </div>
-              )}
+              </label>
+            ))}
+          </div>
 
-              <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
-                <button
-                  onClick={() => {
-                    setShowCategoryModal(false);
-                    setSelectedCategoryIds([]);
-                    setSelectedCoupon(null);
-                  }}
-                  className="flex-1 py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base hover:bg-secondary transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveCategories}
-                  disabled={selectedCategoryIds.length === 0 || categoriesLoading}
-                  className="flex-1 py-2.5 bg-teal-600 text-white rounded-lg text-sm sm:text-base hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Assign to {selectedCategoryIds.length === 0 ? 'Category' : 'Categories'}
-                </button>
-              </div>
-            </>
+          {selectedCategoryIds.length === 0 && (
+            <div className="bg-teal-50 dark:bg-teal-950 border border-teal-200 dark:border-teal-800 rounded-lg p-3">
+              <p className="text-xs text-teal-700 dark:text-teal-300 font-medium">
+                {selectedCategoryIds.length} category selected
+              </p>
+            </div>
           )}
-        </div>
-      </Modal>
 
-      {/* Header */}
-      <div className="bg-card border-b border-border p-3 sm:p-4 lg:p-6 sticky top-0 z-10">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <h1 className="text-foreground text-base sm:text-lg lg:text-xl font-semibold">
-            Offers &amp; Coupons
-          </h1>
-          <div className="flex gap-2 flex-wrap w-full sm:w-auto">
+          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
             <button
-              onClick={handleExport}
-              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-teal-600 text-white rounded-lg text-xs sm:text-sm lg:text-base hover:bg-teal-700 transition-colors"
+              onClick={() => {
+                setShowCategoryModal(false);
+                setSelectedCategoryIds([]);
+                setSelectedCoupon(null);
+              }}
+              className="flex-1 py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base hover:bg-secondary transition-colors"
             >
-              <Download size={16} className="sm:w-[18px] sm:h-[18px]" />
-              <span>Export</span>
+              Cancel
             </button>
             <button
-              onClick={handleNewCoupon}
-              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-teal-600 text-white rounded-lg text-xs sm:text-sm lg:text-base font-medium hover:bg-teal-700 transition-colors"
+              onClick={handleSaveCategories}
+              disabled={selectedCategoryIds.length === 0 || categoriesLoading}
+              className="flex-1 py-2.5 bg-teal-600 text-white rounded-lg text-sm sm:text-base hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Plus size={16} className="sm:w-[18px] sm:h-[18px]" />
-              <span>New Coupon</span>
+              Assign to {selectedCategoryIds.length === 0 ? 'Category' : 'Categories'}
             </button>
           </div>
-        </div>
+        </>
+      )}
+    </div>
+  </Modal>
+
+  {/* Header */}
+  <div className="p-3 sm:p-4 lg:p-6">
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
+      <h1 className="text-foreground text-lg sm:text-xl lg:text-2xl font-semibold">
+        Offers & Coupons
+      </h1>
+      <div className="flex gap-2 flex-wrap w-full sm:w-auto">
+        <button
+          onClick={handleExport}
+          className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-teal-600 text-white rounded-lg text-xs sm:text-sm lg:text-base hover:bg-teal-700 transition-colors"
+        >
+          <Download size={16} className="sm:w-[18px] sm:h-[18px]" />
+          <span>Export</span>
+        </button>
+        <button
+          onClick={handleNewCoupon}
+          className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-teal-600 text-white rounded-lg text-xs sm:text-sm lg:text-base font-medium hover:bg-teal-700 transition-colors"
+        >
+          <Plus size={16} className="sm:w-[18px] sm:h-[18px]" />
+          <span>New Coupon</span>
+        </button>
       </div>
+    </div>
 
-      {/* Main Content */}
-      <div className="p-3 sm:p-4 lg:p-6 max-w-[1600px] mx-auto">
-        <div className="flex flex-col gap-4 sm:gap-5 lg:gap-6">
+    {/* Main Content */}
+    <div className="max-w-[1600px] mx-auto">
+      <div className="flex flex-col gap-4 sm:gap-5 lg:gap-6">
 
-          {/* Coupons List */}
-          <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 lg:p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3">
-              <h2 className="text-foreground text-sm sm:text-base lg:text-lg font-semibold">
-                Coupons List
-              </h2>
-              <button
-                onClick={handleSync}
-                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 border border-teal-600 text-teal-600 bg-transparent rounded-lg text-xs sm:text-sm lg:text-base hover:bg-teal-50 dark:hover:bg-teal-950 transition-colors"
+        {/* Coupons List */}
+        <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 lg:p-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3">
+            <h2 className="text-foreground text-sm sm:text-base lg:text-lg font-semibold">
+              Coupons List
+            </h2>
+            <button
+              onClick={handleSync}
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 border border-teal-600 text-teal-600 bg-transparent rounded-lg text-xs sm:text-sm lg:text-base hover:bg-teal-50 dark:hover:bg-teal-950 transition-colors"
+            >
+              <RefreshCw size={16} className="sm:w-[18px] sm:h-[18px]" />
+              <span>Sync</span>
+            </button>
+          </div>
+
+          {/* Filters */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+            <div>
+              <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">
+                Search coupons
+              </label>
+              <input
+                type="text"
+                placeholder="Code or description..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-xs sm:text-sm lg:text-base focus:border-teal-600"
+              />
+            </div>
+            <div>
+              <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">
+                Type
+              </label>
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-xs sm:text-sm lg:text-base focus:border-teal-600"
               >
-                <RefreshCw size={16} className="sm:w-[18px] sm:h-[18px]" />
-                <span>Sync</span>
-              </button>
+                <option>All / Percentage / Flat</option>
+                <option>Percentage</option>
+                <option>Flat</option>
+              </select>
             </div>
-
-            {/* Filters */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-              <div>
-                <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">
-                  Search coupons
-                </label>
-                <input
-                  type="text"
-                  placeholder="Code or description..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-xs sm:text-sm lg:text-base focus:border-teal-600"
-                />
-              </div>
-              <div>
-                <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">
-                  Type
-                </label>
-                <select
-                  value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                  className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-xs sm:text-sm lg:text-base focus:border-teal-600"
-                >
-                  <option>All / Percentage / Flat</option>
-                  <option>Percentage</option>
-                  <option>Flat</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">
-                  Status
-                </label>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-xs sm:text-sm lg:text-base focus:border-teal-600"
-                >
-                  <option>All / Active / Expired</option>
-                  <option>Active</option>
-                  <option>Expired</option>
-                </select>
-              </div>
+            <div>
+              <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">
+                Status
+              </label>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-xs sm:text-sm lg:text-base focus:border-teal-600"
+              >
+                <option>All / Active / Expired</option>
+                <option>Active</option>
+                <option>Expired</option>
+              </select>
             </div>
+          </div>
 
-            {/* Coupons Table - Desktop */}
-            <div className="hidden lg:block overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Code</th>
-                    <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Type</th>
-                    <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Value</th>
-                    <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Min Order</th>
-                    <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Used/Max</th>
-                    <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Validity</th>
-                    <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Status</th>
-                    <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredCoupons.map((coupon) => {
-                    const isExpired = isCouponExpired(coupon);
-                    const displayStatus = !coupon.is_active ? 'Inactive' : (isExpired ? 'Expired' : 'Active');
+          {/* Coupons Table - Desktop */}
+          <div className="hidden lg:block overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Code</th>
+                  <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Type</th>
+                  <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Value</th>
+                  <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Min Order</th>
+                  <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Used/Max</th>
+                  <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Validity</th>
+                  <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Status</th>
+                  <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCoupons.map((coupon) => {
+                  const isExpired = isCouponExpired(coupon);
+                  const displayStatus = !coupon.is_active ? 'Inactive' : (isExpired ? 'Expired' : 'Active');
+                  const assignable = canAssignCoupon(coupon);
 
-                    return (
-                      <tr key={coupon.id} className="border-b border-border hover:bg-muted/50">
-                        <td className="text-foreground py-3 px-2 text-sm font-semibold">
-                          {coupon.code}
-                        </td>
-                        <td className="text-foreground py-3 px-2 text-sm capitalize">
-                          {coupon.discount_type}
-                        </td>
-                        <td className="text-foreground py-3 px-2 text-sm">
-                          {coupon.discount_type === 'percentage'
-                            ? `${coupon.discount_value}%`
-                            : `₹${coupon.discount_value}`}
-                        </td>
-                        <td className="text-foreground py-3 px-2 text-sm">
-                          {coupon.min_order_amount ? `₹${coupon.min_order_amount}` : '-'}
-                        </td>
-                        <td className="text-foreground py-3 px-2 text-sm">
-                          {coupon.used_count || 0}/{coupon.max_uses || 0}
-                        </td>
-                        <td className="text-foreground py-3 px-2 text-xs whitespace-nowrap">
-                          {formatValidity(coupon)}
-                        </td>
-                        <td className="py-3 px-2">
-                          <span
-                            className={`inline-block px-2.5 py-1 text-white text-xs rounded-full ${
-                              displayStatus === 'Active'
-                                ? 'bg-teal-600'
-                                : 'bg-red-500'
-                            }`}
-                          >
-                            {displayStatus}
-                          </span>
-                        </td>
-                        <td className="py-3 px-2">
-                          <div className="flex gap-1.5 flex-wrap">
-                            <button
-                              onClick={() => handleEdit(coupon)}
-                              className="flex items-center gap-1 px-2.5 py-1.5 bg-teal-600 text-white rounded text-xs hover:bg-teal-700 transition-colors"
-                            >
-                              <Edit size={12} />
-                              <span>Edit</span>
-                            </button>
-                            <button
-                              onClick={() => handleAssign(coupon)}
-                              className="flex items-center gap-1 px-2.5 py-1.5 bg-teal-600 text-white rounded text-xs hover:bg-teal-700 transition-colors"
-                            >
-                              <Link2 size={12} />
-                              <span>Assign</span>
-                            </button>
-                            <button
-                              onClick={() => handleDelete(coupon.id)}
-                              className="flex items-center gap-1 px-2.5 py-1.5 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors"
-                            >
-                              <Trash2 size={12} />
-                              <span>{coupon.is_active ? 'Disable' : 'Disabled'}</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Coupons Cards - Mobile/Tablet */}
-            <div className="lg:hidden space-y-3">
-              {filteredCoupons.map((coupon) => {
-                const isExpired = isCouponExpired(coupon);
-                const displayStatus = !coupon.is_active ? 'Inactive' : (isExpired ? 'Expired' : 'Active');
-
-                return (
-                  <div key={coupon.id} className="bg-muted rounded-lg p-3">
-                    <div className="flex justify-between items-start mb-3 gap-2">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-foreground font-semibold text-sm mb-1 truncate">
-                          {coupon.code}
-                        </h3>
-                        <p className="text-muted-foreground text-xs">
-                          {coupon.description || 'No description'}
-                        </p>
-                      </div>
-                      <div>
+                  return (
+                    <tr key={coupon.id} className="border-b border-border hover:bg-muted/50">
+                      <td className="text-foreground py-3 px-2 text-sm font-semibold">
+                        {coupon.code}
+                      </td>
+                      <td className="text-foreground py-3 px-2 text-sm capitalize">
+                        {coupon.discount_type}
+                      </td>
+                      <td className="text-foreground py-3 px-2 text-sm">
+                        {coupon.discount_type === 'percentage'
+                          ? `${coupon.discount_value}%`
+                          : `₹${coupon.discount_value}`}
+                      </td>
+                      <td className="text-foreground py-3 px-2 text-sm">
+                        {coupon.min_order_amount ? `₹${coupon.min_order_amount}` : '-'}
+                      </td>
+                      <td className="text-foreground py-3 px-2 text-sm">
+                        {coupon.used_count || 0}/{coupon.max_uses || 0}
+                      </td>
+                      <td className="text-foreground py-3 px-2 text-xs whitespace-nowrap">
+                        {formatValidity(coupon)}
+                      </td>
+                      <td className="py-3 px-2">
                         <span
-                          className={`px-2 py-1 text-white text-xs rounded-full whitespace-nowrap flex-shrink-0 ${
-                            displayStatus === 'Active' ? 'bg-teal-600' : 'bg-red-500'
+                          className={`inline-block px-2.5 py-1 text-white text-xs rounded-full ${
+                            displayStatus === 'Active'
+                              ? 'bg-teal-600'
+                              : 'bg-red-500'
                           }`}
                         >
                           {displayStatus}
                         </span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5 mb-3 text-xs sm:text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Type</span>
-                        <span className="text-foreground capitalize">{coupon.discount_type}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Value</span>
-                        <span className="text-foreground font-semibold">
-                          {coupon.discount_type === 'percentage'
-                            ? `${coupon.discount_value}%`
-                            : `₹${coupon.discount_value}`}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Min Order</span>
-                        <span className="text-foreground">
-                          {coupon.min_order_amount ? `₹${coupon.min_order_amount}` : '-'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Used</span>
-                        <span className="text-foreground">
-                          {coupon.used_count || 0}/{coupon.max_uses || 0}
-                        </span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Validity</span>
-                        <span className="text-foreground text-xs text-right">
-                          {formatValidity(coupon)}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2">
-                      <button 
-                        onClick={() => handleEdit(coupon)}
-                        className="flex items-center justify-center gap-1 px-2 py-2 bg-teal-600 text-white rounded-lg text-xs hover:bg-teal-700 transition-colors"
-                      >
-                        <Edit size={12} />
-                        <span className="hidden sm:inline">Edit</span>
-                      </button>
-                      <button 
-                        onClick={() => handleAssign(coupon)}
-                        className="flex items-center justify-center gap-1 px-2 py-2 bg-teal-600 text-white rounded-lg text-xs hover:bg-teal-700 transition-colors"
-                      >
-                        <Link2 size={12} />
-                        <span className="hidden sm:inline">Assign</span>
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(coupon.id)}
-                        className="flex items-center justify-center gap-1 px-2 py-2 bg-red-600 text-white rounded-lg text-xs hover:bg-red-700 transition-colors"
-                      >
-                        <Trash2 size={12} />
-                        <span className="hidden sm:inline">
-                          {coupon.is_active ? 'Disable' : 'Disabled'}
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {filteredCoupons.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground text-xs sm:text-sm">
-                No coupons found matching your filters.
-              </div>
-            )}
+                      </td>
+                      <td className="py-3 px-2">
+                        <div className="flex gap-1.5 flex-wrap">
+                          <button
+                            onClick={() => handleEdit(coupon)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 bg-teal-600 text-white rounded text-xs hover:bg-teal-700 transition-colors"
+                          >
+                            <Edit size={12} />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            onClick={() => handleAssign(coupon)}
+                            disabled={!assignable}
+                            className={`flex items-center gap-1 px-2.5 py-1.5 rounded text-xs transition-colors ${
+                              assignable
+                                ? 'bg-teal-600 text-white hover:bg-teal-700'
+                                : 'bg-slate-600 text-slate-300 cursor-not-allowed'
+                            }`}
+                          >
+                            <Link2 size={12} />
+                            <span>Assign</span>
+                          </button>
+                          <button
+                            onClick={() => handleDelete(coupon.id)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors"
+                          >
+                            <Trash2 size={12} />
+                            <span>{coupon.is_active ? 'Disable' : 'Disabled'}</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
-          {/* Quick Assign Section */}
-          <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 lg:p-6">
-            <h2 className="text-foreground text-sm sm:text-base lg:text-lg font-semibold mb-4">Quick Assign</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="bg-muted rounded-lg p-3">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <div className="flex items-start gap-2 flex-1">
-                    <Link2 size={18} className="text-teal-600 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-foreground text-xs sm:text-sm lg:text-base font-medium mb-1">
-                        Assign Coupon to Order
-                      </h3>
-                      <p className="text-muted-foreground text-xs">
-                        Link coupon to a specific order ID quickly
-                      </p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={handleQuickAssignOrder}
-                    disabled={coupons.length === 0}
-                    className="w-full sm:w-auto px-3 py-2 bg-teal-600 text-white rounded-lg text-xs sm:text-sm hover:bg-teal-700 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Assign
-                  </button>
-                </div>
-              </div>
+          {/* Coupons Cards - Mobile/Tablet */}
+          <div className="lg:hidden space-y-3">
+            {filteredCoupons.map((coupon) => {
+              const isExpired = isCouponExpired(coupon);
+              const displayStatus = !coupon.is_active ? 'Inactive' : (isExpired ? 'Expired' : 'Active');
+              const assignable = canAssignCoupon(coupon);
 
-              <div className="bg-muted rounded-lg p-3">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <div className="flex items-start gap-2 flex-1">
-                    <FolderOpen size={18} className="text-teal-600 mt-0.5 flex-shrink-0" />
+              return (
+                <div key={coupon.id} className="bg-muted rounded-lg p-3">
+                  <div className="flex justify-between items-start mb-3 gap-2">
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-foreground text-xs sm:text-sm lg:text-base font-medium mb-1">
-                        Assign to Categories
+                      <h3 className="text-foreground font-semibold text-sm mb-1 truncate">
+                        {coupon.code}
                       </h3>
                       <p className="text-muted-foreground text-xs">
-                        {categoriesLoading ? 'Loading categories...' : 
-                         categories.length > 0 ? `${categories.length} categories available` : 
-                         'No categories available'}
+                        {coupon.description || 'No description'}
                       </p>
                     </div>
+                    <div>
+                      <span
+                        className={`px-2 py-1 text-white text-xs rounded-full whitespace-nowrap flex-shrink-0 ${
+                          displayStatus === 'Active' ? 'bg-teal-600' : 'bg-red-500'
+                        }`}
+                      >
+                        {displayStatus}
+                      </span>
+                    </div>
                   </div>
-                  <button 
-                    onClick={handleQuickAssignCategories}
-                    disabled={categoriesLoading}
-                    className="w-full sm:w-auto px-3 py-2 bg-teal-600 text-white rounded-lg text-xs sm:text-sm hover:bg-teal-700 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Choose
-                  </button>
+
+                  <div className="space-y-1.5 mb-3 text-xs sm:text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Type</span>
+                      <span className="text-foreground capitalize">{coupon.discount_type}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Value</span>
+                      <span className="text-foreground font-semibold">
+                        {coupon.discount_type === 'percentage'
+                          ? `${coupon.discount_value}%`
+                          : `₹${coupon.discount_value}`}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Min Order</span>
+                      <span className="text-foreground">
+                        {coupon.min_order_amount ? `₹${coupon.min_order_amount}` : '-'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Used</span>
+                      <span className="text-foreground">
+                        {coupon.used_count || 0}/{coupon.max_uses || 0}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Validity</span>
+                      <span className="text-foreground text-xs text-right">
+                        {formatValidity(coupon)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => handleEdit(coupon)}
+                      className="flex items-center justify-center gap-1 px-2 py-2 bg-teal-600 text-white rounded-lg text-xs hover:bg-teal-700 transition-colors"
+                    >
+                      <Edit size={12} />
+                      <span className="hidden sm:inline">Edit</span>
+                    </button>
+                    <button
+                      onClick={() => handleAssign(coupon)}
+                      disabled={!assignable}
+                      className={`flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-xs transition-colors ${
+                        assignable
+                          ? 'bg-teal-600 text-white hover:bg-teal-700'
+                          : 'bg-slate-600 text-slate-300 cursor-not-allowed'
+                      }`}
+                    >
+                      <Link2 size={12} />
+                      <span className="hidden sm:inline">Assign</span>
+                    </button>
+                    <button
+                      onClick={() => handleDelete(coupon.id)}
+                      className="flex items-center justify-center gap-1 px-2 py-2 bg-red-600 text-white rounded-lg text-xs hover:bg-red-700 transition-colors"
+                    >
+                      <Trash2 size={12} />
+                      <span className="hidden sm:inline">
+                        {coupon.is_active ? 'Disable' : 'Disabled'}
+                      </span>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </div>
+              );
+            })}
           </div>
 
+          {filteredCoupons.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground text-xs sm:text-sm">
+              No coupons found matching your filters.
+            </div>
+          )}
         </div>
+
+        {/* Quick Assign Section */}
+        <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 lg:p-6">
+          <h2 className="text-foreground text-sm sm:text-base lg:text-lg font-semibold mb-4">Quick Assign</h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="bg-muted rounded-lg p-3">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-2 flex-1">
+                  <Link2 size={18} className="text-teal-600 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-foreground text-xs sm:text-sm lg:text-base font-medium mb-1">
+                      Assign Coupon to Order
+                    </h3>
+                    <p className="text-muted-foreground text-xs">
+                      Link coupon to a specific order ID quickly
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleQuickAssignOrder}
+                  disabled={coupons.length === 0}
+                  className="w-full sm:w-auto px-3 py-2 bg-teal-600 text-white rounded-lg text-xs sm:text-sm hover:bg-teal-700 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Assign
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-muted rounded-lg p-3">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-2 flex-1">
+                  <FolderOpen size={18} className="text-teal-600 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-foreground text-xs sm:text-sm lg:text-base font-medium mb-1">
+                      Assign to Categories
+                    </h3>
+                    <p className="text-muted-foreground text-xs">
+                      {categoriesLoading
+                        ? 'Loading categories...'
+                        : categories.length > 0
+                          ? `${categories.length} categories available`
+                          : 'No categories available'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleQuickAssignCategories}
+                  disabled={categoriesLoading}
+                  className="w-full sm:w-auto px-3 py-2 bg-teal-600 text-white rounded-lg text-xs sm:text-sm hover:bg-teal-700 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Choose
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
-  );
+  </div>
+</div>);
 }
-
 export default Offers;

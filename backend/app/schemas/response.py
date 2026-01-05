@@ -1,8 +1,12 @@
 """Pydantic schemas for request and response validation"""
-from pydantic import BaseModel, Field, EmailStr, validator
+
+import re
 from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
+
+from pydantic import BaseModel, Field, EmailStr, validator
+
 from app.models.user import UserRole
 from app.models.order import OrderStatus
 from app.models.payment import PaymentMethod, PaymentStatus
@@ -22,12 +26,12 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     """User creation schema"""
     password: str = Field(..., min_length=8, max_length=72)
-    
-    @validator('password')
-    def validate_password_length(cls, v):
+
+    @validator("password")
+    def validate_password_length(cls, v: str) -> str:
         """Ensure password is not longer than 72 bytes (bcrypt limit)"""
-        if len(v.encode('utf-8')) > 72:
-            raise ValueError('Password cannot exceed 72 bytes when encoded as UTF-8')
+        if len(v.encode("utf-8")) > 72:
+            raise ValueError("Password cannot exceed 72 bytes when encoded as UTF-8")
         return v
 
 
@@ -81,9 +85,6 @@ class CategoryResponse(CategoryBase):
     class Config:
         from_attributes = True
 
-    class Config:
-        from_attributes = True
-
 
 # ============= Product Schemas =============
 class ProductBase(BaseModel):
@@ -123,7 +124,7 @@ class ProductResponse(ProductBase):
     id: int
     stock_quantity: int
     is_active: bool
-    category: Optional[CategoryResponse] = None
+    category: Optional["CategoryResponse"] = None
     created_at: datetime
     updated_at: datetime
 
@@ -132,6 +133,11 @@ class ProductResponse(ProductBase):
 
 
 # ============= Customer Schemas =============
+
+PHONE_PATTERN = re.compile(r"^[6-9]\d{9}$")
+EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.(com|org|in)$", re.IGNORECASE)
+
+
 class CustomerBase(BaseModel):
     """Base customer schema"""
     first_name: str = Field(..., min_length=1, max_length=50)
@@ -147,7 +153,22 @@ class CustomerBase(BaseModel):
 
 class CustomerCreate(CustomerBase):
     """Customer creation schema"""
-    pass
+
+    @validator("phone")
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return v
+        if not PHONE_PATTERN.match(v):
+            raise ValueError("Phone must be 10-digit Indian mobile like 9876543210")
+        return v
+
+    @validator("email")
+    def validate_email(cls, v: Optional[EmailStr]) -> Optional[EmailStr]:
+        if v is None:
+            return v
+        if not EMAIL_PATTERN.match(str(v)):
+            raise ValueError("Email must end with .com, .org or .in")
+        return v
 
 
 class CustomerUpdate(BaseModel):
@@ -162,6 +183,22 @@ class CustomerUpdate(BaseModel):
     zip_code: Optional[str] = None
     country: Optional[str] = None
     is_active: Optional[bool] = None
+
+    @validator("phone")
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or v.strip() == "":
+            return v
+        if not PHONE_PATTERN.match(v):
+            raise ValueError("Phone must be 10-digit Indian mobile like 9876543210")
+        return v
+
+    @validator("email")
+    def validate_email(cls, v: Optional[EmailStr]) -> Optional[EmailStr]:
+        if v is None:
+            return v
+        if not EMAIL_PATTERN.match(str(v)):
+            raise ValueError("Email must end with .com, .org or .in")
+        return v
 
 
 class CustomerResponse(CustomerBase):

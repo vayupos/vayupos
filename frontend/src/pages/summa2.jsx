@@ -23,7 +23,7 @@ function POS() {
     city: '',
     state: '',
     zip_code: '',
-    country: 'India',
+    country: 'India'
   });
   const [menuItems, setMenuItems] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -31,19 +31,19 @@ function POS() {
   const [loading, setLoading] = useState(false);
   const [cartItems, setCartItems] = useState([]);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
+  
+  // Pagination states - changed to show 3 rows initially, then 2 more rows at a time
+  const [visibleRows, setVisibleRows] = useState(3); // Start with 3 rows visible
+  const itemsPerRow = 4; // 4 columns
+  const rowsToLoadMore = 2; // Load 2 more rows each time
+  const [allMenuItems, setAllMenuItems] = useState([]); // Store all loaded items
 
-  // Pagination states
-  const [visibleRows, setVisibleRows] = useState(3);
-  const itemsPerRow = 4;
-  const rowsToLoadMore = 2;
-  const [allMenuItems, setAllMenuItems] = useState([]);
-
-  // Define available sizes
+  // Define available sizes - you can modify this based on your backend data
   const allSizes = [
     { name: 'Small', priceModifier: 0 },
     { name: 'Medium', priceModifier: 10 },
     { name: 'Large', priceModifier: 20 },
-    { name: 'Regular', priceModifier: 0 },
+    { name: 'Regular', priceModifier: 0 }
   ];
 
   // Fetch categories on mount
@@ -54,9 +54,11 @@ function POS() {
 
   // Fetch menu items when category or search changes
   useEffect(() => {
+    // Reset visible rows when category or search changes
     setVisibleRows(3);
     setAllMenuItems([]);
-
+    
+    // Only fetch items if categories have been loaded
     if (categories.length > 0) {
       if (searchMenu) {
         searchMenuItems(searchMenu);
@@ -89,7 +91,7 @@ function POS() {
       const token = localStorage.getItem('access_token');
 
       const headers = {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json'
       };
 
       if (token) {
@@ -99,11 +101,11 @@ function POS() {
       const response = await fetch(`${API_BASE_URL}/customers/`, {
         method: 'POST',
         headers: headers,
-        body: JSON.stringify(newCustomer),
+        body: JSON.stringify(newCustomer)
       });
 
       if (response.ok) {
-        await response.json();
+        const data = await response.json();
         alert(
           `Customer ${newCustomer.first_name} ${newCustomer.last_name} added successfully!`
         );
@@ -116,7 +118,7 @@ function POS() {
           city: '',
           state: '',
           zip_code: '',
-          country: 'India',
+          country: 'India'
         });
         setShowAddCustomerModal(false);
         fetchCustomers();
@@ -125,17 +127,7 @@ function POS() {
         setShowAddCustomerModal(false);
       } else {
         const error = await response.json();
-
-        let msg = 'Failed to add customer';
-
-        // FastAPI validation errors: { detail: [ { msg, loc, ... } ] }
-        if (Array.isArray(error.detail) && error.detail.length > 0) {
-          msg = error.detail[0]?.msg || msg;
-        } else if (typeof error.detail === 'string') {
-          msg = error.detail;
-        }
-
-        alert(`Error: ${msg}`);
+        alert(`Error: ${error.detail || 'Failed to add customer'}`);
       }
     } catch (error) {
       console.error('Error adding customer:', error);
@@ -165,11 +157,11 @@ function POS() {
         }
 
         const validCategories = categoriesArray
-          .map((cat) => ({
+          .map(cat => ({
             id: cat.id,
-            name: cat.name || cat.category_name || cat.title,
+            name: cat.name || cat.category_name || cat.title
           }))
-          .filter((cat) => cat && cat.name);
+          .filter(cat => cat && cat.name);
 
         const finalCategories = [{ id: 0, name: 'All' }, ...validCategories];
         console.log('Final categories for dropdown:', finalCategories);
@@ -187,10 +179,11 @@ function POS() {
   const fetchMenuItems = async () => {
     try {
       setLoading(true);
+      // Fetch more items to support pagination (e.g., 100 items)
       let url = `${API_BASE_URL}/products/?skip=0&limit=100`;
 
       if (selectedCategory !== 'All') {
-        const category = categories.find((cat) => cat.name === selectedCategory);
+        const category = categories.find(cat => cat.name === selectedCategory);
         if (category && category.id !== 0) {
           url = `${API_BASE_URL}/products/?category_id=${category.id}&skip=0&limit=100`;
           console.log('Fetching products for category:', category.name, 'with ID:', category.id);
@@ -215,13 +208,11 @@ function POS() {
         }
 
         const validItems = itemsArray.filter(
-          (item) => item && item.id && item.name && item.price !== undefined
+          item => item && item.id && item.name && item.price !== undefined
         );
 
-        const groupedItems = groupItemsByBaseName(validItems);
-
-        console.log('Grouped items:', groupedItems);
-        setAllMenuItems(groupedItems);
+        console.log('Valid items after filtering:', validItems);
+        setAllMenuItems(validItems);
       } else {
         console.error('Failed to fetch menu items');
         setAllMenuItems([]);
@@ -238,12 +229,10 @@ function POS() {
     try {
       setLoading(true);
 
-      let url = `${API_BASE_URL}/products/search?q=${encodeURIComponent(
-        query
-      )}&skip=0&limit=100`;
+      let url = `${API_BASE_URL}/products/search?q=${encodeURIComponent(query)}&skip=0&limit=100`;
 
       if (selectedCategory !== 'All') {
-        const category = categories.find((cat) => cat.name === selectedCategory);
+        const category = categories.find(cat => cat.name === selectedCategory);
         if (category && category.id !== 0) {
           url += `&category_id=${category.id}`;
           console.log('Searching with category filter:', category.name, 'ID:', category.id);
@@ -266,14 +255,14 @@ function POS() {
         }
 
         const validItems = itemsArray.filter(
-          (item) => item && item.id && item.name && item.price !== undefined
+          item => item && item.id && item.name && item.price !== undefined
         );
 
         let finalItems = validItems;
         if (selectedCategory !== 'All') {
-          const category = categories.find((cat) => cat.name === selectedCategory);
+          const category = categories.find(cat => cat.name === selectedCategory);
           if (category && category.id !== 0) {
-            finalItems = validItems.filter((item) => {
+            finalItems = validItems.filter(item => {
               return (
                 item.category_id === category.id ||
                 item.category_name === selectedCategory ||
@@ -283,10 +272,8 @@ function POS() {
             console.log('Client-side filtered items:', finalItems);
           }
         }
-
-        const groupedItems = groupItemsByBaseName(finalItems);
-
-        setAllMenuItems(groupedItems);
+        
+        setAllMenuItems(finalItems);
       } else {
         console.error('Search failed');
         setAllMenuItems([]);
@@ -297,37 +284,6 @@ function POS() {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Group items by base name (removing size info from name)
-  const groupItemsByBaseName = (items) => {
-    const grouped = {};
-
-    items.forEach((item) => {
-      const baseName = item.name.replace(/\s*\([^)]*\)\s*$/i, '').trim();
-      const sizeMatch = item.name.match(/\(([^)]+)\)$/);
-      const size = sizeMatch ? sizeMatch[1].trim() : 'Regular';
-
-      if (!grouped[baseName]) {
-        grouped[baseName] = {
-          id: item.id,
-          name: baseName,
-          basePrice: item.price,
-          image_url: item.image_url || item.image || item.image_path,
-          category_id: item.category_id,
-          category_name: item.category_name,
-          sizes: [],
-        };
-      }
-
-      grouped[baseName].sizes.push({
-        name: size,
-        price: item.price,
-        product_id: item.id,
-      });
-    });
-
-    return Object.values(grouped);
   };
 
   const fetchCustomers = async () => {
@@ -347,7 +303,7 @@ function POS() {
           customersArray = [data];
         }
 
-        const validCustomers = customersArray.filter((c) => c && c.id !== undefined);
+        const validCustomers = customersArray.filter(c => c && c.id !== undefined);
 
         setCustomers([{ id: 0, first_name: 'Guest', last_name: '' }, ...validCustomers]);
       } else {
@@ -374,7 +330,7 @@ function POS() {
           customersArray = data.items;
         }
 
-        const validCustomers = customersArray.filter((c) => c && c.id !== undefined);
+        const validCustomers = customersArray.filter(c => c && c.id !== undefined);
 
         setCustomers([{ id: 0, first_name: 'Guest', last_name: '' }, ...validCustomers]);
       } else {
@@ -388,30 +344,55 @@ function POS() {
 
   // ---------------- UI HELPERS ----------------
 
+  // Get available sizes for an item based on your backend data structure
+  const getAvailableSizes = (item) => {
+    // Check if the item has a sizes array or available_sizes field from your backend
+    if (item.sizes && Array.isArray(item.sizes) && item.sizes.length > 0) {
+      return item.sizes;
+    }
+    
+    if (item.available_sizes && Array.isArray(item.available_sizes) && item.available_sizes.length > 0) {
+      return item.available_sizes;
+    }
+    
+    // Check if item has a size_options field
+    if (item.size_options && Array.isArray(item.size_options) && item.size_options.length > 0) {
+      return item.size_options;
+    }
+    
+    // If no specific sizes are defined, assume only Regular size
+    // You can modify this logic based on your actual data structure
+    return [{ name: 'Regular', priceModifier: 0 }];
+  };
+
   const handleAddToCartClick = (item) => {
     if (!item || !item.id) {
       console.error('Invalid item:', item);
       return;
     }
 
-    const availableSizes = item.sizes || [];
-
+    const availableSizes = getAvailableSizes(item);
+    
+    // If only one size is available, add directly to cart
     if (availableSizes.length === 1) {
       addToCartWithSize(availableSizes[0], item);
       return;
     }
 
+    // Otherwise, show size modal
     setSelectedMenuItem(item);
     setShowSizeModal(true);
   };
 
   const addToCartWithSize = (size, menuItem = selectedMenuItem) => {
-    if (!menuItem) return;
+    if (!menuItem || !menuItem.id) return;
 
-    const finalPrice = size.price || menuItem.basePrice || 0;
-    const productId = size.product_id || menuItem.id;
+    const basePrice = menuItem.price || 0;
+    const finalPrice = basePrice + (size.priceModifier || 0);
 
-    const existingIndex = cartItems.findIndex((ci) => ci.product_id === productId);
+    const existingIndex = cartItems.findIndex(
+      ci => ci.product_id === menuItem.id && ci.size === size.name
+    );
 
     if (existingIndex >= 0) {
       const newCart = [...cartItems];
@@ -421,12 +402,12 @@ function POS() {
       setCartItems([
         ...cartItems,
         {
-          product_id: productId,
-          name: menuItem.name,
+          product_id: menuItem.id,
+          name: menuItem.name || 'Item',
           size: size.name,
           qty: 1,
-          price: finalPrice,
-        },
+          price: finalPrice
+        }
       ]);
     }
 
@@ -437,19 +418,18 @@ function POS() {
   const updateCartItemQuantity = (index, change) => {
     const newCart = [...cartItems];
     newCart[index].qty += change;
-
+    
     if (newCart[index].qty <= 0) {
       newCart.splice(index, 1);
     }
-
+    
     setCartItems(newCart);
   };
 
-  const getMenuItemQuantity = (item) => {
-    if (!item) return 0;
-
+  const getMenuItemQuantity = (itemId) => {
+    if (!itemId) return 0;
     return cartItems
-      .filter((ci) => item.sizes.some((size) => size.product_id === ci.product_id))
+      .filter(ci => ci.product_id === itemId)
       .reduce((sum, ci) => sum + (ci.qty || 0), 0);
   };
 
@@ -484,7 +464,7 @@ function POS() {
   };
 
   const handleLoadMore = () => {
-    setVisibleRows((prev) => prev + rowsToLoadMore);
+    setVisibleRows(prev => prev + rowsToLoadMore);
   };
 
   const handlePreview = () => {
@@ -495,13 +475,12 @@ function POS() {
     setIsPreviewMode(false);
   };
 
+  // Calculate visible items based on visible rows
   const visibleItems = allMenuItems.slice(0, visibleRows * itemsPerRow);
   const hasMoreToLoad = visibleItems.length < allMenuItems.length;
 
-  const subtotal = cartItems.reduce(
-    (sum, item) => sum + (item.price || 0) * (item.qty || 0),
-    0
-  );
+  // Calculate totals
+  const subtotal = cartItems.reduce((sum, item) => sum + ((item.price || 0) * (item.qty || 0)), 0);
   const cgst = subtotal * 0.025;
   const sgst = subtotal * 0.025;
   const total = subtotal + cgst + sgst;
@@ -528,34 +507,23 @@ function POS() {
                 }}
                 className="text-muted-foreground hover:text-foreground"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
             <p className="text-sm text-muted-foreground mb-4">
               {selectedMenuItem.name || 'Item'}
             </p>
             <div className="space-y-2">
-              {(selectedMenuItem.sizes || []).map((size, i) => (
+              {getAvailableSizes(selectedMenuItem).map((size, i) => (
                 <button
                   key={i}
                   onClick={() => addToCartWithSize(size)}
                   className="w-full p-3 bg-muted hover:bg-teal-600 hover:text-white rounded-lg transition-colors flex justify-between items-center"
                 >
                   <span className="font-medium">{size.name}</span>
-                  <span>₹{size.price || 0}</span>
+                  <span>
+                    ₹{(selectedMenuItem.price || 0) + (size.priceModifier || 0)}
+                  </span>
                 </button>
               ))}
             </div>
@@ -568,27 +536,9 @@ function POS() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
           <div className="bg-card rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-3 sm:mb-4">
-              <h3 className="text-sm sm:text-lg md:text-xl font-semibold text-card-foreground">
-                Add New Customer
-              </h3>
-              <button
-                onClick={() => setShowAddCustomerModal(false)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+              <h3 className="text-sm sm:text-lg md:text-xl font-semibold text-card-foreground">Add New Customer</h3>
+              <button onClick={() => setShowAddCustomerModal(false)} className="text-muted-foreground hover:text-foreground">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
 
@@ -596,88 +546,63 @@ function POS() {
               type="text"
               placeholder="First name *"
               value={newCustomer.first_name}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, first_name: e.target.value })
-              }
+              onChange={(e) => setNewCustomer({ ...newCustomer, first_name: e.target.value })}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
             />
             <input
               type="text"
               placeholder="Last name"
               value={newCustomer.last_name}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, last_name: e.target.value })
-              }
+              onChange={(e) => setNewCustomer({ ...newCustomer, last_name: e.target.value })}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
             />
             <input
               type="text"
               placeholder="+91 Phone number"
               value={newCustomer.phone}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, phone: e.target.value })
-              }
+              onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
             />
             <input
               type="email"
               placeholder="example@mail.com (optional)"
               value={newCustomer.email}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, email: e.target.value })
-              }
+              onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
             />
             <input
               type="text"
               placeholder="Address"
               value={newCustomer.address}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, address: e.target.value })
-              }
+              onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
             />
             <input
               type="text"
               placeholder="City"
               value={newCustomer.city}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, city: e.target.value })
-              }
+              onChange={(e) => setNewCustomer({ ...newCustomer, city: e.target.value })}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
             />
             <input
               type="text"
               placeholder="State"
               value={newCustomer.state}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, state: e.target.value })
-              }
+              onChange={(e) => setNewCustomer({ ...newCustomer, state: e.target.value })}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
             />
             <input
               type="text"
               placeholder="Zip code"
               value={newCustomer.zip_code}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, zip_code: e.target.value })
-              }
+              onChange={(e) => setNewCustomer({ ...newCustomer, zip_code: e.target.value })}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-3 sm:mb-4"
             />
             <div className="flex gap-2">
-              <button
-                onClick={addCustomer}
-                disabled={loading}
-                className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium disabled:opacity-50"
-              >
+              <button onClick={addCustomer} disabled={loading} className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium disabled:opacity-50">
                 {loading ? 'Adding...' : 'Add Customer'}
               </button>
-              <button
-                onClick={() => setShowAddCustomerModal(false)}
-                className="flex-1 py-2 sm:py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base font-medium"
-              >
-                Cancel
-              </button>
+              <button onClick={() => setShowAddCustomerModal(false)} className="flex-1 py-2 sm:py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base font-medium">Cancel</button>
             </div>
           </div>
         </div>
@@ -690,12 +615,10 @@ function POS() {
         </h2>
       </div>
 
-      {/* Customer Panel */}
+      {/* Customer Panel - Always visible */}
       <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full mb-3 sm:mb-4 md:mb-5">
         <div className="flex items-center justify-between mb-3 sm:mb-4">
-          <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">
-            Customer
-          </h2>
+          <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">Customer</h2>
           <button
             onClick={() => setShowAddCustomerModal(true)}
             className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
@@ -705,14 +628,9 @@ function POS() {
           </button>
         </div>
         <div className="mb-3 sm:mb-4">
-          <label className="text-muted-foreground text-sm mb-2 block">
-            Select customer
-          </label>
+          <label className="text-muted-foreground text-sm mb-2 block">Select customer</label>
           <div className="relative">
-            <Search
-              size={16}
-              className="text-muted-foreground absolute left-3 top-1/2 transform -translate-y-1/2"
-            />
+            <Search size={16} className="text-muted-foreground absolute left-3 top-1/2 transform -translate-y-1/2" />
             <input
               type="text"
               placeholder="Search name, phone..."
@@ -741,7 +659,7 @@ function POS() {
                 className="px-2.5 py-1.5 sm:px-3 sm:py-2 border border-teal-600 rounded-full text-sm cursor-pointer flex items-center gap-1.5 sm:gap-2 transition-colors flex-shrink-0"
                 style={{
                   backgroundColor: isSelected ? '#1ABC9C' : 'transparent',
-                  color: isSelected ? 'white' : 'inherit',
+                  color: isSelected ? 'white' : 'inherit'
                 }}
                 onMouseEnter={(e) => {
                   if (!isSelected) {
@@ -756,10 +674,7 @@ function POS() {
                   }
                 }}
               >
-                <div
-                  className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
-                  style={{ backgroundColor: bgColor }}
-                >
+                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0" style={{ backgroundColor: bgColor }}>
                   {firstName === 'Guest' ? '👤' : initial}
                 </div>
                 <span className="text-sm whitespace-nowrap">{displayName}</span>
@@ -780,6 +695,7 @@ function POS() {
 
       {/* Conditional rendering based on preview mode */}
       {!isPreviewMode ? (
+        // Menu Panel - Full Width
         <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full">
           <div className="flex items-center justify-between mb-3 sm:mb-4 flex-wrap gap-2">
             <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">
@@ -811,222 +727,198 @@ function POS() {
               />
             </div>
           </div>
-          <div className="mb-3 sm:mb-4">
-            <label className="text-muted-foreground text-sm mb-2 block">
-              Categories
-            </label>
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base"
-            >
-              {categories.map((cat, i) => (
-                <option key={i} value={cat?.name || 'All'}>
-                  {cat?.name || 'All'}
-                </option>
-              ))}
-            </select>
-          </div>
+          <div className="mb-3 sm:mb-4"><label className="text-muted-foreground text-sm mb-2 block">
+          Categories
+        </label>
+        <select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base"
+        >
+          {categories.map((cat, i) => (
+            <option key={i} value={cat?.name || 'All'}>
+              {cat?.name || 'All'}
+            </option>
+          ))}
+        </select>
+      </div>
 
-          {loading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading...</div>
-          ) : visibleItems.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No items found
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-4">
-                {visibleItems.map((item, i) => {
-                  if (!item || !item.id) return null;
-
-                  const quantity = getMenuItemQuantity(item);
-                  const imageUrl = getImageUrl(item);
-                  const itemName = item.name || 'Item';
-                  const fallbackImage = `https://via.placeholder.com/200x200/1ABC9C/FFFFFF?text=${encodeURIComponent(
-                    itemName.substring(0, 3)
-                  )}`;
-
-                  return (
-                    <div
-                      key={i}
-                      className="bg-secondary rounded-lg overflow-hidden flex flex-col shadow-sm"
-                    >
-                      <div className="aspect-square w-full overflow-hidden bg-gray-200">
-                        <img
-                          src={imageUrl || fallbackImage}
-                          alt={itemName}
-                          className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
-                          loading="lazy"
-                          onError={(e) => {
-                            console.log(
-                              'Image failed to load, using fallback:',
-                              imageUrl
-                            );
-                            e.target.onerror = null;
-                            e.target.src = fallbackImage;
-                          }}
-                        />
-                      </div>
-                      <div className="p-2 sm:p-2.5 flex flex-col gap-1.5 sm:gap-2">
-                        <div>
-                          <h3 className="text-foreground text-sm font-semibold mb-0.5 sm:mb-1 line-clamp-2 leading-tight">
-                            {itemName}
-                          </h3>
-                        </div>
-                        <button
-                          onClick={() => handleAddToCartClick(item)}
-                          className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-full text-sm cursor-pointer flex items-center justify-center gap-1 hover:bg-teal-700 w-full"
-                        >
-                          <Plus size={14} />
-                          <span>
-                            {quantity === 0 ? 'Add' : `${quantity} in cart`}
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="flex justify-between items-center mt-4">
-                {hasMoreToLoad && (
-                  <button
-                    onClick={handleLoadMore}
-                    disabled={loading}
-                    className="px-4 py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Load More
-                  </button>
-                )}
-                <button
-                  onClick={handlePreview}
-                  disabled={cartItems.length === 0}
-                  className="px-4 py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-2 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed ml-auto"
-                >
-                  <Eye size={16} />
-                  <span>Preview</span>
-                </button>
-              </div>
-            </>
-          )}
+      {loading ? (
+        <div className="text-center py-8 text-muted-foreground">Loading...</div>
+      ) : visibleItems.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          No items found
         </div>
       ) : (
-        <div className="space-y-4">
-          <button
-            onClick={handleBackToMenu}
-            className="px-4 py-2 bg-gray-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-2 hover:bg-gray-700"
-          >
-            <ArrowLeft size={16} />
-            <span>Back to Menu</span>
-          </button>
+        <>
+          <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-4">
+            {visibleItems.map((item, i) => {
+              if (!item || !item.id) return null;
 
-          <div className="bg-card rounded-lg shadow-sm p-4 md:p-6">
-            <h2 className="text-lg font-semibold text-card-foreground mb-4">
-              Selected Dishes
-            </h2>
+              const quantity = getMenuItemQuantity(item.id);
+              const imageUrl = getImageUrl(item);
+              const itemName = item.name || 'Item';
+              const fallbackImage = `https://via.placeholder.com/200x200/1ABC9C/FFFFFF?text=${encodeURIComponent(
+                itemName.substring(0, 3)
+              )}`;
 
-            {cartItems.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No items in cart
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {cartItems.map((item, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between border-b border-border pb-4 last:border-b-0 last:pb-0"
-                  >
-                    <div className="flex-1">
-                      <h3 className="text-card-foreground font-semibold">
-                        {item.name || 'Item'}
-                      </h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        ₹{item.price || 0} each
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2 bg-muted rounded-lg p-1">
-                        <button
-                          onClick={() => updateCartItemQuantity(i, -1)}
-                          className="w-8 h-8 flex items-center justify-center bg-card hover:bg-accent rounded text-card-foreground cursor-pointer transition-colors"
-                        >
-                          <Minus size={16} />
-                        </button>
-                        <span className="w-12 text-center font-semibold text-card-foreground">
-                          {item.qty || 0}
-                        </span>
-                        <button
-                          onClick={() => updateCartItemQuantity(i, 1)}
-                          className="w-8 h-8 flex items-center justify-center bg-teal-600 hover:bg-teal-700 text-white rounded cursor-pointer transition-colors"
-                        >
-                          <Plus size={16} />
-                        </button>
-                      </div>
-
-                      <div className="w-24 text-right">
-                        <p className="text-card-foreground font-semibold">
-                          ₹{((item.price || 0) * (item.qty || 0)).toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
+              return (
+                <div
+                  key={i}
+                  className="bg-secondary rounded-lg overflow-hidden flex flex-col shadow-sm"
+                >
+                  <div className="aspect-square w-full overflow-hidden bg-gray-200">
+                    <img
+                      src={imageUrl || fallbackImage}
+                      alt={itemName}
+                      className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
+                      loading="lazy"
+                      onError={(e) => {
+                        console.log(
+                          'Image failed to load, using fallback:',
+                          imageUrl
+                        );
+                        e.target.onerror = null;
+                        e.target.src = fallbackImage;
+                      }}
+                    />
                   </div>
-                ))}
-              </div>
+                  <div className="p-2 sm:p-2.5 flex flex-col gap-1.5 sm:gap-2">
+                    <div>
+                      <h3 className="text-foreground text-sm font-semibold mb-0.5 sm:mb-1 line-clamp-2 leading-tight">
+                        {itemName}
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => handleAddToCartClick(item)}
+                      className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-full text-sm cursor-pointer flex items-center justify-center gap-1 hover:bg-teal-700 w-full"
+                    >
+                      <Plus size={14} />
+                      <span>
+                        {quantity === 0 ? 'Add' : `${quantity} in cart`}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Load More and Preview buttons */}
+          <div className="flex justify-between items-center mt-4">
+            {hasMoreToLoad && (
+              <button
+                onClick={handleLoadMore}
+                disabled={loading}
+                className="px-4 py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Load More
+              </button>
             )}
+            <button
+              onClick={handlePreview}
+              disabled={cartItems.length === 0}
+              className="px-4 py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-2 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed ml-auto"
+            >
+              <Eye size={16} />
+              <span>Preview</span>
+            </button>
           </div>
-
-          <div className="bg-card rounded-lg shadow-sm p-4 md:p-6">
-            <h2 className="text-lg font-semibold text-card-foreground mb-4">
-              Billing Summary
-            </h2>
-
-            <div className="space-y-3">
-              <div className="flex justify-between text-base">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span className="text-card-foreground font-semibold">
-                  ₹{subtotal.toFixed(2)}
-                </span>
-              </div>
-
-              <div className="flex justify-between text-base">
-                <span className="text-muted-foreground">CGST (2.5%)</span>
-                <span className="text-card-foreground">₹{cgst.toFixed(2)}</span>
-              </div>
-
-              <div className="flex justify-between text-base">
-                <span className="text-muted-foreground">SGST (2.5%)</span>
-                <span className="text-card-foreground">₹{sgst.toFixed(2)}</span>
-              </div>
-
-              <div className="border-t border-border pt-3 flex justify-between text-xl font-bold">
-                <span className="text-card-foreground">Total</span>
-                <span className="text-card-foreground">₹{total.toFixed(2)}</span>
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <h3 className="text-base font-semibold text-card-foreground mb-3">
-                Payment Methods
-              </h3>
-              <div className="grid grid-cols-3 gap-2">
-                <button className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700">
-                  UPI
-                </button>
-                <button className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700">
-                  Cash
-                </button>
-                <button className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700">
-                  Card
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        </>
       )}
     </div>
-  );
-}
+  ) : (
+    // Preview Mode - Respects dark/light mode
+    <div className="space-y-4">
+      {/* Back button */}
+      <button
+        onClick={handleBackToMenu}
+        className="px-4 py-2 bg-gray-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-2 hover:bg-gray-700"
+      >
+        <ArrowLeft size={16} />
+        <span>Back to Menu</span>
+      </button>
 
+      {/* Selected Dishes */}
+      <div className="bg-card rounded-lg shadow-sm p-4 md:p-6">
+        <h2 className="text-lg font-semibold text-card-foreground mb-4">Selected Dishes</h2>
+        
+        {cartItems.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">No items in cart</div>
+        ) : (
+          <div className="space-y-4">
+            {cartItems.map((item, i) => (
+              <div key={i} className="flex items-center justify-between border-b border-border pb-4 last:border-b-0 last:pb-0">
+                <div className="flex-1">
+                  <h3 className="text-card-foreground font-semibold">{item.name || 'Item'}</h3>
+                  <p className="text-sm text-muted-foreground mt-1">₹{item.price || 0} each</p>
+                </div>
+                
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 bg-muted rounded-lg p-1">
+                    <button 
+                      onClick={() => updateCartItemQuantity(i, -1)}
+                      className="w-8 h-8 flex items-center justify-center bg-card hover:bg-accent rounded text-card-foreground cursor-pointer transition-colors"
+                    >
+                      <Minus size={16} />
+                    </button>
+                    <span className="w-12 text-center font-semibold text-card-foreground">{item.qty || 0}</span>
+                    <button 
+                      onClick={() => updateCartItemQuantity(i, 1)}
+                      className="w-8 h-8 flex items-center justify-center bg-teal-600 hover:bg-teal-700 text-white rounded cursor-pointer transition-colors"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                  
+                  <div className="w-24 text-right">
+                    <p className="text-card-foreground font-semibold">₹{((item.price || 0) * (item.qty || 0)).toFixed(2)}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Cart & Billing Summary */}
+      <div className="bg-card rounded-lg shadow-sm p-4 md:p-6">
+        <h2 className="text-lg font-semibold text-card-foreground mb-4">Billing Summary</h2>
+        
+        <div className="space-y-3">
+          <div className="flex justify-between text-base">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span className="text-card-foreground font-semibold">₹{subtotal.toFixed(2)}</span>
+          </div>
+          
+          <div className="flex justify-between text-base">
+            <span className="text-muted-foreground">CGST (2.5%)</span>
+            <span className="text-card-foreground">₹{cgst.toFixed(2)}</span>
+          </div>
+          
+          <div className="flex justify-between text-base">
+            <span className="text-muted-foreground">SGST (2.5%)</span>
+            <span className="text-card-foreground">₹{sgst.toFixed(2)}</span>
+          </div>
+          
+          <div className="border-t border-border pt-3 flex justify-between text-xl font-bold">
+            <span className="text-card-foreground">Total</span>
+            <span className="text-card-foreground">₹{total.toFixed(2)}</span>
+          </div>
+        </div>
+
+        {/* Payment Methods Section */}
+        <div className="mt-6">
+          <h3 className="text-base font-semibold text-card-foreground mb-3">Payment Methods</h3>
+          <div className="grid grid-cols-3 gap-2">
+            <button className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700">UPI</button>
+            <button className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700">Cash</button>
+            <button className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700">Card</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )}
+</div>);
+}
 export default POS;

@@ -1,5 +1,11 @@
 """Pydantic schemas for API request/response validation"""
 from app.schemas.response import *
+from app.schemas.dish_template import (    # ← ADD THIS
+    DishTemplateBase,
+    DishTemplateCreate,
+    DishTemplateUpdate,
+    DishTemplateOut,
+)
 
 __all__ = [
     # User
@@ -35,6 +41,11 @@ __all__ = [
     # Inventory
     "InventoryLogCreate",
     "InventoryLogResponse",
+     # DishTemplate  ← ADD THESE 4
+    "DishTemplateBase",
+    "DishTemplateCreate",
+    "DishTemplateUpdate",
+    "DishTemplateOut",
     # Generic
     "ResponseSchema",
     "PaginationParams",

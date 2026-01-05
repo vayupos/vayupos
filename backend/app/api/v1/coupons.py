@@ -26,6 +26,7 @@ from app.models.coupon_category import CouponCategory
 
 router = APIRouter()
 
+
 @router.post(
     "/coupons",
     response_model=CouponResponse,
@@ -59,7 +60,15 @@ def get_available_coupons(
 ):
     """Get eligible and ineligible coupons based on cart subtotal"""
     eligible, ineligible = CouponService.get_available_coupons(db, subtotal)
-    return {"eligible": eligible, "ineligible": ineligible}
+
+    # Convert Coupon objects to CouponResponse dicts
+    eligible_response = [CouponResponse.model_validate(coupon).model_dump() for coupon in eligible]
+    ineligible_response = [CouponResponse.model_validate(coupon).model_dump() for coupon in ineligible]
+
+    return {
+        "eligible": eligible_response,
+        "ineligible": ineligible_response,
+    }
 
 
 @router.post("/coupons/validate", response_model=CouponValidateResponse)
@@ -77,7 +86,7 @@ def validate_coupon(
         "valid": valid,
         "eligible": eligible,
         "message": message,
-        "coupon": coupon,
+        "coupon": CouponResponse.model_validate(coupon).model_dump() if coupon else None,
         "discount_amount": discount_amount,
     }
 
@@ -95,7 +104,7 @@ def get_coupon(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Coupon with ID {coupon_id} not found",
         )
-    return coupon
+    return CouponResponse.model_validate(coupon).model_dump()
 
 
 @router.put("/coupons/{coupon_id}", response_model=CouponResponse)
@@ -112,7 +121,7 @@ def update_coupon(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Coupon with ID {coupon_id} not found",
         )
-    return updated
+    return CouponResponse.model_validate(updated).model_dump()
 
 
 @router.delete("/coupons/{coupon_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -166,7 +175,7 @@ def assign_coupon_to_order(
         OrderCoupon.order_id == order.id,
         OrderCoupon.coupon_id == coupon.id
     ).first()
-    
+
     if existing:
         return AssignOrderResponse(
             success=True,

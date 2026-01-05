@@ -8,6 +8,7 @@ from app.models.order_item import OrderItem
 from app.models.payment import Payment, PaymentMethod, PaymentStatus
 from app.models.inventory_log import InventoryLog, InventoryAction
 from app.models.coupon import Coupon  # ← ADD THIS
+from app.models.dish_template import DishTemplate  # ← ADD THIS
 
 
 __all__ = [
@@ -24,5 +25,6 @@ __all__ = [
     "PaymentStatus",
     "InventoryLog",
     "InventoryAction",
-    "Coupon",  # ← ADD THIS
+    "Coupon", 
+     "DishTemplate" # ← ADD THIS
 ]
