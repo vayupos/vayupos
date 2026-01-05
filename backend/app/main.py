@@ -25,11 +25,19 @@ app = FastAPI(
 origins = [
     "http://localhost:8080",
     "http://127.0.0.1:8080",
-    "http://localhost:3000",      # ✅ ADD THIS
-    "http://127.0.0.1:3000",      # ✅ ADD THIS
-    "http://localhost:5173",      # ✅ ADD THIS (Vite)
-    "http://127.0.0.1:5173",      # ✅ ADD THIS
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",      # Vite dev server
+    "http://127.0.0.1:5173",
+    "https://restaurant-vayu-pos.vercel.app",
+    "https://restaurant-vayupos.onrender.com",
+    "https://*.onrender.com",     # Render deployment
 ]
+
+# Allow all origins in development, specific in production
+if settings.DEBUG:
+    origins.append("*")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
