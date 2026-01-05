@@ -1,7 +1,11 @@
 import axios from "axios";
 
+// Use environment variable or fallback to localhost for development
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api/v1";
+const API_HOST = import.meta.env.VITE_API_HOST || "http://127.0.0.1:8000";
+
 const api = axios.create({
-  baseURL: "http://127.0.0.1:8000/api/v1",
+  baseURL: API_BASE_URL,
   headers: {
     "Content-Type": "application/json",
   },
@@ -20,10 +24,10 @@ api.interceptors.response.use(
   (response) => {
     // If response contains image_url or url, convert to absolute
     if (response.data?.image_url && !response.data.image_url.startsWith('http')) {
-      response.data.image_url = `http://127.0.0.1:8000${response.data.image_url}`;
+      response.data.image_url = `${API_HOST}${response.data.image_url}`;
     }
     if (response.data?.url && !response.data.url.startsWith('http')) {
-      response.data.url = `http://127.0.0.1:8000${response.data.url}`;
+      response.data.url = `${API_HOST}${response.data.url}`;
     }
     return response;
   },
