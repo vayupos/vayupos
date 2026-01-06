@@ -5,13 +5,13 @@ from typing import Optional
 
 from app.core.config import settings
 
-# Password hashing context using argon2
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+# Password hashing context using bcrypt
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def hash_password(password: str) -> str:
     """
-    Hash a password using argon2.
+    Hash a password using bcrypt.
     
     Args:
         password: Plain text password
