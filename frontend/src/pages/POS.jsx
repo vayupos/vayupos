@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Plus, Database, Eye, ArrowLeft, Minus } from 'lucide-react';
 
-// API Base URL - Update this to your actual API URL
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+// API Base URL - comes from env, falls back to local
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 function POS() {
   const [selectedCustomer, setSelectedCustomer] = useState('Guest');
@@ -128,7 +129,6 @@ function POS() {
 
         let msg = 'Failed to add customer';
 
-        // FastAPI validation errors: { detail: [ { msg, loc, ... } ] }
         if (Array.isArray(error.detail) && error.detail.length > 0) {
           msg = error.detail[0]?.msg || msg;
         } else if (typeof error.detail === 'string') {
