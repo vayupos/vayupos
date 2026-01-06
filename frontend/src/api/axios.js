@@ -1,7 +1,9 @@
 import axios from "axios";
 
+const BASE_URL = import.meta.env.VITE_API_URL; // set to https://restaurant-vayupos.onrender.com in Vercel
+
 const api = axios.create({
-  baseURL: "http://127.0.0.1:8000/api/v1",
+  baseURL: `${BASE_URL}/api/v1`,
   headers: {
     "Content-Type": "application/json",
   },
@@ -15,15 +17,13 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Add response interceptor to convert relative image URLs to absolute
 api.interceptors.response.use(
   (response) => {
-    // If response contains image_url or url, convert to absolute
-    if (response.data?.image_url && !response.data.image_url.startsWith('http')) {
-      response.data.image_url = `http://127.0.0.1:8000${response.data.image_url}`;
+    if (response.data?.image_url && !response.data.image_url.startsWith("http")) {
+      response.data.image_url = `${BASE_URL}${response.data.image_url}`;
     }
-    if (response.data?.url && !response.data.url.startsWith('http')) {
-      response.data.url = `http://127.0.0.1:8000${response.data.url}`;
+    if (response.data?.url && !response.data.url.startsWith("http")) {
+      response.data.url = `${BASE_URL}${response.data.url}`;
     }
     return response;
   },
