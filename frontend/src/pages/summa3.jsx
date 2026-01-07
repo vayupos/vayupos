@@ -803,9 +803,9 @@ function POS() {
               <button
                 key={i}
                 onClick={() => handleCustomerSelect(customer)}
-                className="px-2.5 py-1.5 sm:px-3 sm:py-2 border border-teal-600 rounded-full text-sm cursor-pointer flex items-center gap-1.5sm:gap-2 transition-colors flex-shrink-0"
-style={{
-backgroundColor: isSelected ? '#1ABC9C' : 'transparent',
+                className="px-2.5 py-1.5 sm:px-3 sm:py-2 border border-teal-600 rounded-full text-sm cursor-pointer flex items-center gap-1.5 sm:gap-2 transition-colors flex-shrink-0"
+                style={{
+                  backgroundColor: isSelected ?'#1ABC9C' : 'transparent',
 color: isSelected ? 'white' : 'inherit',
 }}
 onMouseEnter={(e) => {
