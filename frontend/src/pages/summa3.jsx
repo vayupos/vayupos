@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Database, Eye, ArrowLeft, Minus } from 'lucide-react';
+import { Search, Plus, Database, Eye, ArrowLeft, Minus, Tag, Trash2, Printer } from 'lucide-react';
 import api from '../api/axios';
 
 function POS() {
@@ -12,6 +12,9 @@ function POS() {
   const [showSizeModal, setShowSizeModal] = useState(false);
   const [selectedMenuItem, setSelectedMenuItem] = useState(null);
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
+  const [showCouponModal, setShowCouponModal] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
+  const [discount, setDiscount] = useState(0);
   const [newCustomer, setNewCustomer] = useState({
     first_name: '',
     last_name: '',
@@ -332,6 +335,86 @@ function POS() {
     }
   };
 
+  // ---------------- COUPON FUNCTIONS ----------------
+
+  const applyCoupon = () => {
+    // Example coupon logic - replace with actual API call
+    const coupons = {
+      'SAVE10': 10, // 10% discount
+      'SAVE20': 20, // 20% discount
+      'FLAT50': 50, // Flat 50 rupees off
+    };
+
+    const couponUpper = couponCode.toUpperCase();
+    if (coupons[couponUpper]) {
+      const discountValue = coupons[couponUpper];
+      
+      // Check if it's percentage or flat discount
+      if (couponUpper.startsWith('SAVE')) {
+        setDiscount((subtotal * discountValue) / 100);
+      } else {
+        setDiscount(discountValue);
+      }
+      
+      alert(`Coupon ${couponUpper} applied successfully!`);
+      setShowCouponModal(false);
+    } else {
+      alert('Invalid coupon code');
+    }
+  };
+
+  const removeCoupon = () => {
+    setCouponCode('');
+    setDiscount(0);
+  };
+
+  // ---------------- PAYMENT HANDLERS ----------------
+
+  const handleUpiPayment = () => {
+    if (cartItems.length === 0) {
+      alert('Cart is empty!');
+      return;
+    }
+    alert('UPI Payment initiated');
+    // Add your UPI payment logic here
+  };
+
+  const handleCashPayment = () => {
+    if (cartItems.length === 0) {
+      alert('Cart is empty!');
+      return;
+    }
+    alert('Cash Payment recorded');
+    // Add your cash payment logic here
+  };
+
+  const handleCardPayment = () => {
+    if (cartItems.length === 0) {
+      alert('Cart is empty!');
+      return;
+    }
+    alert('Card Payment initiated');
+    // Add your card payment logic here
+  };
+
+  const handleSaveDraft = () => {
+    if (cartItems.length === 0) {
+      alert('Cart is empty!');
+      return;
+    }
+    alert('Order saved as draft');
+    // Add your save draft logic here
+  };
+
+  const handlePrint = () => {
+    if (cartItems.length === 0) {
+      alert('Cart is empty!');
+      return;
+    }
+    alert('Printing bill...');
+    // Add your print logic here
+  };
+
   // ---------------- UI HELPERS ----------------
 
   const handleAddToCartClick = (item) => {
@@ -430,9 +513,10 @@ function POS() {
     (sum, item) => sum + (item.price || 0) * (item.qty || 0),
     0
   );
-  const cgst = subtotal * 0.025;
-  const sgst = subtotal * 0.025;
-  const total = subtotal + cgst + sgst;
+  const discountedSubtotal = subtotal - discount;
+  const cgst = discountedSubtotal * 0.025;
+  const sgst = discountedSubtotal * 0.025;
+  const total = discountedSubtotal + cgst + sgst;
 
   // ---------------- RENDER ----------------
 
@@ -611,6 +695,59 @@ function POS() {
         </div>
       )}
 
+      {/* Coupon Modal */}
+      {showCouponModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
+          <div className="bg-card rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-sm sm:text-lg md:text-xl font-semibold text-card-foreground">
+                Apply Coupon
+              </h3>
+              <button
+                onClick={() => setShowCouponModal(false)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <input
+              type="text"
+              placeholder="Enter coupon code"
+              value={couponCode}
+              onChange={(e) => setCouponCode(e.target.value)}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-4"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={applyCoupon}
+                className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium"
+              >
+                Apply
+              </button>
+              <button
+                onClick={() => setShowCouponModal(false)}
+                className="flex-1 py-2 sm:py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base font-medium"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-5">
         <h2 className="text-base sm:text-xl md:text-2xl font-semibold text-foreground">
@@ -668,154 +805,155 @@ function POS() {
                 onClick={() => handleCustomerSelect(customer)}
                 className="px-2.5 py-1.5 sm:px-3 sm:py-2 border border-teal-600 rounded-full text-sm cursor-pointer flex items-center gap-1.5 sm:gap-2 transition-colors flex-shrink-0"
                 style={{
-                  backgroundColor: isSelected ? '#1ABC9C' : 'transparent',
-                  color: isSelected ? 'white' : 'inherit',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isSelected) {
-                    e.currentTarget.style.backgroundColor = '#1ABC9C';
-                    e.currentTarget.style.color = 'white';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isSelected) {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.color = 'inherit';
-                  }
-                }}
-              >
-                <div
-                  className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
-                  style={{ backgroundColor: bgColor }}
-                >
-                  {firstName === 'Guest' ? '👤' : initial}
-                </div>
-                <span className="text-sm whitespace-nowrap">{displayName}</span>
-              </button>
-            );
-          })}
+backgroundColor: isSelected ? '#1ABC9C' : 'transparent',
+color: isSelected ? 'white' : 'inherit',
+}}
+onMouseEnter={(e) => {
+if (!isSelected) {
+e.currentTarget.style.backgroundColor = '#1ABC9C';
+e.currentTarget.style.color = 'white';
+}
+}}
+onMouseLeave={(e) => {
+if (!isSelected) {
+e.currentTarget.style.backgroundColor = 'transparent';
+e.currentTarget.style.color = 'inherit';
+}
+}}
+>
+<div
+className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
+style={{ backgroundColor: bgColor }}
+>
+{firstName === 'Guest' ? '👤' : initial}
+</div>
+<span className="text-sm whitespace-nowrap">{displayName}</span>
+</button>
+);
+})}
+</div>
+<div>
+<label className="text-muted-foreground text-sm mb-2 block">Notes</label>
+<textarea
+value={notes}
+onChange={(e) => setNotes(e.target.value)}
+rows="2"
+className="w-full bg-muted text-foreground border border-border rounded-md outline-none resize-y px-3 py-2 text-sm sm:text-base"
+/>
+</div>
+</div>{/* Conditional rendering based on preview mode */}
+  {!isPreviewMode ? (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-5">
+      {/* Menu Panel */}
+      <div className="lg:col-span-2 bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full">
+        <div className="flex items-center justify-between mb-3 sm:mb-4 flex-wrap gap-2">
+          <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">
+            Menu
+          </h2>
+          <button
+            onClick={handleDatabaseClick}
+            className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
+          >
+            <Database size={16} />
+            <span>DB</span>
+          </button>
         </div>
-        <div>
-          <label className="text-muted-foreground text-sm mb-2 block">Notes</label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows="2"
-            className="w-full bg-muted text-foreground border border-border rounded-md outline-none resize-y px-3 py-2 text-sm sm:text-base"
-          />
+        <div className="mb-3 sm:mb-4">
+          <label className="text-muted-foreground text-sm mb-2 block">
+            Search items
+          </label>
+          <div className="relative">
+            <Search
+              size={16}
+              className="text-muted-foreground absolute left-3 top-1/2 transform -translate-y-1/2"
+            />
+            <input
+              type="text"
+              placeholder="Search..."
+              value={searchMenu}
+              onChange={(e) => setSearchMenu(e.target.value)}
+              className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-4 py-2 pl-10 text-sm sm:text-base"
+            />
+          </div>
         </div>
-      </div>
+        <div className="mb-3 sm:mb-4">
+          <label className="text-muted-foreground text-sm mb-2 block">
+            Categories
+          </label>
+          <select
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base"
+          >
+            {categories.map((cat, i) => (
+              <option key={i} value={cat?.name || 'All'}>
+                {cat?.name || 'All'}
+              </option>
+            ))}
+          </select>
+        </div>
 
-      {/* Conditional rendering based on preview mode */}
-      {!isPreviewMode ? (
-        <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full">
-          <div className="flex items-center justify-between mb-3 sm:mb-4 flex-wrap gap-2">
-            <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">
-              Menu
-            </h2>
-            <button
-              onClick={handleDatabaseClick}
-              className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
-            >
-              <Database size={16} />
-              <span>DB</span>
-            </button>
+        {loading ? (
+          <div className="text-center py-8 text-muted-foreground">Loading...</div>
+        ) : visibleItems.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            No items found
           </div>
-          <div className="mb-3 sm:mb-4">
-            <label className="text-muted-foreground text-sm mb-2 block">
-              Search items
-            </label>
-            <div className="relative">
-              <Search
-                size={16}
-                className="text-muted-foreground absolute left-3 top-1/2 transform -translate-y-1/2"
-              />
-              <input
-                type="text"
-                placeholder="Search..."
-                value={searchMenu}
-                onChange={(e) => setSearchMenu(e.target.value)}
-                className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-4 py-2 pl-10 text-sm sm:text-base"
-              />
-            </div>
-          </div>
-          <div className="mb-3 sm:mb-4">
-            <label className="text-muted-foreground text-sm mb-2 block">
-              Categories
-            </label>
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base"
-            >
-              {categories.map((cat, i) => (
-                <option key={i} value={cat?.name || 'All'}>
-                  {cat?.name || 'All'}
-                </option>
-              ))}
-            </select>
-          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-4">
+              {visibleItems.map((item, i) => {
+                if (!item || !item.id) return null;
 
-          {loading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading...</div>
-          ) : visibleItems.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No items found
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-4">
-                {visibleItems.map((item, i) => {
-                  if (!item || !item.id) return null;
+                const quantity = getMenuItemQuantity(item);
+                const imageUrl = item.image_url;
+                const itemName = item.name || 'Item';
+                const fallbackImage = `https://via.placeholder.com/200x200/1ABC9C/FFFFFF?text=${encodeURIComponent(
+                  itemName.substring(0, 3)
+                )}`;
 
-                  const quantity = getMenuItemQuantity(item);
-                  const imageUrl = item.image_url;
-                  const itemName = item.name || 'Item';
-                  const fallbackImage = `https://via.placeholder.com/200x200/1ABC9C/FFFFFF?text=${encodeURIComponent(
-itemName.substring(0, 3)
-)}`;return (
-                <div
-                  key={i}
-                  className="bg-secondary rounded-lg overflow-hidden flex flex-col shadow-sm"
-                >
-                  <div className="aspect-square w-full overflow-hidden bg-gray-200">
-                    <img
-                      src={imageUrl || fallbackImage}
-                      alt={itemName}
-                      className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
-                      loading="lazy"
-                      onError={(e) => {
-                        console.log(
-                          'Image failed to load, using fallback:',
-                          imageUrl
-                        );
-                        e.target.onerror = null;
-                        e.target.src = fallbackImage;
-                      }}
-                    />
-                  </div>
-                  <div className="p-2 sm:p-2.5 flex flex-col gap-1.5 sm:gap-2">
-                    <div>
-                      <h3 className="text-foreground text-sm font-semibold mb-0.5 sm:mb-1 line-clamp-2 leading-tight">
-                        {itemName}
-                      </h3>
+                return (
+                  <div
+                    key={i}
+                    className="bg-secondary rounded-lg overflow-hidden flex flex-col shadow-sm"
+                  >
+                    <div className="aspect-square w-full overflow-hidden bg-gray-200">
+                      <img
+                        src={imageUrl || fallbackImage}
+                        alt={itemName}
+                        className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
+                        loading="lazy"
+                        onError={(e) => {
+                          console.log(
+                            'Image failed to load, using fallback:',
+                            imageUrl
+                          );
+                          e.target.onerror = null;
+                          e.target.src = fallbackImage;
+                        }}
+                      />
                     </div>
-                    <button
-                      onClick={() => handleAddToCartClick(item)}
-                      className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-full text-sm cursor-pointer flex items-center justify-center gap-1 hover:bg-teal-700 w-full"
-                    >
-                      <Plus size={14} />
-                      <span>
-                        {quantity === 0 ? 'Add' : `${quantity} in cart`}
-                      </span>
-                    </button>
+                    <div className="p-2 sm:p-2.5 flex flex-col gap-1.5 sm:gap-2">
+                      <div>
+                        <h3 className="text-foreground text-sm font-semibold mb-0.5 sm:mb-1 line-clamp-2 leading-tight">
+                          {itemName}
+                        </h3>
+                      </div>
+                      <button
+                        onClick={() => handleAddToCartClick(item)}
+                        className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-full text-sm cursor-pointer flex items-center justify-center gap-1 hover:bg-teal-700 w-full"
+                      >
+                        <Plus size={14} />
+                        <span>
+                          {quantity === 0 ? 'Add' : `${quantity} in cart`}
+                        </span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
 
-          <div className="flex justify-between items-center mt-4">
             {hasMoreToLoad && (
               <button
                 onClick={handleLoadMore}
@@ -825,17 +963,157 @@ itemName.substring(0, 3)
                 Load More
               </button>
             )}
+          </>
+        )}
+      </div>
+
+      {/* Cart Billing Panel */}
+      <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full h-fit">
+        <div className="flex items-center justify-between mb-3 sm:mb-4 flex-wrap gap-2">
+          <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">
+            Cart Billing
+          </h2>
+          <div className="flex gap-2">
             <button
-              onClick={handlePreview}
-              disabled={cartItems.length === 0}
-              className="px-4 py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-2 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed ml-auto"
+              onClick={() => setShowCouponModal(true)}
+              className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
             >
-              <Eye size={16} />
-              <span>Preview</span>
+              <Tag size={16} />
+              <span>Coupon</span>
+            </button>
+            <button
+              onClick={() => setCartItems([])}
+              className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
+            >
+              <Trash2 size={16} />
+              <span>Clear</span>
             </button>
           </div>
-        </>
-      )}
+        </div>
+
+        {/* Cart Items Table */}
+        <div className="mb-4">
+          <div className="border-b border-border text-muted-foreground grid grid-cols-[2fr_1fr_1fr_1fr] gap-2 p-2 text-xs sm:text-sm">
+            <div>Item</div>
+            <div>Qty</div>
+            <div>Price</div>
+            <div>Total</div>
+          </div>
+          <div className="max-h-[200px] overflow-y-auto">
+            {cartItems.map((item, i) => (
+              <div
+                key={i}
+                className="border-b border-border grid grid-cols-[2fr_1fr_1fr_1fr] gap-2 p-2 sm:p-2.5 items-center"
+              >
+                <div className="text-foreground text-xs sm:text-sm">
+                  <div className="truncate">{item.name}</div>
+                  <div className="text-muted-foreground text-xs">
+                    {item.size}
+                  </div>
+                </div>
+                <div className="text-foreground text-xs sm:text-sm">
+                  {item.qty}
+                </div>
+                <div className="text-foreground text-xs sm:text-sm">
+                  ₹{item.price}
+                </div>
+                <div className="text-foreground text-xs sm:text-sm">
+                  ₹{(item.price * item.qty).toFixed(2)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Billing Summary */}
+        <div className="border-t border-border pt-3 sm:pt-4 flex flex-col gap-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span className="text-foreground font-semibold">
+              ₹{subtotal.toFixed(2)}
+            </span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-muted-foreground">Discount</span>
+              {couponCode && (
+                <span
+                  className="px-2 py-0.5 bg-teal-600 text-white text-xs rounded cursor-pointer hover:bg-red-600 transition-colors"
+                  onClick={removeCoupon}
+                  title="Click to remove"
+                >
+                  {couponCode}
+                </span>
+              )}
+            </div>
+            <span className="text-foreground font-semibold">
+              {discount > 0 ? `- ₹${discount.toFixed(2)}` : '₹0.00'}
+            </span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">CGST 2.5%</span>
+            <span className="text-foreground">₹{cgst.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">SGST 2.5%</span>
+            <span className="text-foreground">₹{sgst.toFixed(2)}</span>
+          </div>
+          <div className="border-t border-border flex justify-between text-base font-semibold pt-2 sm:pt-3">
+            <span className="text-foreground">Total</span>
+            <span className="text-foreground">₹{total.toFixed(2)}</span>
+          </div>
+        </div>
+
+        {/* Payment Buttons */}
+        <div className="mt-4">
+          <div className="flex justify-between items-center mb-3">
+            <span className="text-foreground text-sm">To collect</span>
+            <span className="text-foreground font-semibold text-lg">
+              ₹{total.toFixed(2)}
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            <button
+              onClick={handleUpiPayment}
+              className="px-2 py-2 sm:py-2.5 bg-teal-600 text-white border-none rounded-lg text-xs sm:text-sm cursor-pointer font-medium hover:bg-teal-700"
+            >
+              UPI
+            </button>
+            <button
+              onClick={handleCashPayment}
+              className="px-2 py-2 sm:py-2.5 bg-teal-600 text-white border-none rounded-lg text-xs sm:text-sm cursor-pointer font-medium hover:bg-teal-700"
+            >
+              Cash
+            </button>
+            <button
+              onClick={handleCardPayment}
+              className="px-2 py-2 sm:py-2.5 bg-teal-600 text-white border-none rounded-lg text-xs sm:text-sm cursor-pointer font-medium hover:bg-teal-700"
+            >
+              Card
+            </button>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="space-y-2">
+            <button
+              onClick={handleSaveDraft}
+              className="w-full py-2.5 bg-gray-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-gray-700 transition-colors"
+            >
+              Save Draft
+            </button>
+            <button
+              onClick={handlePrint}
+              className="w-full py-2.5 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer flex items-center justify-center gap-2 font-medium hover:bg-teal-700 transition-colors"
+            >
+              <Printer size={16} />
+              <span>Print Bill</span>
+            </button>
+          </div>
+          <p className="text-muted-foreground text-xs mt-2 leading-relaxed">
+            Print sends bill to printer and logs to Past Orders.
+          </p>
+        </div>
+      </div>
     </div>
   ) : (
     <div className="space-y-4">
@@ -916,6 +1194,15 @@ itemName.substring(0, 3)
             </span>
           </div>
 
+          {discount > 0 && (
+            <div className="flex justify-between text-base">
+              <span className="text-muted-foreground">Discount</span>
+              <span className="text-card-foreground">
+                - ₹{discount.toFixed(2)}
+              </span>
+            </div>
+          )}
+
           <div className="flex justify-between text-base">
             <span className="text-muted-foreground">CGST (2.5%)</span>
             <span className="text-card-foreground">₹{cgst.toFixed(2)}</span>
@@ -937,13 +1224,22 @@ itemName.substring(0, 3)
             Payment Methods
           </h3>
           <div className="grid grid-cols-3 gap-2">
-            <button className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700">
+            <button
+              onClick={handleUpiPayment}
+              className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700"
+            >
               UPI
             </button>
-            <button className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700">
+            <button
+              onClick={handleCashPayment}
+              className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700"
+            >
               Cash
             </button>
-            <button className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700">
+            <button
+              onClick={handleCardPayment}
+              className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700"
+            >
               Card
             </button>
           </div>
