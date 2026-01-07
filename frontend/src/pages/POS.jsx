@@ -805,7 +805,7 @@ function POS() {
                 onClick={() => handleCustomerSelect(customer)}
                 className="px-2.5 py-1.5 sm:px-3 sm:py-2 border border-teal-600 rounded-full text-sm cursor-pointer flex items-center gap-1.5 sm:gap-2 transition-colors flex-shrink-0"
                 style={{
-                  backgroundColor: isSelected ?'#1ABC9C' : 'transparent',
+                  backgroundColor: isSelected ? '#1ABC9C' : 'transparent',
 color: isSelected ? 'white' : 'inherit',
 }}
 onMouseEnter={(e) => {
@@ -843,117 +843,116 @@ className="w-full bg-muted text-foreground border border-border rounded-md outli
 </div>
 </div>{/* Conditional rendering based on preview mode */}
   {!isPreviewMode ? (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-5">
-      {/* Menu Panel */}
-      <div className="lg:col-span-2 bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full">
-        <div className="flex items-center justify-between mb-3 sm:mb-4 flex-wrap gap-2">
-          <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">
-            Menu
-          </h2>
-          <button
-            onClick={handleDatabaseClick}
-            className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
-          >
-            <Database size={16} />
-            <span>DB</span>
-          </button>
+    <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full">
+      <div className="flex items-center justify-between mb-3 sm:mb-4 flex-wrap gap-2">
+        <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">
+          Menu
+        </h2>
+        <button
+          onClick={handleDatabaseClick}
+          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
+        >
+          <Database size={16} />
+          <span>DB</span>
+        </button>
+      </div>
+      <div className="mb-3 sm:mb-4">
+        <label className="text-muted-foreground text-sm mb-2 block">
+          Search items
+        </label>
+        <div className="relative">
+          <Search
+            size={16}
+            className="text-muted-foreground absolute left-3 top-1/2 transform -translate-y-1/2"
+          />
+          <input
+            type="text"
+            placeholder="Search..."
+            value={searchMenu}
+            onChange={(e) => setSearchMenu(e.target.value)}
+            className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-4 py-2 pl-10 text-sm sm:text-base"
+          />
         </div>
-        <div className="mb-3 sm:mb-4">
-          <label className="text-muted-foreground text-sm mb-2 block">
-            Search items
-          </label>
-          <div className="relative">
-            <Search
-              size={16}
-              className="text-muted-foreground absolute left-3 top-1/2 transform -translate-y-1/2"
-            />
-            <input
-              type="text"
-              placeholder="Search..."
-              value={searchMenu}
-              onChange={(e) => setSearchMenu(e.target.value)}
-              className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-4 py-2 pl-10 text-sm sm:text-base"
-            />
-          </div>
+      </div>
+      <div className="mb-3 sm:mb-4">
+        <label className="text-muted-foreground text-sm mb-2 block">
+          Categories
+        </label>
+        <select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base"
+        >
+          {categories.map((cat, i) => (
+            <option key={i} value={cat?.name || 'All'}>
+              {cat?.name || 'All'}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-8 text-muted-foreground">Loading...</div>
+      ) : visibleItems.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          No items found
         </div>
-        <div className="mb-3 sm:mb-4">
-          <label className="text-muted-foreground text-sm mb-2 block">
-            Categories
-          </label>
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base"
-          >
-            {categories.map((cat, i) => (
-              <option key={i} value={cat?.name || 'All'}>
-                {cat?.name || 'All'}
-              </option>
-            ))}
-          </select>
-        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-4">
+            {visibleItems.map((item, i) => {
+              if (!item || !item.id) return null;
 
-        {loading ? (
-          <div className="text-center py-8 text-muted-foreground">Loading...</div>
-        ) : visibleItems.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            No items found
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-4">
-              {visibleItems.map((item, i) => {
-                if (!item || !item.id) return null;
+              const quantity = getMenuItemQuantity(item);
+              const imageUrl = item.image_url;
+              const itemName = item.name || 'Item';
+              const fallbackImage = `https://via.placeholder.com/200x200/1ABC9C/FFFFFF?text=${encodeURIComponent(
+                itemName.substring(0, 3)
+              )}`;
 
-                const quantity = getMenuItemQuantity(item);
-                const imageUrl = item.image_url;
-                const itemName = item.name || 'Item';
-                const fallbackImage = `https://via.placeholder.com/200x200/1ABC9C/FFFFFF?text=${encodeURIComponent(
-                  itemName.substring(0, 3)
-                )}`;
-
-                return (
-                  <div
-                    key={i}
-                    className="bg-secondary rounded-lg overflow-hidden flex flex-col shadow-sm"
-                  >
-                    <div className="aspect-square w-full overflow-hidden bg-gray-200">
-                      <img
-                        src={imageUrl || fallbackImage}
-                        alt={itemName}
-                        className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
-                        loading="lazy"
-                        onError={(e) => {
-                          console.log(
-                            'Image failed to load, using fallback:',
-                            imageUrl
-                          );
-                          e.target.onerror = null;
-                          e.target.src = fallbackImage;
-                        }}
-                      />
-                    </div>
-                    <div className="p-2 sm:p-2.5 flex flex-col gap-1.5 sm:gap-2">
-                      <div>
-                        <h3 className="text-foreground text-sm font-semibold mb-0.5 sm:mb-1 line-clamp-2 leading-tight">
-                          {itemName}
-                        </h3>
-                      </div>
-                      <button
-                        onClick={() => handleAddToCartClick(item)}
-                        className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-full text-sm cursor-pointer flex items-center justify-center gap-1 hover:bg-teal-700 w-full"
-                      >
-                        <Plus size={14} />
-                        <span>
-                          {quantity === 0 ? 'Add' : `${quantity} in cart`}
-                        </span>
-                      </button>
-                    </div>
+              return (
+                <div
+                  key={i}
+                  className="bg-secondary rounded-lg overflow-hidden flex flex-col shadow-sm"
+                >
+                  <div className="aspect-square w-full overflow-hidden bg-gray-200">
+                    <img
+                      src={imageUrl || fallbackImage}
+                      alt={itemName}
+                      className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
+                      loading="lazy"
+                      onError={(e) => {
+                        console.log(
+                          'Image failed to load, using fallback:',
+                          imageUrl
+                        );
+                        e.target.onerror = null;
+                        e.target.src = fallbackImage;
+                      }}
+                    />
                   </div>
-                );
-              })}
-            </div>
+                  <div className="p-2 sm:p-2.5 flex flex-col gap-1.5 sm:gap-2">
+                    <div>
+                      <h3 className="text-foreground text-sm font-semibold mb-0.5 sm:mb-1 line-clamp-2 leading-tight">
+                        {itemName}
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => handleAddToCartClick(item)}
+                      className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-full text-sm cursor-pointer flex items-center justify-center gap-1 hover:bg-teal-700 w-full"
+                    >
+                      <Plus size={14} />
+                      <span>
+                        {quantity === 0 ? 'Add' : `${quantity} in cart`}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
+          <div className="flex justify-between items-center mt-4">
             {hasMoreToLoad && (
               <button
                 onClick={handleLoadMore}
@@ -963,27 +962,103 @@ className="w-full bg-muted text-foreground border border-border rounded-md outli
                 Load More
               </button>
             )}
-          </>
+            <button
+              onClick={handlePreview}
+              disabled={cartItems.length === 0}
+              className="px-4 py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-2 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed ml-auto"
+            >
+              <Eye size={16} />
+              <span>Preview</span>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  ) : (
+    <div className="space-y-4">
+      <button
+        onClick={handleBackToMenu}
+        className="px-4 py-2 bg-gray-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-2 hover:bg-gray-700"
+      >
+        <ArrowLeft size={16} />
+        <span>Back to Menu</span>
+      </button>
+
+      <div className="bg-card rounded-lg shadow-sm p-4 md:p-6">
+        <h2 className="text-lg font-semibold text-card-foreground mb-4">
+          Selected Dishes
+        </h2>
+
+        {cartItems.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            No items in cart
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {cartItems.map((item, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between border-b border-border pb-4 last:border-b-0 last:pb-0"
+              >
+                <div className="flex-1">
+                  <h3 className="text-card-foreground font-semibold">
+                    {item.name || 'Item'}
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {item.size} - ₹{item.price || 0} each
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 bg-muted rounded-lg p-1">
+                    <button
+                      onClick={() => updateCartItemQuantity(i, -1)}
+                      className="w-8 h-8 flex items-center justify-center bg-card hover:bg-accent rounded text-card-foreground cursor-pointer transition-colors"
+                    >
+                      <Minus size={16} />
+                    </button>
+                    <span className="w-12 text-center font-semibold text-card-foreground">
+                      {item.qty || 0}
+                    </span>
+                    <button
+                      onClick={() => updateCartItemQuantity(i, 1)}
+                      className="w-8 h-8 flex items-center justify-center bg-teal-600 hover:bg-teal-700 text-white rounded cursor-pointer transition-colors"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </div>
+
+                  <div className="w-24 text-right">
+                    <p className="text-card-foreground font-semibold">
+                      ₹{((item.price || 0) * (item.qty || 0)).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
-      {/* Cart Billing Panel */}
-      <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full h-fit">
-        <div className="flex items-center justify-between mb-3 sm:mb-4 flex-wrap gap-2">
-          <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">
-            Cart Billing
+      <div className="bg-card rounded-lg shadow-sm p-4 md:p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-card-foreground">
+            Billing Summary
           </h2>
           <div className="flex gap-2">
             <button
               onClick={() => setShowCouponModal(true)}
-              className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
+              className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 hover:bg-teal-700 flex-shrink-0"
             >
               <Tag size={16} />
               <span>Coupon</span>
             </button>
             <button
-              onClick={() => setCartItems([])}
-              className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
+              onClick={() => {
+                setCartItems([]);
+                removeCoupon();
+              }}
+              className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 hover:bg-teal-700 flex-shrink-0"
             >
               <Trash2 size={16} />
               <span>Clear</span>
@@ -991,49 +1066,15 @@ className="w-full bg-muted text-foreground border border-border rounded-md outli
           </div>
         </div>
 
-        {/* Cart Items Table */}
-        <div className="mb-4">
-          <div className="border-b border-border text-muted-foreground grid grid-cols-[2fr_1fr_1fr_1fr] gap-2 p-2 text-xs sm:text-sm">
-            <div>Item</div>
-            <div>Qty</div>
-            <div>Price</div>
-            <div>Total</div>
-          </div>
-          <div className="max-h-[200px] overflow-y-auto">
-            {cartItems.map((item, i) => (
-              <div
-                key={i}
-                className="border-b border-border grid grid-cols-[2fr_1fr_1fr_1fr] gap-2 p-2 sm:p-2.5 items-center"
-              >
-                <div className="text-foreground text-xs sm:text-sm">
-                  <div className="truncate">{item.name}</div>
-                  <div className="text-muted-foreground text-xs">
-                    {item.size}
-                  </div>
-                </div>
-                <div className="text-foreground text-xs sm:text-sm">
-                  {item.qty}
-                </div>
-                <div className="text-foreground text-xs sm:text-sm">
-                  ₹{item.price}
-                </div>
-                <div className="text-foreground text-xs sm:text-sm">
-                  ₹{(item.price * item.qty).toFixed(2)}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Billing Summary */}
-        <div className="border-t border-border pt-3 sm:pt-4 flex flex-col gap-2">
-          <div className="flex justify-between text-sm">
+        <div className="space-y-3">
+          <div className="flex justify-between text-base">
             <span className="text-muted-foreground">Subtotal</span>
-            <span className="text-foreground font-semibold">
+            <span className="text-card-foreground font-semibold">
               ₹{subtotal.toFixed(2)}
             </span>
           </div>
-          <div className="flex justify-between text-sm">
+
+          <div className="flex justify-between text-base">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-muted-foreground">Discount</span>
               {couponCode && (
@@ -1046,54 +1087,52 @@ className="w-full bg-muted text-foreground border border-border rounded-md outli
                 </span>
               )}
             </div>
-            <span className="text-foreground font-semibold">
+            <span className="text-card-foreground font-semibold">
               {discount > 0 ? `- ₹${discount.toFixed(2)}` : '₹0.00'}
             </span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">CGST 2.5%</span>
-            <span className="text-foreground">₹{cgst.toFixed(2)}</span>
+
+          <div className="flex justify-between text-base">
+            <span className="text-muted-foreground">CGST (2.5%)</span>
+            <span className="text-card-foreground">₹{cgst.toFixed(2)}</span>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">SGST 2.5%</span>
-            <span className="text-foreground">₹{sgst.toFixed(2)}</span>
+
+          <div className="flex justify-between text-base">
+            <span className="text-muted-foreground">SGST (2.5%)</span>
+            <span className="text-card-foreground">₹{sgst.toFixed(2)}</span>
           </div>
-          <div className="border-t border-border flex justify-between text-base font-semibold pt-2 sm:pt-3">
-            <span className="text-foreground">Total</span>
-            <span className="text-foreground">₹{total.toFixed(2)}</span>
+
+          <div className="border-t border-border pt-3 flex justify-between text-xl font-bold">
+            <span className="text-card-foreground">Total</span>
+            <span className="text-card-foreground">₹{total.toFixed(2)}</span>
           </div>
         </div>
 
-        {/* Payment Buttons */}
-        <div className="mt-4">
-          <div className="flex justify-between items-center mb-3">
-            <span className="text-foreground text-sm">To collect</span>
-            <span className="text-foreground font-semibold text-lg">
-              ₹{total.toFixed(2)}
-            </span>
-          </div>
-          <div className="grid grid-cols-3 gap-2 mb-3">
-            <button
+        <div className="mt-6">
+          <h3 className="text-base font-semibold text-card-foreground mb-3">
+            Payment Methods
+          </h3>
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            <button 
               onClick={handleUpiPayment}
-              className="px-2 py-2 sm:py-2.5 bg-teal-600 text-white border-none rounded-lg text-xs sm:text-sm cursor-pointer font-medium hover:bg-teal-700"
+              className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700"
             >
               UPI
             </button>
-            <button
+            <button 
               onClick={handleCashPayment}
-              className="px-2 py-2 sm:py-2.5 bg-teal-600 text-white border-none rounded-lg text-xs sm:text-sm cursor-pointer font-medium hover:bg-teal-700"
+              className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700"
             >
               Cash
             </button>
-            <button
+            <button 
               onClick={handleCardPayment}
-              className="px-2 py-2 sm:py-2.5 bg-teal-600 text-white border-none rounded-lg text-xs sm:text-sm cursor-pointer font-medium hover:bg-teal-700"
+              className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700"
             >
               Card
             </button>
           </div>
 
-          {/* Action Buttons */}
           <div className="space-y-2">
             <button
               onClick={handleSaveDraft}
@@ -1108,168 +1147,6 @@ className="w-full bg-muted text-foreground border border-border rounded-md outli
               <Printer size={16} />
               <span>Print Bill</span>
             </button>
-          </div>
-          <p className="text-muted-foreground text-xs mt-2 leading-relaxed">
-            Print sends bill to printer and logs to Past Orders.
-          </p>
-        </div>
-      </div>
-    </div>
-  ) : (
-    /* PREVIEW MODE - Side by Side Layout */
-    <div>
-      <button
-        onClick={handleBackToMenu}
-        className="px-4 py-2 bg-gray-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-2 hover:bg-gray-700 mb-4"
-      >
-        <ArrowLeft size={16} />
-        <span>Back to Menu</span>
-      </button>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Selected Dishes - Takes 2 columns on large screens */}
-        <div className="lg:col-span-2 bg-card rounded-lg shadow-sm p-4 md:p-6">
-          <h2 className="text-lg font-semibold text-card-foreground mb-4">
-            Selected Dishes
-          </h2>
-
-          {cartItems.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No items in cart
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {cartItems.map((item, i) => (
-                <div
-                  key={i}
-                  className="flex items-center justify-between border-b border-border pb-4 last:border-b-0 last:pb-0"
-                >
-                  <div className="flex-1">
-                    <h3 className="text-card-foreground font-semibold">
-                      {item.name || 'Item'}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {item.size} - ₹{item.price || 0} each
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 bg-muted rounded-lg p-1">
-                      <button
-                        onClick={() => updateCartItemQuantity(i, -1)}
-                        className="w-8 h-8 flex items-center justify-center bg-card hover:bg-accent rounded text-card-foreground cursor-pointer transition-colors"
-                      >
-                        <Minus size={16} />
-                      </button>
-                      <span className="w-12 text-center font-semibold text-card-foreground">
-                        {item.qty || 0}
-                      </span>
-                      <button
-                        onClick={() => updateCartItemQuantity(i, 1)}
-                        className="w-8 h-8 flex items-center justify-center bg-teal-600 hover:bg-teal-700 text-white rounded cursor-pointer transition-colors"
-                      >
-                        <Plus size={16} />
-                      </button>
-                    </div>
-
-                    <div className="w-24 text-right">
-                      <p className="text-card-foreground font-semibold">
-                        ₹{((item.price || 0) * (item.qty || 0)).toFixed(2)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Billing Summary - Takes 1 column on large screens */}
-        <div className="bg-card rounded-lg shadow-sm p-4 md:p-6 h-fit">
-          <h2 className="text-lg font-semibold text-card-foreground mb-4">
-            Billing Summary
-          </h2>
-
-          <div className="space-y-3">
-            <div className="flex justify-between text-base">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span className="text-card-foreground font-semibold">
-                ₹{subtotal.toFixed(2)}
-              </span>
-            </div>
-
-            {discount > 0 && (
-              <div className="flex justify-between text-base">
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">Discount</span>
-                  {couponCode && (
-                    <span className="px-2 py-0.5 bg-teal-600 text-white text-xs rounded">
-                      {couponCode}
-                    </span>
-                  )}
-                </div>
-                <span className="text-card-foreground">
-                  - ₹{discount.toFixed(2)}
-                </span>
-              </div>
-            )}
-
-            <div className="flex justify-between text-base">
-              <span className="text-muted-foreground">CGST (2.5%)</span>
-              <span className="text-card-foreground">₹{cgst.toFixed(2)}</span>
-            </div>
-
-            <div className="flex justify-between text-base">
-              <span className="text-muted-foreground">SGST (2.5%)</span>
-              <span className="text-card-foreground">₹{sgst.toFixed(2)}</span>
-            </div>
-
-            <div className="border-t border-border pt-3 flex justify-between text-xl font-bold">
-              <span className="text-card-foreground">Total</span>
-              <span className="text-card-foreground">₹{total.toFixed(2)}</span>
-            </div>
-          </div>
-
-          <div className="mt-6">
-            <h3 className="text-base font-semibold text-card-foreground mb-3">
-              Payment Methods
-            </h3>
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              <button
-                onClick={handleUpiPayment}
-                className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700"
-              >
-                UPI
-              </button>
-              <button
-                onClick={handleCashPayment}
-                className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700"
-              >
-                Cash
-              </button>
-              <button
-                onClick={handleCardPayment}
-                className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700"
-              >
-                Card
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              <button
-                onClick={handleSaveDraft}
-                className="w-full py-2.5 bg-gray-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-gray-700 transition-colors"
-              >
-                Save Draft
-              </button>
-              <button
-                onClick={handlePrint}
-                className="w-full py-2.5 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer flex items-center justify-center gap-2 font-medium hover:bg-teal-700 transition-colors"
-              >
-                <Printer size={16} />
-                <span>Print Bill</span>
-              </button>
-            </div>
           </div>
         </div>
       </div>
