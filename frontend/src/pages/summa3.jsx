@@ -14,6 +14,7 @@ function POS() {
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [showCouponModal, setShowCouponModal] = useState(false);
   const [couponCode, setCouponCode] = useState('');
+  const [inputCoupon, setInputCoupon] = useState('');
   const [discount, setDiscount] = useState(0);
   const [newCustomer, setNewCustomer] = useState({
     first_name: '',
@@ -38,6 +39,14 @@ function POS() {
   const itemsPerRow = 4;
   const rowsToLoadMore = 2;
   const [allMenuItems, setAllMenuItems] = useState([]);
+
+  // Available Coupons Data
+  const availableCoupons = [
+    { code: 'NEW20', discount: 20, type: 'percentage', description: '20% off for new customers', minOrder: 0 },
+    { code: 'FLAT50', discount: 50, type: 'fixed', description: '₹50 flat discount', minOrder: 0 },
+    { code: 'SAVE100', discount: 100, type: 'fixed', description: '₹100 off on orders above ₹200', minOrder: 200 },
+    { code: 'WELCOME10', discount: 10, type: 'percentage', description: '10% off welcome offer', minOrder: 0 }
+  ];
 
   // Fetch categories on mount
   useEffect(() => {
@@ -338,26 +347,24 @@ function POS() {
   // ---------------- COUPON FUNCTIONS ----------------
 
   const applyCoupon = () => {
-    // Example coupon logic - replace with actual API call
-    const coupons = {
-      'SAVE10': 10, // 10% discount
-      'SAVE20': 20, // 20% discount
-      'FLAT50': 50, // Flat 50 rupees off
-    };
-
-    const couponUpper = couponCode.toUpperCase();
-    if (coupons[couponUpper]) {
-      const discountValue = coupons[couponUpper];
-      
-      // Check if it's percentage or flat discount
-      if (couponUpper.startsWith('SAVE')) {
-        setDiscount((subtotal * discountValue) / 100);
+    const coupon = availableCoupons.find(c => c.code.toUpperCase() === inputCoupon.toUpperCase());
+    if (coupon) {
+      if (subtotal >= coupon.minOrder) {
+        setCouponCode(coupon.code);
+        
+        // Calculate discount
+        if (coupon.type === 'percentage') {
+          setDiscount((subtotal * coupon.discount) / 100);
+        } else {
+          setDiscount(coupon.discount);
+        }
+        
+        setInputCoupon('');
+        setShowCouponModal(false);
+        alert(`Coupon ${coupon.code} applied successfully!`);
       } else {
-        setDiscount(discountValue);
+        alert(`Minimum order of ₹${coupon.minOrder} required for this coupon`);
       }
-      
-      alert(`Coupon ${couponUpper} applied successfully!`);
-      setShowCouponModal(false);
     } else {
       alert('Invalid coupon code');
     }
@@ -513,6 +520,10 @@ function POS() {
     (sum, item) => sum + (item.price || 0) * (item.qty || 0),
     0
   );
+  
+  // Calculate eligible coupons based on subtotal
+  const eligibleCoupons = availableCoupons.filter(coupon => subtotal >= coupon.minOrder);
+  
   const discountedSubtotal = subtotal - discount;
   const cgst = discountedSubtotal * 0.025;
   const sgst = discountedSubtotal * 0.025;
@@ -695,16 +706,19 @@ function POS() {
         </div>
       )}
 
-      {/* Coupon Modal */}
+      {/* Coupon Modal with Available and Eligible Coupons */}
       {showCouponModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
-          <div className="bg-card rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-md">
-            <div className="flex justify-between items-center mb-4">
+          <div className="bg-card rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-3 sm:mb-4">
               <h3 className="text-sm sm:text-lg md:text-xl font-semibold text-card-foreground">
                 Apply Coupon
               </h3>
               <button
-                onClick={() => setShowCouponModal(false)}
+                onClick={() => {
+                  setShowCouponModal(false);
+                  setInputCoupon('');
+                }}
                 className="text-muted-foreground hover:text-foreground"
               >
                 <svg
@@ -723,125 +737,181 @@ function POS() {
                 </svg>
               </button>
             </div>
+            
             <input
               type="text"
               placeholder="Enter coupon code"
-              value={couponCode}
-              onChange={(e) => setCouponCode(e.target.value)}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-4"
+              value={inputCoupon}
+              onChange={(e) => setInputCoupon(e.target.value.toUpperCase())}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-3 sm:mb-4"
             />
-            <div className="flex gap-2">
-              <button
-                onClick={applyCoupon}
-                className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium"
-              >
-                Apply
-              </button>
-              <button
-                onClick={() => setShowCouponModal(false)}
-                className="flex-1 py-2 sm:py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base font-medium"
-              >
-                Cancel
-              </button>
+
+            {/* Eligible Coupons */}
+            {eligibleCoupons.length > 0 && (
+              <div className="mb-4">
+                <p className="text-sm font-semibold text-foreground mb-2">Eligible Coupons</p>
+                <div className="space-y-2">
+                  {eligibleCoupons.map((coupon, i) => (
+                    <div
+                      key={i}
+                      className="bg-muted rounded p-2 sm:p-3 cursor-pointer hover:bg-teal-600 hover:text-white transition-colors"
+                      onClick={() => setInputCoupon(coupon.code)}
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-sm sm:text-base">{coupon.code}</span>
+                        <span className="text-xs sm:text-sm">
+                          {coupon.type === 'percentage' ? `${coupon.discount}% off` : `₹${coupon.discount} off`}
+                        </span>
+                      </div>
+                      <p className="text-xs sm:text-sm mt-1 opacity-80">{coupon.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* All Available Coupons */}
+            <div className="mb-4">
+              <p className="text-sm font-semibold text-foreground mb-2">All Available Coupons</p>
+              <div className="space-y-2">
+                {availableCoupons.filter(c => !eligibleCoupons.includes(c)).map((coupon, i) => (
+                  <div
+                    key={i}
+                    className="bg-muted rounded p-2 sm:p-3 opacity-60"
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold text-sm sm:text-base">{coupon.code}</span>
+                      <span className="text-xs sm:text-sm">
+                        {coupon.type === 'percentage' ? `${coupon.discount}% off` : `₹${coupon.discount} off`}
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm mt-1">{coupon.description}</p>
+                    {coupon.minOrder > subtotal && (
+                      <p className="text-xs text-red-500 mt-1">
+                        Add ₹{(coupon.minOrder - subtotal).toFixed(2)} more to unlock
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-5">
-        <h2 className="text-base sm:text-xl md:text-2xl font-semibold text-foreground">
-          POS System
-        </h2>
-      </div>
-
-      {/* Customer Panel */}
-      <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full mb-3 sm:mb-4 md:mb-5">
-        <div className="flex items-center justify-between mb-3 sm:mb-4">
-          <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">
-            Customer
-          </h2>
-          <button
-            onClick={() => setShowAddCustomerModal(true)}
-            className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
-          >
-            <Plus size={16} />
-            <span>Add</span>
-          </button>
-        </div>
-        <div className="mb-3 sm:mb-4">
-          <label className="text-muted-foreground text-sm mb-2 block">
-            Select customer
-          </label>
-          <div className="relative">
-            <Search
-              size={16}
-              className="text-muted-foreground absolute left-3 top-1/2 transform -translate-y-1/2"
-            />
-            <input
-              type="text"
-              placeholder="Search name, phone..."
-              value={searchCustomer}
-              onChange={(e) => setSearchCustomer(e.target.value)}
-              className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-4 py-2 pl-10 text-sm sm:text-base"
-            />
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2 mb-3 sm:mb-4">
-          {customers.map((customer, i) => {
-            if (!customer) return null;
-
-            const firstName = customer.first_name || '';
-            const lastName = customer.last_name || '';
-            const initial = firstName.charAt(0)?.toUpperCase() || '?';
-            const colors = ['#4A5568', '#2D5A7B', '#8B6F47', '#6B7280'];
-            const bgColor = colors[i % colors.length];
-            const displayName = `${firstName} ${lastName}`.trim() || 'Unknown';
-            const isSelected = selectedCustomerId === customer.id;
-
-            return (
-              <button
-                key={i}
-                onClick={() => handleCustomerSelect(customer)}
-                className="px-2.5 py-1.5 sm:px-3 sm:py-2 border border-teal-600 rounded-full text-sm cursor-pointer flex items-center gap-1.5 sm:gap-2 transition-colors flex-shrink-0"
-                style={{
-                  backgroundColor: isSelected ? '#1ABC9C' : 'transparent',
-color: isSelected ? 'white' : 'inherit',
-}}
-onMouseEnter={(e) => {
-if (!isSelected) {
-e.currentTarget.style.backgroundColor = '#1ABC9C';
-e.currentTarget.style.color = 'white';
-}
-}}
-onMouseLeave={(e) => {
-if (!isSelected) {
-e.currentTarget.style.backgroundColor = 'transparent';
-e.currentTarget.style.color = 'inherit';
-}
-}}
->
-<div
-className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
-style={{ backgroundColor: bgColor }}
->
-{firstName === 'Guest' ? '👤' : initial}
-</div>
-<span className="text-sm whitespace-nowrap">{displayName}</span>
+            {/* ActionButtons */}
+<div className="flex gap-2">
+<button
+             onClick={applyCoupon}
+             className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium"
+           >
+Apply
 </button>
-);
-})}
+<button
+onClick={() => {
+setShowCouponModal(false);
+setInputCoupon('');
+}}
+className="flex-1 py-2 sm:py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base font-medium"
+>
+Cancel
+</button>
 </div>
-<div>
-<label className="text-muted-foreground text-sm mb-2 block">Notes</label>
-<textarea
-value={notes}
-onChange={(e) => setNotes(e.target.value)}
-rows="2"
-className="w-full bg-muted text-foreground border border-border rounded-md outline-none resize-y px-3 py-2 text-sm sm:text-base"
-/>
 </div>
-</div>{/* Conditional rendering based on preview mode */}
+</div>
+)}{/* Header */}
+  <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-5">
+    <h2 className="text-base sm:text-xl md:text-2xl font-semibold text-foreground">
+      POS System
+    </h2>
+  </div>
+
+  {/* Customer Panel */}
+  <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full mb-3 sm:mb-4 md:mb-5">
+    <div className="flex items-center justify-between mb-3 sm:mb-4">
+      <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">
+        Customer
+      </h2>
+      <button
+        onClick={() => setShowAddCustomerModal(true)}
+        className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
+      >
+        <Plus size={16} />
+        <span>Add</span>
+      </button>
+    </div>
+    <div className="mb-3 sm:mb-4">
+      <label className="text-muted-foreground text-sm mb-2 block">
+        Select customer
+      </label>
+      <div className="relative">
+        <Search
+          size={16}
+          className="text-muted-foreground absolute left-3 top-1/2 transform -translate-y-1/2"
+        />
+        <input
+          type="text"
+          placeholder="Search name, phone..."
+          value={searchCustomer}
+          onChange={(e) => setSearchCustomer(e.target.value)}
+          className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-4 py-2 pl-10 text-sm sm:text-base"
+        />
+      </div>
+    </div>
+    <div className="flex flex-wrap gap-2 mb-3 sm:mb-4">
+      {customers.map((customer, i) => {
+        if (!customer) return null;
+
+        const firstName = customer.first_name || '';
+        const lastName = customer.last_name || '';
+        const initial = firstName.charAt(0)?.toUpperCase() || '?';
+        const colors = ['#4A5568', '#2D5A7B', '#8B6F47', '#6B7280'];
+        const bgColor = colors[i % colors.length];
+        const displayName = `${firstName} ${lastName}`.trim() || 'Unknown';
+        const isSelected = selectedCustomerId === customer.id;
+
+        return (
+          <button
+            key={i}
+            onClick={() => handleCustomerSelect(customer)}
+            className="px-2.5 py-1.5 sm:px-3 sm:py-2 border border-teal-600 rounded-full text-sm cursor-pointer flex items-center gap-1.5 sm:gap-2 transition-colors flex-shrink-0"
+            style={{
+              backgroundColor: isSelected ? '#1ABC9C' : 'transparent',
+              color: isSelected ? 'white' : 'inherit',
+            }}
+            onMouseEnter={(e) => {
+              if (!isSelected) {
+                e.currentTarget.style.backgroundColor = '#1ABC9C';
+                e.currentTarget.style.color = 'white';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isSelected) {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = 'inherit';
+              }
+            }}
+          >
+            <div
+              className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
+              style={{ backgroundColor: bgColor }}
+            >
+              {firstName === 'Guest' ? '👤' : initial}
+            </div>
+            <span className="text-sm whitespace-nowrap">{displayName}</span>
+          </button>
+        );
+      })}
+    </div>
+    <div>
+      <label className="text-muted-foreground text-sm mb-2 block">Notes</label>
+      <textarea
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        rows="2"
+        className="w-full bg-muted text-foreground border border-border rounded-md outline-none resize-y px-3 py-2 text-sm sm:text-base"
+      />
+    </div>
+  </div>
+
+  {/* Conditional rendering based on preview mode */}
   {!isPreviewMode ? (
     <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full">
       <div className="flex items-center justify-between mb-3 sm:mb-4 flex-wrap gap-2">
