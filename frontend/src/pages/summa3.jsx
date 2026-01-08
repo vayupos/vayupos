@@ -345,29 +345,72 @@ function POS() {
   const fetchAvailableCoupons = async () => {
     try {
       setLoadingCoupons(true);
+      console.log('Fetching coupons from backend...');
+      
       const res = await api.get('/api/v1/coupons/available');
-      console.log('Coupons fetched:', res.data);
+      console.log('Raw coupon response:', res);
+      console.log('Coupon response data:', res.data);
       
       // Handle different response structures
       let couponsData = [];
+      
       if (Array.isArray(res.data)) {
         couponsData = res.data;
+        console.log('Coupons extracted from array:', couponsData);
       } else if (res.data.data && Array.isArray(res.data.data)) {
         couponsData = res.data.data;
+        console.log('Coupons extracted from data property:', couponsData);
       } else if (res.data.items && Array.isArray(res.data.items)) {
         couponsData = res.data.items;
+        console.log('Coupons extracted from items property:', couponsData);
+      } else if (res.data.coupons && Array.isArray(res.data.coupons)) {
+        couponsData = res.data.coupons;
+        console.log('Coupons extracted from coupons property:', couponsData);
+      } else {
+        console.warn('Unexpected coupon response structure:', res.data);
       }
       
-      setAvailableCoupons(couponsData);
+      // Normalize coupon data to ensure consistent structure
+      const normalizedCoupons = couponsData.map(coupon => ({
+        id: coupon.id,
+        code: coupon.code || coupon.coupon_code || '',
+        discount: coupon.discount || coupon.discount_value || 0,
+        type: coupon.type || coupon.discount_type || 'percentage',
+        description: coupon.description || coupon.desc || `${coupon.discount}${coupon.type === 'percentage' ? '%' : '₹'} off`,
+        min_order: coupon.min_order || coupon.min_order_value || coupon.minOrder || 0,
+        is_active: coupon.is_active !== undefined ? coupon.is_active : true,
+        valid_from: coupon.valid_from,
+        valid_to: coupon.valid_to
+      }));
+      
+      console.log('Normalized coupons:', normalizedCoupons);
+      
+      // Filter only active coupons
+      const activeCoupons = normalizedCoupons.filter(c => c.is_active && c.code);
+      console.log('Active coupons:', activeCoupons);
+      
+      if (activeCoupons.length > 0) {
+        setAvailableCoupons(activeCoupons);
+        console.log('Successfully loaded', activeCoupons.length, 'coupons from backend');
+      } else {
+        console.warn('No active coupons found in backend response');
+        setAvailableCoupons([]);
+      }
+      
     } catch (error) {
       console.error('Error fetching available coupons:', error);
-      // Fallback hardcoded coupons if API fails
-      setAvailableCoupons([
-        { code: 'NEW20', discount: 20, type: 'percentage', description: '20% off for new customers', min_order: 0 },
-        { code: 'FLAT50', discount: 50, type: 'fixed', description: '₹50 flat discount', min_order: 0 },
-        { code: 'SAVE100', discount: 100, type: 'fixed', description: '₹100 off on orders above ₹200', min_order: 200 },
-        { code: 'WELCOME10', discount: 10, type: 'percentage', description: '10% off welcome offer', min_order: 0 }
-      ]);
+      console.error('Error details:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      
+      // Don't use fallback hardcoded coupons - instead show empty state
+      setAvailableCoupons([]);
+      
+      // Alert user if there's a connection issue
+      if (error.response?.status === 404) {
+        console.warn('Coupon endpoint not found - API might not be configured');
+      } else if (error.response?.status === 401) {
+        console.warn('Unauthorized - user might need to login');
+      }
     } finally {
       setLoadingCoupons(false);
     }
@@ -376,46 +419,108 @@ function POS() {
   // Validate Coupon with Backend API
   const validateCoupon = async (couponCode) => {
     try {
-      const res = await api.post('/api/v1/coupons/validate', { code: couponCode });
-      console.log('Coupon validated:', res.data);
-      return res.data;
+      console.log('Validating coupon:', couponCode);
+      const res = await api.post('/api/v1/coupons/validate', { 
+        code: couponCode,
+        order_total: subtotal // Send current order total for validation
+      });
+      console.log('Coupon validation response:', res.data);
+      
+      // Handle different response structures
+      let validatedCoupon = null;
+      
+      if (res.data.valid || res.data.is_valid) {
+        validatedCoupon = {
+          code: res.data.code || res.data.coupon_code || couponCode,
+          discount: res.data.discount || res.data.discount_value || 0,
+          type: res.data.type || res.data.discount_type || 'percentage',
+          min_order: res.data.min_order || res.data.min_order_value || 0,
+          description: res.data.description || res.data.message || ''
+        };
+      } else if (res.data.coupon) {
+        // Some APIs return the coupon object directly
+        const coupon = res.data.coupon;
+        validatedCoupon = {
+          code: coupon.code || coupon.coupon_code || couponCode,
+          discount: coupon.discount || coupon.discount_value || 0,
+          type: coupon.type || coupon.discount_type || 'percentage',
+          min_order: coupon.min_order || coupon.min_order_value || 0,
+          description: coupon.description || ''
+        };
+      } else {
+        // Assume the response data itself is the coupon
+        validatedCoupon = {
+          code: res.data.code || couponCode,
+          discount: res.data.discount || 0,
+          type: res.data.type || 'percentage',
+          min_order: res.data.min_order || 0,
+          description: res.data.description || ''
+        };
+      }
+      
+      console.log('Validated coupon:', validatedCoupon);
+      return validatedCoupon;
+      
     } catch (error) {
       console.error('Coupon validation failed:', error);
+      console.error('Validation error details:', error.response?.data);
+      
+      // Check if error message indicates invalid coupon
+      const errorMsg = error.response?.data?.detail || error.response?.data?.message || '';
+      if (errorMsg) {
+        console.log('Validation error message:', errorMsg);
+      }
+      
       return null;
     }
   };
 
   // Apply Coupon Function with Backend Validation
   const applyCoupon = async () => {
-    const couponCodeUpper = inputCoupon.toUpperCase();
+    if (!inputCoupon.trim()) {
+      alert('Please enter a coupon code');
+      return;
+    }
+    
+    const couponCodeUpper = inputCoupon.trim().toUpperCase();
+    console.log('Applying coupon:', couponCodeUpper);
+    
     const validatedCoupon = await validateCoupon(couponCodeUpper);
     
-    if (validatedCoupon) {
-      const minOrder = validatedCoupon.min_order || validatedCoupon.minOrder || 0;
+    if (validatedCoupon && validatedCoupon.code) {
+      const minOrder = validatedCoupon.min_order || 0;
       
       if (subtotal >= minOrder) {
         setCouponCode(validatedCoupon.code);
         
         // Calculate discount based on coupon type
-        const discountAmount = validatedCoupon.type === 'percentage' 
-          ? (subtotal * validatedCoupon.discount) / 100 
-          : validatedCoupon.discount;
+        let discountAmount = 0;
+        if (validatedCoupon.type === 'percentage' || validatedCoupon.type === 'percent') {
+          discountAmount = (subtotal * validatedCoupon.discount) / 100;
+        } else if (validatedCoupon.type === 'fixed' || validatedCoupon.type === 'flat') {
+          discountAmount = validatedCoupon.discount;
+        } else {
+          // Default to percentage if type is unclear
+          discountAmount = (subtotal * validatedCoupon.discount) / 100;
+        }
         
+        console.log('Discount amount calculated:', discountAmount);
         setDiscount(discountAmount);
         setInputCoupon('');
         setShowCouponModal(false);
-        alert(`Coupon ${validatedCoupon.code} applied successfully!`);
+        alert(`Coupon ${validatedCoupon.code} applied successfully! You saved ₹${discountAmount.toFixed(2)}`);
       } else {
-        alert(`Minimum order of ₹${minOrder} required for this coupon`);
+        alert(`Minimum order of ₹${minOrder} required for this coupon. Current order: ₹${subtotal.toFixed(2)}`);
       }
     } else {
-      alert('Invalid coupon code');
+      alert('Invalid or expired coupon code');
     }
   };
 
   const removeCoupon = () => {
     setCouponCode('');
     setDiscount(0);
+    console.log('Coupon removed');
   };
 
   // ---------------- PAYMENT HANDLERS ----------------
@@ -696,115 +801,126 @@ function POS() {
               type="text"
               placeholder="Zip code"
               value={newCustomer.zip_code}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, zip_code: e.target.value })
-              }
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-3 sm:mb-4"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={addCustomer}
-                disabled={loading}
-                className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium disabled:opacity-50"
-              >
-                {loading ? 'Adding...' : 'Add Customer'}
-              </button>
-              <button
-                onClick={() => setShowAddCustomerModal(false)}
-                className="flex-1 py-2 sm:py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base font-medium"
-              >
-                Cancel
-              </button>
+onChange={(e) =>
+setNewCustomer({ ...newCustomer, zip_code: e.target.value })
+}
+className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-3 sm:mb-4"
+/>
+<div className="flex gap-2">
+<button
+             onClick={addCustomer}
+             disabled={loading}
+             className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium disabled:opacity-50"
+           >
+{loading ? 'Adding...' : 'Add Customer'}
+</button>
+<button
+onClick={() => setShowAddCustomerModal(false)}
+className="flex-1 py-2 sm:py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base font-medium"
+>
+Cancel
+</button>
+</div>
+</div>
+</div>
+)}{/* Backend-Powered Coupon Modal */}
+  {showCouponModal && (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
+      <div className="bg-card rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-3 sm:mb-4">
+          <h3 className="text-sm sm:text-lg md:text-xl font-semibold text-card-foreground">
+            Apply Coupon
+          </h3>
+          <button
+            onClick={() => {
+              setShowCouponModal(false);
+              setInputCoupon('');
+            }}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Manual Input */}
+        <input
+          type="text"
+          placeholder="Enter coupon code"
+          value={inputCoupon}
+          onChange={(e) => setInputCoupon(e.target.value.toUpperCase())}
+          onKeyPress={(e) => {
+            if (e.key === 'Enter' && inputCoupon.trim()) {
+              applyCoupon();
+            }
+          }}
+          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-3 sm:mb-4"
+        />
+
+        {/* Backend Available/Eligible Coupons */}
+        {loadingCoupons ? (
+          <div className="text-center py-4 text-muted-foreground">
+            Loading coupons...
+          </div>
+        ) : availableCoupons.length > 0 ? (
+          <div className="mb-4">
+            <p className="text-sm font-semibold text-foreground mb-2">
+              Available Coupons (Subtotal: ₹{subtotal.toFixed(2)})
+            </p>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {availableCoupons.map((coupon, i) => {
+                const minOrder = coupon.min_order || 0;
+                const isEligible = subtotal >= minOrder;
+                return (
+                  <div
+                    key={coupon.id || i}
+                    className={`bg-muted rounded p-2 sm:p-3 cursor-pointer transition-colors ${
+                      isEligible
+                        ? 'hover:bg-teal-600 hover:text-white border-2 border-transparent hover:border-teal-700'
+                        : 'opacity-60 cursor-not-allowed border-2 border-red-300'
+                    }`}
+                    onClick={() => {
+                      if (isEligible) {
+                        setInputCoupon(coupon.code);
+                      }
+                    }}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold text-sm sm:text-base">
+                        {coupon.code}
+                      </span>
+                      <span className="text-xs sm:text-sm">
+                        {coupon.type === 'percentage' || coupon.type === 'percent'
+                          ? `${coupon.discount}% off`
+                          : `₹${coupon.discount} off`}
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm mt-1 opacity-80">
+                      {coupon.description}
+                    </p>
+                    {minOrder > 0 && (
+                      <p className={`text-xs mt-1 ${isEligible ? 'text-green-600' : 'text-red-500'}`}>
+                        {isEligible 
+                          ? `✓ Min order: ₹${minOrder}` 
+                          : `✗ Min order: ₹${minOrder} (Need ₹${(minOrder - subtotal).toFixed(2)} more)`
+                        }
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="text-center py-4 text-muted-foreground mb-4">
+            {loadingCoupons ? 'Loading coupons...' : 'No coupons available at the moment'}
+          </div>
+        )}
 
-      {/* Backend-Powered Coupon Modal */}
-      {showCouponModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
-          <div className="bg-card rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-3 sm:mb-4">
-              <h3 className="text-sm sm:text-lg md:text-xl font-semibold text-card-foreground">
-                Apply Coupon
-              </h3>
-              <button
-                onClick={() => {
-                  setShowCouponModal(false);
-                  setInputCoupon('');
-                }}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Manual Input */}
-            <input
-              type="text"
-              placeholder="Enter coupon code"
-              value={inputCoupon}
-              onChange={(e) => setInputCoupon(e.target.value.toUpperCase())}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-3 sm:mb-4"
-            />
-
-            {/* Backend Available/Eligible Coupons */}
-            {loadingCoupons ? (
-              <div className="text-center py-4 text-muted-foreground">
-                Loading coupons...
-              </div>
-            ) : availableCoupons.length > 0 ? (
-              <div className="mb-4">
-                <p className="text-sm font-semibold text-foreground mb-2">
-                  Available Coupons (Subtotal: ₹{subtotal.toFixed(2)})
-                </p>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {availableCoupons.map((coupon, i) => {
-                    const minOrder = coupon.min_order || coupon.minOrder || 0;
-                    const isEligible = subtotal >= minOrder;
-                    return (
-                      <div
-                        key={i}
-                        className={`bg-muted rounded p-2 sm:p-3 cursor-pointer transition-colors ${
-                          isEligible
-                            ? 'hover:bg-teal-600 hover:text-white'
-                            : 'opacity-60 cursor-not-allowed'
-                        }`}
-                        onClick={() => isEligible && setInputCoupon(coupon.code)}
-                      >
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-sm sm:text-base">
-                            {coupon.code}
-                          </span>
-                          <span className="text-xs sm:text-sm">
-                            {coupon.type === 'percentage'
-                              ? `${coupon.discount}% off`
-                              : `₹${coupon.discount} off`}
-                          </span>
-                        </div>
-                        <p className="text-xs sm:text-sm mt-1 opacity-80">
-                          {coupon.description}
-                        </p>
-                        {!isEligible && (
-                          <p className="text-xs text-red-500 mt-1">
-                            Min order: ₹{minOrder} (Need ₹{(minOrder - subtotal).toFixed(2)} more)
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-4 text-muted-foreground mb-4">
-                No coupons available
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex gap-2">
-              <button onClick={applyCoupon}
-            disabled={!inputCoupon}
+        {/* Action Buttons */}
+        <div className="flex gap-2">
+          <button 
+            onClick={applyCoupon}
+            disabled={!inputCoupon.trim()}
             className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Apply Coupon
@@ -823,6 +939,7 @@ function POS() {
     </div>
   )}
 
+  {/* Rest of the component remains the same... */}
   {/* Header */}
   <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-5">
     <h2 className="text-base sm:text-xl md:text-2xl font-semibold text-foreground">
