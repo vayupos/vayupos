@@ -341,7 +341,7 @@ function POS() {
 
   // ---------------- COUPON FUNCTIONS (BACKEND) ----------------
 
-  // ✅ FIXED: Fetch Available Coupons from Backend API with proper field mapping
+  // Fetch Available Coupons from Backend API
   const fetchAvailableCoupons = async () => {
     try {
       setLoadingCoupons(true);
@@ -351,10 +351,8 @@ function POS() {
       console.log('📦 Raw coupon response:', res);
       console.log('📊 Coupon response data:', res.data);
       
-      // Handle different response structures
       let couponsData = [];
       
-      // Check if backend returns {eligible: [...], ineligible: [...]}
       if (res.data.eligible && Array.isArray(res.data.eligible)) {
         couponsData = res.data.eligible;
         console.log('✅ Coupons extracted from eligible property:', couponsData);
@@ -374,7 +372,6 @@ function POS() {
         console.warn('⚠️ Unexpected coupon response structure:', res.data);
       }
       
-      // ✅ FIXED: Map backend fields correctly to frontend format
       const normalizedCoupons = couponsData.map(coupon => ({
         id: coupon.id,
         code: coupon.code || coupon.coupon_code || '',
@@ -389,7 +386,6 @@ function POS() {
       
       console.log('🔄 Normalized coupons:', normalizedCoupons);
       
-      // Filter only active coupons
       const activeCoupons = normalizedCoupons.filter(c => c.is_active && c.code);
       console.log('✅ Active coupons:', activeCoupons);
       
@@ -405,61 +401,38 @@ function POS() {
       console.error('❌ Error fetching available coupons:', error);
       console.error('📋 Error details:', error.response?.data);
       console.error('🔢 Error status:', error.response?.status);
-      console.error('🔗 Request URL:', error.config?.url);
-      console.error('🌐 Full URL:', error.config?.baseURL + error.config?.url);
       
       setAvailableCoupons([]);
       
-      // Alert user if there's a connection issue
       if (error.response?.status === 404) {
-        console.warn('⚠️ Coupon endpoint not found (404) - Check API configuration');
-        console.warn('Expected endpoint: /coupons/available');
+        console.warn('⚠️ Coupon endpoint not found (404)');
       } else if (error.response?.status === 401) {
-        console.warn('⚠️ Unauthorized (401) - User might need to login');
+        console.warn('⚠️ Unauthorized (401)');
       } else if (error.response?.status === 500) {
-        console.error('⚠️ Server error (500) - Backend issue');
+        console.error('⚠️ Server error (500)');
       }
     } finally {
       setLoadingCoupons(false);
     }
   };
 
-  // ✅ FIXED v2: Validate Coupon - Try BOTH query param AND body approaches
+  // ✅ FINAL FIX: Validate Coupon with correct field names
   const validateCoupon = async (couponCode) => {
     try {
       console.log('🔍 Validating coupon:', couponCode);
       console.log('💰 Current order subtotal:', subtotal);
       
-      let res;
-      let validationError = null;
+      // ✅ CORRECT: Backend expects "coupon_code" and "subtotal" in request body
+      const requestBody = {
+        coupon_code: couponCode,  // ✅ Use "coupon_code" not "code"
+        subtotal: subtotal        // ✅ Use "subtotal" in body, not as query param
+      };
       
-      // ✅ TRY APPROACH 1: Subtotal in body (most common FastAPI pattern)
-      try {
-        console.log('📤 Attempt 1: Sending subtotal in request body');
-        res = await api.post('/coupons/validate', { 
-          code: couponCode,
-          subtotal: subtotal
-        });
-        console.log('✅ Approach 1 SUCCESS:', res.data);
-      } catch (error1) {
-        console.warn('⚠️ Approach 1 failed, trying approach 2...');
-        validationError = error1;
-        
-        // ✅ TRY APPROACH 2: Subtotal as query parameter
-        try {
-          console.log('📤 Attempt 2: Sending subtotal as query parameter');
-          res = await api.post(
-            `/coupons/validate?subtotal=${subtotal}`,
-            { code: couponCode }
-          );
-          console.log('✅ Approach 2 SUCCESS:', res.data);
-        } catch (error2) {
-          console.error('❌ Both approaches failed');
-          console.error('Error 1 (body):', error1.response?.data);
-          console.error('Error 2 (query):', error2.response?.data);
-          throw error2; // Throw the last error
-        }
-      }
+      console.log('📤 Sending validation request:', requestBody);
+      
+      const res = await api.post('/coupons/validate', requestBody);
+      
+      console.log('✅ Coupon validation response:', res.data);
       
       // Handle different response structures
       let validatedCoupon = null;
@@ -500,13 +473,11 @@ function POS() {
       console.error('🔗 Request URL:', error.config?.url);
       console.error('📦 Request data:', error.config?.data);
       
-      // Extract detailed error message
       const errorData = error.response?.data;
       let errorMsg = 'Invalid or expired coupon code';
       
       if (errorData?.detail) {
         if (Array.isArray(errorData.detail)) {
-          // FastAPI validation errors
           const messages = errorData.detail.map(err => 
             `${err.loc?.join(' → ') || 'Field'}: ${err.msg}`
           ).join(', ');
@@ -525,7 +496,7 @@ function POS() {
     }
   };
 
-  // Apply Coupon Function with Backend Validation
+  // Apply Coupon Function
   const applyCoupon = async () => {
     if (!inputCoupon.trim()) {
       alert('Please enter a coupon code');
@@ -543,7 +514,7 @@ function POS() {
       if (subtotal >= minOrder) {
         setCouponCode(validatedCoupon.code);
         
-        // Calculate discount based on coupon type
+        // Calculate discount
         let discountAmount = 0;
         if (validatedCoupon.type === 'percentage' || validatedCoupon.type === 'percent') {
           discountAmount = (subtotal * validatedCoupon.discount) / 100;
@@ -905,7 +876,7 @@ function POS() {
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-3 sm:mb-4"
             />
 
-            {/* Backend Available/Eligible Coupons */}
+            {/* Backend Available Coupons */}
             {loadingCoupons ? (
               <div className="text-center py-4 text-muted-foreground">
                 Loading coupons...
@@ -961,7 +932,7 @@ function POS() {
               </div>
             ) : (
               <div className="text-center py-4 text-muted-foreground mb-4">
-                {loadingCoupons ? 'Loading coupons...' : 'No coupons available at the moment'}
+                {loadingCoupons ? 'Loading coupons...' : 'No coupons available'}
               </div>
             )}
 
