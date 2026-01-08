@@ -345,71 +345,77 @@ function POS() {
   const fetchAvailableCoupons = async () => {
     try {
       setLoadingCoupons(true);
-      console.log('Fetching coupons from backend...');
+      console.log('🎫 Fetching coupons from backend...');
       
-      const res = await api.get('/api/v1/coupons/available');
-      console.log('Raw coupon response:', res);
-      console.log('Coupon response data:', res.data);
+      // ✅ FIXED: Removed /api/v1 prefix since it's in axios baseURL
+      const res = await api.get('/coupons/available');
+      console.log('📦 Raw coupon response:', res);
+      console.log('📊 Coupon response data:', res.data);
       
       // Handle different response structures
       let couponsData = [];
       
       if (Array.isArray(res.data)) {
         couponsData = res.data;
-        console.log('Coupons extracted from array:', couponsData);
+        console.log('✅ Coupons extracted from array:', couponsData);
       } else if (res.data.data && Array.isArray(res.data.data)) {
         couponsData = res.data.data;
-        console.log('Coupons extracted from data property:', couponsData);
+        console.log('✅ Coupons extracted from data property:', couponsData);
       } else if (res.data.items && Array.isArray(res.data.items)) {
         couponsData = res.data.items;
-        console.log('Coupons extracted from items property:', couponsData);
+        console.log('✅ Coupons extracted from items property:', couponsData);
       } else if (res.data.coupons && Array.isArray(res.data.coupons)) {
         couponsData = res.data.coupons;
-        console.log('Coupons extracted from coupons property:', couponsData);
+        console.log('✅ Coupons extracted from coupons property:', couponsData);
       } else {
-        console.warn('Unexpected coupon response structure:', res.data);
+        console.warn('⚠️ Unexpected coupon response structure:', res.data);
       }
       
       // Normalize coupon data to ensure consistent structure
       const normalizedCoupons = couponsData.map(coupon => ({
         id: coupon.id,
         code: coupon.code || coupon.coupon_code || '',
-        discount: coupon.discount || coupon.discount_value || 0,
+        discount: coupon.discount || coupon.discount_value || coupon.discount_amount || 0,
         type: coupon.type || coupon.discount_type || 'percentage',
         description: coupon.description || coupon.desc || `${coupon.discount}${coupon.type === 'percentage' ? '%' : '₹'} off`,
-        min_order: coupon.min_order || coupon.min_order_value || coupon.minOrder || 0,
+        min_order: coupon.min_order || coupon.min_order_value || coupon.minOrder || coupon.minimum_order_amount || 0,
         is_active: coupon.is_active !== undefined ? coupon.is_active : true,
         valid_from: coupon.valid_from,
         valid_to: coupon.valid_to
       }));
       
-      console.log('Normalized coupons:', normalizedCoupons);
+      console.log('🔄 Normalized coupons:', normalizedCoupons);
       
       // Filter only active coupons
       const activeCoupons = normalizedCoupons.filter(c => c.is_active && c.code);
-      console.log('Active coupons:', activeCoupons);
+      console.log('✅ Active coupons:', activeCoupons);
       
       if (activeCoupons.length > 0) {
         setAvailableCoupons(activeCoupons);
-        console.log('Successfully loaded', activeCoupons.length, 'coupons from backend');
+        console.log('🎉 Successfully loaded', activeCoupons.length, 'coupons from backend');
       } else {
-        console.warn('No active coupons found in backend response');
+        console.warn('⚠️ No active coupons found in backend response');
         setAvailableCoupons([]);
       }
       
     } catch (error) {
-      console.error('Error fetching available coupons:', error);
-      console.error('Error details:', error.response?.data);
-      console.error('Error status:', error.response?.status);
+      console.error('❌ Error fetching available coupons:', error);
+      console.error('📋 Error details:', error.response?.data);
+      console.error('🔢 Error status:', error.response?.status);
+      console.error('🔗 Request URL:', error.config?.url);
+      console.error('🌐 Full URL:', error.config?.baseURL + error.config?.url);
       
       // Don't use fallback hardcoded coupons - instead show empty state
       setAvailableCoupons([]);
       
       // Alert user if there's a connection issue
       if (error.response?.status === 404) {
-        console.warn('Coupon endpoint not found - API might not be configured');
+        console.warn('⚠️ Coupon endpoint not found (404) - Check API configuration');
+        console.warn('Expected endpoint: /coupons/available');
       } else if (error.response?.status === 401) {
-        console.warn('Unauthorized - user might need to login');
+        console.warn('⚠️ Unauthorized (401) - User might need to login');
+      } else if (error.response?.status === 500) {
+        console.error('⚠️ Server error (500) - Backend issue');
       }
     } finally {
       setLoadingCoupons(false);
@@ -419,12 +425,15 @@ function POS() {
   // Validate Coupon with Backend API
   const validateCoupon = async (couponCode) => {
     try {
-      console.log('Validating coupon:', couponCode);
-      const res = await api.post('/api/v1/coupons/validate', { 
+      console.log('🔍 Validating coupon:', couponCode);
+      console.log('💰 Current order total:', subtotal);
+      
+      // ✅ FIXED: Removed /api/v1 prefix since it's in axios baseURL
+      const res = await api.post('/coupons/validate', { 
         code: couponCode,
         order_total: subtotal // Send current order total for validation
       });
-      console.log('Coupon validation response:', res.data);
+      console.log('✅ Coupon validation response:', res.data);
       
       // Handle different response structures
       let validatedCoupon = null;
@@ -432,9 +441,9 @@ function POS() {
       if (res.data.valid || res.data.is_valid) {
         validatedCoupon = {
           code: res.data.code || res.data.coupon_code || couponCode,
-          discount: res.data.discount || res.data.discount_value || 0,
+          discount: res.data.discount || res.data.discount_value || res.data.discount_amount || 0,
           type: res.data.type || res.data.discount_type || 'percentage',
-          min_order: res.data.min_order || res.data.min_order_value || 0,
+          min_order: res.data.min_order || res.data.min_order_value || res.data.minimum_order_amount || 0,
           description: res.data.description || res.data.message || ''
         };
       } else if (res.data.coupon) {
@@ -442,33 +451,34 @@ function POS() {
         const coupon = res.data.coupon;
         validatedCoupon = {
           code: coupon.code || coupon.coupon_code || couponCode,
-          discount: coupon.discount || coupon.discount_value || 0,
+          discount: coupon.discount || coupon.discount_value || coupon.discount_amount || 0,
           type: coupon.type || coupon.discount_type || 'percentage',
-          min_order: coupon.min_order || coupon.min_order_value || 0,
+          min_order: coupon.min_order || coupon.min_order_value || coupon.minimum_order_amount || 0,
           description: coupon.description || ''
         };
       } else {
         // Assume the response data itself is the coupon
         validatedCoupon = {
           code: res.data.code || couponCode,
-          discount: res.data.discount || 0,
-          type: res.data.type || 'percentage',
-          min_order: res.data.min_order || 0,
+          discount: res.data.discount || res.data.discount_value || 0,
+          type: res.data.type || res.data.discount_type || 'percentage',
+          min_order: res.data.min_order || res.data.min_order_value || 0,
           description: res.data.description || ''
         };
       }
       
-      console.log('Validated coupon:', validatedCoupon);
+      console.log('✅ Validated coupon:', validatedCoupon);
       return validatedCoupon;
       
     } catch (error) {
-      console.error('Coupon validation failed:', error);
-      console.error('Validation error details:', error.response?.data);
+      console.error('❌ Coupon validation failed:', error);
+      console.error('📋 Validation error details:', error.response?.data);
+      console.error('🔗 Request URL:', error.config?.url);
       
       // Check if error message indicates invalid coupon
       const errorMsg = error.response?.data?.detail || error.response?.data?.message || '';
       if (errorMsg) {
-        console.log('Validation error message:', errorMsg);
+        console.log('📝 Error message:', errorMsg);
       }
       
       return null;
@@ -483,7 +493,7 @@ function POS() {
     }
     
     const couponCodeUpper = inputCoupon.trim().toUpperCase();
-    console.log('Applying coupon:', couponCodeUpper);
+    console.log('🎫 Applying coupon:', couponCodeUpper, 'to order total:', subtotal);
     
     const validatedCoupon = await validateCoupon(couponCodeUpper);
     
@@ -497,30 +507,33 @@ function POS() {
         let discountAmount = 0;
         if (validatedCoupon.type === 'percentage' || validatedCoupon.type === 'percent') {
           discountAmount = (subtotal * validatedCoupon.discount) / 100;
-        } else if (validatedCoupon.type === 'fixed' || validatedCoupon.type === 'flat') {
+          console.log(`📊 Percentage discount: ${validatedCoupon.discount}% of ₹${subtotal} = ₹${discountAmount}`);
+        } else if (validatedCoupon.type === 'fixed' || validatedCoupon.type === 'flat' || validatedCoupon.type === 'amount') {
           discountAmount = validatedCoupon.discount;
+          console.log(`💰 Fixed discount: ₹${discountAmount}`);
         } else {
           // Default to percentage if type is unclear
           discountAmount = (subtotal * validatedCoupon.discount) / 100;
+          console.log(`📊 Default to percentage: ${validatedCoupon.discount}% = ₹${discountAmount}`);
         }
         
-        console.log('Discount amount calculated:', discountAmount);
+        console.log('✅ Discount amount calculated:', discountAmount);
         setDiscount(discountAmount);
         setInputCoupon('');
         setShowCouponModal(false);
-        alert(`Coupon ${validatedCoupon.code} applied successfully! You saved ₹${discountAmount.toFixed(2)}`);
+        alert(`🎉 Coupon ${validatedCoupon.code} applied successfully! You saved ₹${discountAmount.toFixed(2)}`);
       } else {
-        alert(`Minimum order of ₹${minOrder} required for this coupon. Current order: ₹${subtotal.toFixed(2)}`);
+        alert(`⚠️ Minimum order of ₹${minOrder} required for this coupon. Current order: ₹${subtotal.toFixed(2)}`);
       }
     } else {
-      alert('Invalid or expired coupon code');
+      alert('❌ Invalid or expired coupon code');
     }
   };
 
   const removeCoupon = () => {
     setCouponCode('');
     setDiscount(0);
-    console.log('Coupon removed');
+    console.log('🗑️ Coupon removed');
   };
 
   // ---------------- PAYMENT HANDLERS ----------------
@@ -767,40 +780,40 @@ function POS() {
               value={newCustomer.email}
               onChange={(e) =>
                 setNewCustomer({ ...newCustomer, email: e.target.value })
-              }
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
-            />
-            <input
-              type="text"
-              placeholder="Address"
-              value={newCustomer.address}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, address: e.target.value })
-              }
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
-            />
-            <input
-              type="text"
-              placeholder="City"
-              value={newCustomer.city}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, city: e.target.value })
-              }
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
-            />
-            <input
-              type="text"
-              placeholder="State"
-              value={newCustomer.state}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, state: e.target.value })
-              }
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
-            />
-            <input
-              type="text"
-              placeholder="Zip code"
-              value={newCustomer.zip_code}
+}
+className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
+/>
+<input
+type="text"
+placeholder="Address"
+value={newCustomer.address}
+onChange={(e) =>
+setNewCustomer({ ...newCustomer, address: e.target.value })
+}
+className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
+/>
+<input
+type="text"
+placeholder="City"
+value={newCustomer.city}
+onChange={(e) =>
+setNewCustomer({ ...newCustomer, city: e.target.value })
+}
+className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
+/>
+<input
+type="text"
+placeholder="State"
+value={newCustomer.state}
+onChange={(e) =>
+setNewCustomer({ ...newCustomer, state: e.target.value })
+}
+className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
+/>
+<input
+type="text"
+placeholder="Zip code"
+value={newCustomer.zip_code}
 onChange={(e) =>
 setNewCustomer({ ...newCustomer, zip_code: e.target.value })
 }
@@ -939,7 +952,6 @@ Cancel
     </div>
   )}
 
-  {/* Rest of the component remains the same... */}
   {/* Header */}
   <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-5">
     <h2 className="text-base sm:text-xl md:text-2xl font-semibold text-foreground">
