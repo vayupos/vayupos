@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Database, Eye, ArrowLeft, Minus, Tag, Trash2, Printer } from 'lucide-react';
+import { Search, Plus, Database, Eye, ArrowLeft, Minus, Tag, Trash2, Printer, X } from 'lucide-react';
 import api from '../api/axios';
 
 function POS() {
@@ -16,6 +16,8 @@ function POS() {
   const [couponCode, setCouponCode] = useState('');
   const [inputCoupon, setInputCoupon] = useState('');
   const [discount, setDiscount] = useState(0);
+  const [availableCoupons, setAvailableCoupons] = useState([]);
+  const [loadingCoupons, setLoadingCoupons] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
     first_name: '',
     last_name: '',
@@ -40,18 +42,11 @@ function POS() {
   const rowsToLoadMore = 2;
   const [allMenuItems, setAllMenuItems] = useState([]);
 
-  // Available Coupons Data
-  const availableCoupons = [
-    { code: 'NEW20', discount: 20, type: 'percentage', description: '20% off for new customers', minOrder: 0 },
-    { code: 'FLAT50', discount: 50, type: 'fixed', description: '₹50 flat discount', minOrder: 0 },
-    { code: 'SAVE100', discount: 100, type: 'fixed', description: '₹100 off on orders above ₹200', minOrder: 200 },
-    { code: 'WELCOME10', discount: 10, type: 'percentage', description: '10% off welcome offer', minOrder: 0 }
-  ];
-
-  // Fetch categories on mount
+  // Fetch categories and customers on mount
   useEffect(() => {
     fetchCategories();
     fetchCustomers();
+    fetchAvailableCoupons();
   }, []);
 
   // Fetch menu items when category or search changes
@@ -344,26 +339,74 @@ function POS() {
     }
   };
 
-  // ---------------- COUPON FUNCTIONS ----------------
+  // ---------------- COUPON FUNCTIONS (BACKEND) ----------------
 
-  const applyCoupon = () => {
-    const coupon = availableCoupons.find(c => c.code.toUpperCase() === inputCoupon.toUpperCase());
-    if (coupon) {
-      if (subtotal >= coupon.minOrder) {
-        setCouponCode(coupon.code);
+  // Fetch Available Coupons from Backend API
+  const fetchAvailableCoupons = async () => {
+    try {
+      setLoadingCoupons(true);
+      const res = await api.get('/api/v1/coupons/available');
+      console.log('Coupons fetched:', res.data);
+      
+      // Handle different response structures
+      let couponsData = [];
+      if (Array.isArray(res.data)) {
+        couponsData = res.data;
+      } else if (res.data.data && Array.isArray(res.data.data)) {
+        couponsData = res.data.data;
+      } else if (res.data.items && Array.isArray(res.data.items)) {
+        couponsData = res.data.items;
+      }
+      
+      setAvailableCoupons(couponsData);
+    } catch (error) {
+      console.error('Error fetching available coupons:', error);
+      // Fallback hardcoded coupons if API fails
+      setAvailableCoupons([
+        { code: 'NEW20', discount: 20, type: 'percentage', description: '20% off for new customers', min_order: 0 },
+        { code: 'FLAT50', discount: 50, type: 'fixed', description: '₹50 flat discount', min_order: 0 },
+        { code: 'SAVE100', discount: 100, type: 'fixed', description: '₹100 off on orders above ₹200', min_order: 200 },
+        { code: 'WELCOME10', discount: 10, type: 'percentage', description: '10% off welcome offer', min_order: 0 }
+      ]);
+    } finally {
+      setLoadingCoupons(false);
+    }
+  };
+
+  // Validate Coupon with Backend API
+  const validateCoupon = async (couponCode) => {
+    try {
+      const res = await api.post('/api/v1/coupons/validate', { code: couponCode });
+      console.log('Coupon validated:', res.data);
+      return res.data;
+    } catch (error) {
+      console.error('Coupon validation failed:', error);
+      return null;
+    }
+  };
+
+  // Apply Coupon Function with Backend Validation
+  const applyCoupon = async () => {
+    const couponCodeUpper = inputCoupon.toUpperCase();
+    const validatedCoupon = await validateCoupon(couponCodeUpper);
+    
+    if (validatedCoupon) {
+      const minOrder = validatedCoupon.min_order || validatedCoupon.minOrder || 0;
+      
+      if (subtotal >= minOrder) {
+        setCouponCode(validatedCoupon.code);
         
-        // Calculate discount
-        if (coupon.type === 'percentage') {
-          setDiscount((subtotal * coupon.discount) / 100);
-        } else {
-          setDiscount(coupon.discount);
-        }
+        // Calculate discount based on coupon type
+        const discountAmount = validatedCoupon.type === 'percentage' 
+          ? (subtotal * validatedCoupon.discount) / 100 
+          : validatedCoupon.discount;
         
+        setDiscount(discountAmount);
         setInputCoupon('');
         setShowCouponModal(false);
-        alert(`Coupon ${coupon.code} applied successfully!`);
+        alert(`Coupon ${validatedCoupon.code} applied successfully!`);
       } else {
-        alert(`Minimum order of ₹${coupon.minOrder} required for this coupon`);
+        alert(`Minimum order of ₹${minOrder} required for this coupon`);
       }
     } else {
       alert('Invalid coupon code');
@@ -521,9 +564,6 @@ function POS() {
     0
   );
   
-  // Calculate eligible coupons based on subtotal
-  const eligibleCoupons = availableCoupons.filter(coupon => subtotal >= coupon.minOrder);
-  
   const discountedSubtotal = subtotal - discount;
   const cgst = discountedSubtotal * 0.025;
   const sgst = discountedSubtotal * 0.025;
@@ -551,20 +591,7 @@ function POS() {
                 }}
                 className="text-muted-foreground hover:text-foreground"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+                <X size={20} />
               </button>
             </div>
             <p className="text-sm text-muted-foreground mb-4">
@@ -598,20 +625,7 @@ function POS() {
                 onClick={() => setShowAddCustomerModal(false)}
                 className="text-muted-foreground hover:text-foreground"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+                <X size={20} />
               </button>
             </div>
 
@@ -706,7 +720,7 @@ function POS() {
         </div>
       )}
 
-      {/* Coupon Modal with Available and Eligible Coupons */}
+      {/* Backend-Powered Coupon Modal */}
       {showCouponModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
           <div className="bg-card rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
@@ -721,23 +735,11 @@ function POS() {
                 }}
                 className="text-muted-foreground hover:text-foreground"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+                <X size={20} />
               </button>
             </div>
-            
+
+            {/* Manual Input */}
             <input
               type="text"
               placeholder="Enter coupon code"
@@ -746,77 +748,82 @@ function POS() {
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-3 sm:mb-4"
             />
 
-            {/* Eligible Coupons */}
-            {eligibleCoupons.length > 0 && (
+            {/* Backend Available/Eligible Coupons */}
+            {loadingCoupons ? (
+              <div className="text-center py-4 text-muted-foreground">
+                Loading coupons...
+              </div>
+            ) : availableCoupons.length > 0 ? (
               <div className="mb-4">
-                <p className="text-sm font-semibold text-foreground mb-2">Eligible Coupons</p>
-                <div className="space-y-2">
-                  {eligibleCoupons.map((coupon, i) => (
-                    <div
-                      key={i}
-                      className="bg-muted rounded p-2 sm:p-3 cursor-pointer hover:bg-teal-600 hover:text-white transition-colors"
-                      onClick={() => setInputCoupon(coupon.code)}
-                    >
-                      <div className="flex justify-between items-center">
-                        <span className="font-semibold text-sm sm:text-base">{coupon.code}</span>
-                        <span className="text-xs sm:text-sm">
-                          {coupon.type === 'percentage' ? `${coupon.discount}% off` : `₹${coupon.discount} off`}
-                        </span>
+                <p className="text-sm font-semibold text-foreground mb-2">
+                  Available Coupons (Subtotal: ₹{subtotal.toFixed(2)})
+                </p>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {availableCoupons.map((coupon, i) => {
+                    const minOrder = coupon.min_order || coupon.minOrder || 0;
+                    const isEligible = subtotal >= minOrder;
+                    return (
+                      <div
+                        key={i}
+                        className={`bg-muted rounded p-2 sm:p-3 cursor-pointer transition-colors ${
+                          isEligible
+                            ? 'hover:bg-teal-600 hover:text-white'
+                            : 'opacity-60 cursor-not-allowed'
+                        }`}
+                        onClick={() => isEligible && setInputCoupon(coupon.code)}
+                      >
+                        <div className="flex justify-between items-center">
+                          <span className="font-semibold text-sm sm:text-base">
+                            {coupon.code}
+                          </span>
+                          <span className="text-xs sm:text-sm">
+                            {coupon.type === 'percentage'
+                              ? `${coupon.discount}% off`
+                              : `₹${coupon.discount} off`}
+                          </span>
+                        </div>
+                        <p className="text-xs sm:text-sm mt-1 opacity-80">
+                          {coupon.description}
+                        </p>
+                        {!isEligible && (
+                          <p className="text-xs text-red-500 mt-1">
+                            Min order: ₹{minOrder} (Need ₹{(minOrder - subtotal).toFixed(2)} more)
+                          </p>
+                        )}
                       </div>
-                      <p className="text-xs sm:text-sm mt-1 opacity-80">{coupon.description}</p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
+              </div>
+            ) : (
+              <div className="text-center py-4 text-muted-foreground mb-4">
+                No coupons available
               </div>
             )}
 
-            {/* All Available Coupons */}
-            <div className="mb-4">
-              <p className="text-sm font-semibold text-foreground mb-2">All Available Coupons</p>
-              <div className="space-y-2">
-                {availableCoupons.filter(c => !eligibleCoupons.includes(c)).map((coupon, i) => (
-                  <div
-                    key={i}
-                    className="bg-muted rounded p-2 sm:p-3 opacity-60"
-                  >
-                    <div className="flex justify-between items-center">
-                      <span className="font-semibold text-sm sm:text-base">{coupon.code}</span>
-                      <span className="text-xs sm:text-sm">
-                        {coupon.type === 'percentage' ? `${coupon.discount}% off` : `₹${coupon.discount} off`}
-                      </span>
-                    </div>
-                    <p className="text-xs sm:text-sm mt-1">{coupon.description}</p>
-                    {coupon.minOrder > subtotal && (
-                      <p className="text-xs text-red-500 mt-1">
-                        Add ₹{(coupon.minOrder - subtotal).toFixed(2)} more to unlock
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              <button onClick={applyCoupon}
+            disabled={!inputCoupon}
+            className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Apply Coupon
+          </button>
+          <button
+            onClick={() => {
+              setShowCouponModal(false);
+              setInputCoupon('');
+            }}
+            className="flex-1 py-2 sm:py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base font-medium hover:bg-accent"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
 
-            {/* ActionButtons */}
-<div className="flex gap-2">
-<button
-             onClick={applyCoupon}
-             className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium"
-           >
-Apply
-</button>
-<button
-onClick={() => {
-setShowCouponModal(false);
-setInputCoupon('');
-}}
-className="flex-1 py-2 sm:py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base font-medium"
->
-Cancel
-</button>
-</div>
-</div>
-</div>
-)}{/* Header */}
+  {/* Header */}
   <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-5">
     <h2 className="text-base sm:text-xl md:text-2xl font-semibold text-foreground">
       POS System
@@ -1118,10 +1125,11 @@ Cancel
           <div className="flex gap-2">
             <button
               onClick={() => setShowCouponModal(true)}
-              className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 hover:bg-teal-700 flex-shrink-0"
+              disabled={loadingCoupons}
+              className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 hover:bg-teal-700 flex-shrink-0 disabled:opacity-50"
             >
               <Tag size={16} />
-              <span>Coupon</span>
+              <span>{loadingCoupons ? 'Loading...' : 'Coupon'}</span>
             </button>
             <button
               onClick={() => {
@@ -1183,19 +1191,19 @@ Cancel
             Payment Methods
           </h3>
           <div className="grid grid-cols-3 gap-2 mb-4">
-            <button 
+            <button
               onClick={handleUpiPayment}
               className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700"
             >
               UPI
             </button>
-            <button 
+            <button
               onClick={handleCashPayment}
               className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700"
             >
               Cash
             </button>
-            <button 
+            <button
               onClick={handleCardPayment}
               className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700"
             >
