@@ -1,4 +1,4 @@
-# VayuPos - POS System Backend API
+ch# VayuPos - POS System Backend API
 
 A comprehensive Point of Sale (POS) system backend built with FastAPI and SQLAlchemy. This API provides complete functionality for managing products, customers, orders, payments, inventory, and business analytics.
 
