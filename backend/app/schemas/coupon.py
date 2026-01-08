@@ -61,10 +61,10 @@ class CouponResponse(CouponBase):
         from_attributes = True
 
 
-# ✅ FIXED: Flexible field aliases for frontend compatibility
+# ✅ PERFECT MATCH: Exactly what frontend sends
 class CouponValidateRequest(BaseModel):
-    code: str = Field(..., description="Coupon code")  # Accepts 'code' OR 'coupon_code'
-    order_total: float = Field(..., ge=0, description="Order subtotal")  # Accepts 'order_total' OR 'subtotal'
+    coupon_code: str  # ✅ Matches frontend {"coupon_code":"PONGAL"}
+    subtotal: float = Field(..., ge=0)  # ✅ Matches frontend {"subtotal":5720}
     customer_id: Optional[str] = None
 
 
@@ -78,10 +78,10 @@ class CouponValidateResponse(BaseModel):
 
 class CouponAvailableResponse(BaseModel):
     eligible: List[CouponResponse]
-    ineligible: List[dict]  # Can include reason, etc.
+    ineligible: List[dict]
 
 
-# -------- Assign schemas --------
+# Assign schemas
 class AssignOrderRequest(BaseModel):
     order_id: int
 
