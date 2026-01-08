@@ -424,16 +424,18 @@ function POS() {
     }
   };
 
-  // Validate Coupon with Backend API
+  // ✅ FIXED: Validate Coupon with Backend API - CORRECTED TO USE QUERY PARAMETER
   const validateCoupon = async (couponCode) => {
     try {
       console.log('🔍 Validating coupon:', couponCode);
-      console.log('💰 Current order total:', subtotal);
+      console.log('💰 Current order subtotal:', subtotal);
       
-      const res = await api.post('/coupons/validate', { 
-        code: couponCode,
-        order_total: subtotal
-      });
+      // ✅ FIXED: Send subtotal as query parameter, code in body
+      const res = await api.post(
+        `/coupons/validate?subtotal=${subtotal}`,
+        { code: couponCode }
+      );
+      
       console.log('✅ Coupon validation response:', res.data);
       
       // Handle different response structures
@@ -442,26 +444,26 @@ function POS() {
       if (res.data.valid || res.data.is_valid) {
         validatedCoupon = {
           code: res.data.code || res.data.coupon_code || couponCode,
-          discount: res.data.discount_value || res.data.discount || res.data.discount_amount || 0,
-          type: res.data.discount_type || res.data.type || 'percentage',
-          min_order: res.data.min_order_amount || res.data.min_order || res.data.min_order_value || res.data.minimum_order_amount || 0,
+          discount: res.data.discount || res.data.discount_value || res.data.discount_amount || 0,
+          type: res.data.type || res.data.discount_type || 'percentage',
+          min_order: res.data.min_order || res.data.min_order_value || res.data.minimum_order_amount || 0,
           description: res.data.description || res.data.message || ''
         };
       } else if (res.data.coupon) {
         const coupon = res.data.coupon;
         validatedCoupon = {
           code: coupon.code || coupon.coupon_code || couponCode,
-          discount: coupon.discount_value || coupon.discount || coupon.discount_amount || 0,
-          type: coupon.discount_type || coupon.type || 'percentage',
-          min_order: coupon.min_order_amount || coupon.min_order || coupon.min_order_value || coupon.minimum_order_amount || 0,
+          discount: coupon.discount || coupon.discount_value || coupon.discount_amount || 0,
+          type: coupon.type || coupon.discount_type || 'percentage',
+          min_order: coupon.min_order || coupon.min_order_value || coupon.minimum_order_amount || 0,
           description: coupon.description || ''
         };
       } else {
         validatedCoupon = {
           code: res.data.code || couponCode,
-          discount: res.data.discount_value || res.data.discount || 0,
-          type: res.data.discount_type || res.data.type || 'percentage',
-          min_order: res.data.min_order_amount || res.data.min_order || 0,
+          discount: res.data.discount || res.data.discount_value || 0,
+          type: res.data.type || res.data.discount_type || 'percentage',
+          min_order: res.data.min_order || res.data.min_order_value || 0,
           description: res.data.description || ''
         };
       }
