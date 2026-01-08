@@ -378,10 +378,10 @@ function POS() {
       const normalizedCoupons = couponsData.map(coupon => ({
         id: coupon.id,
         code: coupon.code || coupon.coupon_code || '',
-        discount: coupon.discount_value || coupon.discount || coupon.discount_amount || 0,  // Backend → Frontend
-        type: coupon.discount_type || coupon.type || 'percentage',  // Backend → Frontend
+        discount: coupon.discount_value || coupon.discount || coupon.discount_amount || 0,
+        type: coupon.discount_type || coupon.type || 'percentage',
         description: coupon.description || coupon.desc || `${coupon.discount_value || coupon.discount || 0}${(coupon.discount_type || coupon.type) === 'percentage' ? '%' : '₹'} off`,
-        min_order: coupon.min_order_amount || coupon.min_order || coupon.minOrder || coupon.minimum_order_amount || 0,  // Backend → Frontend
+        min_order: coupon.min_order_amount || coupon.min_order || coupon.minOrder || coupon.minimum_order_amount || 0,
         is_active: coupon.is_active !== undefined ? coupon.is_active : true,
         valid_from: coupon.valid_from,
         valid_to: coupon.valid_to
@@ -424,19 +424,42 @@ function POS() {
     }
   };
 
-  // ✅ FIXED: Validate Coupon with Backend API - CORRECTED TO USE QUERY PARAMETER
+  // ✅ FIXED v2: Validate Coupon - Try BOTH query param AND body approaches
   const validateCoupon = async (couponCode) => {
     try {
       console.log('🔍 Validating coupon:', couponCode);
       console.log('💰 Current order subtotal:', subtotal);
       
-      // ✅ FIXED: Send subtotal as query parameter, code in body
-      const res = await api.post(
-        `/coupons/validate?subtotal=${subtotal}`,
-        { code: couponCode }
-      );
+      let res;
+      let validationError = null;
       
-      console.log('✅ Coupon validation response:', res.data);
+      // ✅ TRY APPROACH 1: Subtotal in body (most common FastAPI pattern)
+      try {
+        console.log('📤 Attempt 1: Sending subtotal in request body');
+        res = await api.post('/coupons/validate', { 
+          code: couponCode,
+          subtotal: subtotal
+        });
+        console.log('✅ Approach 1 SUCCESS:', res.data);
+      } catch (error1) {
+        console.warn('⚠️ Approach 1 failed, trying approach 2...');
+        validationError = error1;
+        
+        // ✅ TRY APPROACH 2: Subtotal as query parameter
+        try {
+          console.log('📤 Attempt 2: Sending subtotal as query parameter');
+          res = await api.post(
+            `/coupons/validate?subtotal=${subtotal}`,
+            { code: couponCode }
+          );
+          console.log('✅ Approach 2 SUCCESS:', res.data);
+        } catch (error2) {
+          console.error('❌ Both approaches failed');
+          console.error('Error 1 (body):', error1.response?.data);
+          console.error('Error 2 (query):', error2.response?.data);
+          throw error2; // Throw the last error
+        }
+      }
       
       // Handle different response structures
       let validatedCoupon = null;
@@ -475,11 +498,28 @@ function POS() {
       console.error('❌ Coupon validation failed:', error);
       console.error('📋 Validation error details:', error.response?.data);
       console.error('🔗 Request URL:', error.config?.url);
+      console.error('📦 Request data:', error.config?.data);
       
-      const errorMsg = error.response?.data?.detail || error.response?.data?.message || '';
-      if (errorMsg) {
-        console.log('📝 Error message:', errorMsg);
+      // Extract detailed error message
+      const errorData = error.response?.data;
+      let errorMsg = 'Invalid or expired coupon code';
+      
+      if (errorData?.detail) {
+        if (Array.isArray(errorData.detail)) {
+          // FastAPI validation errors
+          const messages = errorData.detail.map(err => 
+            `${err.loc?.join(' → ') || 'Field'}: ${err.msg}`
+          ).join(', ');
+          errorMsg = messages;
+          console.error('🔍 Validation errors:', errorData.detail);
+        } else if (typeof errorData.detail === 'string') {
+          errorMsg = errorData.detail;
+        }
+      } else if (errorData?.message) {
+        errorMsg = errorData.message;
       }
+      
+      console.log('📝 Final error message:', errorMsg);
       
       return null;
     }
