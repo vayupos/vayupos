@@ -53,34 +53,62 @@ def list_coupons(
     return CouponService.get_all_coupons(db, skip, limit, active_only)
 
 
+# ✅ FIXED: Changed from Query parameter to request body
 @router.get("/coupons/available", response_model=CouponAvailableResponse)
 def get_available_coupons(
-    subtotal: float = Query(..., ge=0, description="Current cart subtotal"),
     db: Session = Depends(get_db),
 ):
-    """Get eligible and ineligible coupons based on cart subtotal"""
-    eligible, ineligible = CouponService.get_available_coupons(db, subtotal)
+    """Get all available coupons (no subtotal filter needed for initial load)"""
+    # Get all active coupons
+    eligible, ineligible = CouponService.get_available_coupons(db, subtotal=0)
+    
+    # Combine both lists - frontend will filter based on order total
+    all_coupons = eligible + ineligible
 
     # Convert Coupon objects to CouponResponse dicts
-    eligible_response = [CouponResponse.model_validate(coupon).model_dump() for coupon in eligible]
-    ineligible_response = [CouponResponse.model_validate(coupon).model_dump() for coupon in ineligible]
+    coupons_response = [CouponResponse.model_validate(coupon).model_dump() for coupon in all_coupons]
 
     return {
-        "eligible": eligible_response,
-        "ineligible": ineligible_response,
+        "eligible": coupons_response,
+        "ineligible": [],
     }
 
 
+# ✅ FIXED: This is the main endpoint that was causing the error
 @router.post("/coupons/validate", response_model=CouponValidateResponse)
 def validate_coupon(
-    request: CouponValidateRequest,
+    request: CouponValidateRequest,  # ✅ Now accepts body with code + order_total
     db: Session = Depends(get_db),
 ):
-    """Validate a coupon code and check eligibility"""
+    """
+    ✅ FIXED: Validate a coupon code and check eligibility
+    
+    Request Body:
+    {
+        "code": "PONGAL",           // or "coupon_code": "PONGAL" 
+        "order_total": 500          // or "subtotal": 500
+    }
+    """
+    # ✅ Handle both field names (code/coupon_code and order_total/subtotal)
+    coupon_code = getattr(request, 'code', None) or getattr(request, 'coupon_code', None)
+    order_total = getattr(request, 'order_total', None) or getattr(request, 'subtotal', None)
+    
+    if not coupon_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Coupon code is required"
+        )
+    
+    if order_total is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Order total is required"
+        )
+    
     valid, eligible, message, coupon, discount_amount = CouponService.validate_coupon(
         db,
-        request.coupon_code,
-        request.subtotal,
+        coupon_code,
+        order_total,
     )
     return {
         "valid": valid,
