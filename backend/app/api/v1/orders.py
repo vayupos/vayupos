@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user, get_db
 from app.services import OrderService
 from app.schemas import OrderCreate, OrderUpdate, OrderResponse
+import traceback  # ← ADD THIS LINE
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -16,8 +17,19 @@ def create_order(
     db: Session = Depends(get_db),
 ):
     """Create a new order"""
-    order = OrderService.create_order(db, order_create, int(current_user["sub"]))
-    return OrderResponse.from_orm(order)  # Convert to Pydantic schema
+    try:  # ← ADD TRY-CATCH BLOCK
+        print(f"📦 Creating order with data: {order_create.dict()}")
+        print(f"👤 Current user: {current_user}")
+        order = OrderService.create_order(db, order_create, int(current_user["sub"]))
+        print(f"✅ Order created successfully: {order.id}")
+        return OrderResponse.from_orm(order)
+    except Exception as e:
+        print(f"❌ Error creating order: {str(e)}")
+        print(f"📋 Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error creating order: {str(e)}"
+        )
 
 
 @router.get("/", response_model=dict)
@@ -30,7 +42,6 @@ def list_orders(
 ):
     """List all orders"""
     orders, total = OrderService.list_orders(db, skip, limit, status, customer_id)
-    # Convert each order to Pydantic schema
     return {
         "total": total,
         "skip": skip,
