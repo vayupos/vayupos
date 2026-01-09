@@ -57,6 +57,56 @@ class InventoryService:
 
         return log
 
+    # ⭐ ADD THIS NEW METHOD ⭐
+    @staticmethod
+    def log_inventory_change(
+        db: Session,
+        product_id: int,
+        quantity_change: int,
+        change_type: str,
+        reference_id: int = None,
+        notes: str = None,
+        user_id: int = None
+    ):
+        """
+        Log inventory changes when orders are created
+        This is a wrapper around create_inventory_log for order creation
+        """
+        try:
+            # Load product to get current stock
+            product = db.query(Product).filter(Product.id == product_id).first()
+            if not product:
+                print(f"⚠️ Product {product_id} not found, skipping inventory log")
+                return None
+
+            qty_before = product.stock_quantity
+            qty_after = qty_before + quantity_change  # quantity_change is already negative for sales
+
+            # Create log entry
+            log = InventoryLog(
+                product_id=product_id,
+                user_id=user_id,
+                action=change_type.upper(),  # e.g., "ORDER_SALE" or "STOCK_OUT"
+                quantity_change=abs(quantity_change),
+                quantity_before=qty_before,
+                quantity_after=qty_after,
+                reference_number=f"ORDER-{reference_id}" if reference_id else None,
+                notes=notes,
+                created_at=datetime.utcnow(),
+            )
+
+            # Update product stock
+            product.stock_quantity = qty_after
+
+            db.add(log)
+            # Don't commit here - let the order service handle the transaction
+            
+            return log
+        except Exception as e:
+            print(f"⚠️ Error logging inventory change: {str(e)}")
+            # Don't raise - allow order creation to proceed even if logging fails
+            return None
+
     @staticmethod
     def get_all_logs(db: Session):
         return (
