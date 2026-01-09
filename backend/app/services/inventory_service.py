@@ -65,6 +65,7 @@ class InventoryService:
         action: str = None,
         change_type: str = None,
         reference_id: int = None,
+        reference_number: str = None,
         notes: str = None,
         user_id: int = None
     ):
@@ -75,6 +76,9 @@ class InventoryService:
         try:
             # Use action if provided, otherwise use change_type
             log_action = action or change_type or "ORDER_SALE"
+            
+            # Use reference_number if provided, otherwise use reference_id
+            ref_number = reference_number or (f"ORDER-{reference_id}" if reference_id else None)
             
             # Load product to get current stock
             product = db.query(Product).filter(Product.id == product_id).first()
@@ -89,11 +93,11 @@ class InventoryService:
             log = InventoryLog(
                 product_id=product_id,
                 user_id=user_id,
-                action=log_action.upper(),  # e.g., "ORDER_SALE" or "STOCK_OUT"
+                action=log_action.upper(),
                 quantity_change=abs(quantity_change),
                 quantity_before=qty_before,
                 quantity_after=qty_after,
-                reference_number=f"ORDER-{reference_id}" if reference_id else None,
+                reference_number=ref_number,
                 notes=notes,
                 created_at=datetime.utcnow(),
             )
@@ -102,12 +106,10 @@ class InventoryService:
             product.stock_quantity = qty_after
 
             db.add(log)
-            # Don't commit here - let the order service handle the transaction
             
             return log
         except Exception as e:
             print(f"⚠️ Error logging inventory change: {str(e)}")
-            # Don't raise - allow order creation to proceed even if logging fails
             return None
 
     @staticmethod
