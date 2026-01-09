@@ -57,13 +57,14 @@ class InventoryService:
 
         return log
 
-    # ⭐ ADD THIS NEW METHOD ⭐
+    # ✅ CORRECTED METHOD - accepts 'action' parameter
     @staticmethod
     def log_inventory_change(
         db: Session,
         product_id: int,
         quantity_change: int,
-        change_type: str,
+        action: str = None,  # ← Changed to 'action'
+        change_type: str = None,  # ← Keep for compatibility
         reference_id: int = None,
         notes: str = None,
         user_id: int = None
@@ -73,6 +74,9 @@ class InventoryService:
         This is a wrapper around create_inventory_log for order creation
         """
         try:
+            # Use action if provided, otherwise use change_type
+            log_action = action or change_type or "ORDER_SALE"
+            
             # Load product to get current stock
             product = db.query(Product).filter(Product.id == product_id).first()
             if not product:
@@ -86,7 +90,7 @@ class InventoryService:
             log = InventoryLog(
                 product_id=product_id,
                 user_id=user_id,
-                action=change_type.upper(),  # e.g., "ORDER_SALE" or "STOCK_OUT"
+                action=log_action.upper(),  # e.g., "ORDER_SALE" or "STOCK_OUT"
                 quantity_change=abs(quantity_change),
                 quantity_before=qty_before,
                 quantity_after=qty_after,
