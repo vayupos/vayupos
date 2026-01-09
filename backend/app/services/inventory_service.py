@@ -57,14 +57,13 @@ class InventoryService:
 
         return log
 
-    # ✅ CORRECTED METHOD - accepts 'action' parameter
     @staticmethod
     def log_inventory_change(
         db: Session,
         product_id: int,
         quantity_change: int,
-        action: str = None,  # ← Changed to 'action'
-        change_type: str = None,  # ← Keep for compatibility
+        action: str = None,
+        change_type: str = None,
         reference_id: int = None,
         notes: str = None,
         user_id: int = None
