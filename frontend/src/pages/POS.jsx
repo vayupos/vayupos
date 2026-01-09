@@ -107,13 +107,13 @@ function POS() {
       } else {
         const errorDetail = error.response?.data?.detail;
         let msg = 'Failed to add customer';
-        
+
         if (Array.isArray(errorDetail) && errorDetail.length > 0) {
           msg = errorDetail[0]?.msg || msg;
         } else if (typeof errorDetail === 'string') {
           msg = errorDetail;
         }
-        
+
         alert(`Error: ${msg}`);
       }
     } finally {
@@ -341,18 +341,17 @@ function POS() {
 
   // ---------------- COUPON FUNCTIONS (BACKEND) ----------------
 
-  // Fetch Available Coupons from Backend API
   const fetchAvailableCoupons = async () => {
     try {
       setLoadingCoupons(true);
       console.log('🎫 Fetching coupons from backend...');
-      
+
       const res = await api.get('/coupons/available');
       console.log('📦 Raw coupon response:', res);
       console.log('📊 Coupon response data:', res.data);
-      
+
       let couponsData = [];
-      
+
       if (res.data.eligible && Array.isArray(res.data.eligible)) {
         couponsData = res.data.eligible;
         console.log('✅ Coupons extracted from eligible property:', couponsData);
@@ -371,7 +370,7 @@ function POS() {
       } else {
         console.warn('⚠️ Unexpected coupon response structure:', res.data);
       }
-      
+
       const normalizedCoupons = couponsData.map(coupon => ({
         id: coupon.id,
         code: coupon.code || coupon.coupon_code || '',
@@ -383,12 +382,12 @@ function POS() {
         valid_from: coupon.valid_from,
         valid_to: coupon.valid_to
       }));
-      
+
       console.log('🔄 Normalized coupons:', normalizedCoupons);
-      
+
       const activeCoupons = normalizedCoupons.filter(c => c.is_active && c.code);
       console.log('✅ Active coupons:', activeCoupons);
-      
+
       if (activeCoupons.length > 0) {
         setAvailableCoupons(activeCoupons);
         console.log('🎉 Successfully loaded', activeCoupons.length, 'coupons from backend');
@@ -396,14 +395,14 @@ function POS() {
         console.warn('⚠️ No active coupons found in backend response');
         setAvailableCoupons([]);
       }
-      
+
     } catch (error) {
       console.error('❌ Error fetching available coupons:', error);
       console.error('📋 Error details:', error.response?.data);
       console.error('🔢 Error status:', error.response?.status);
-      
+
       setAvailableCoupons([]);
-      
+
       if (error.response?.status === 404) {
         console.warn('⚠️ Coupon endpoint not found (404)');
       } else if (error.response?.status === 401) {
@@ -416,27 +415,24 @@ function POS() {
     }
   };
 
-  // ✅ FINAL FIX: Validate Coupon with correct field names
   const validateCoupon = async (couponCode) => {
     try {
       console.log('🔍 Validating coupon:', couponCode);
       console.log('💰 Current order subtotal:', subtotal);
-      
-      // ✅ CORRECT: Backend expects "coupon_code" and "subtotal" in request body
+
       const requestBody = {
-        coupon_code: couponCode,  // ✅ Use "coupon_code" not "code"
-        subtotal: subtotal        // ✅ Use "subtotal" in body, not as query param
+        coupon_code: couponCode,
+        subtotal: subtotal
       };
-      
+
       console.log('📤 Sending validation request:', requestBody);
-      
+
       const res = await api.post('/coupons/validate', requestBody);
-      
+
       console.log('✅ Coupon validation response:', res.data);
-      
-      // Handle different response structures
+
       let validatedCoupon = null;
-      
+
       if (res.data.valid || res.data.is_valid) {
         validatedCoupon = {
           code: res.data.code || res.data.coupon_code || couponCode,
@@ -463,22 +459,22 @@ function POS() {
           description: res.data.description || ''
         };
       }
-      
+
       console.log('✅ Validated coupon:', validatedCoupon);
       return validatedCoupon;
-      
+
     } catch (error) {
       console.error('❌ Coupon validation failed:', error);
       console.error('📋 Validation error details:', error.response?.data);
       console.error('🔗 Request URL:', error.config?.url);
       console.error('📦 Request data:', error.config?.data);
-      
+
       const errorData = error.response?.data;
       let errorMsg = 'Invalid or expired coupon code';
-      
+
       if (errorData?.detail) {
         if (Array.isArray(errorData.detail)) {
-          const messages = errorData.detail.map(err => 
+          const messages = errorData.detail.map(err =>
             `${err.loc?.join(' → ') || 'Field'}: ${err.msg}`
           ).join(', ');
           errorMsg = messages;
@@ -489,32 +485,30 @@ function POS() {
       } else if (errorData?.message) {
         errorMsg = errorData.message;
       }
-      
+
       console.log('📝 Final error message:', errorMsg);
-      
+
       return null;
     }
   };
 
-  // Apply Coupon Function
   const applyCoupon = async () => {
     if (!inputCoupon.trim()) {
       alert('Please enter a coupon code');
       return;
     }
-    
+
     const couponCodeUpper = inputCoupon.trim().toUpperCase();
     console.log('🎫 Applying coupon:', couponCodeUpper, 'to order total:', subtotal);
-    
+
     const validatedCoupon = await validateCoupon(couponCodeUpper);
-    
+
     if (validatedCoupon && validatedCoupon.code) {
       const minOrder = validatedCoupon.min_order || 0;
-      
+
       if (subtotal >= minOrder) {
         setCouponCode(validatedCoupon.code);
-        
-        // Calculate discount
+
         let discountAmount = 0;
         if (validatedCoupon.type === 'percentage' || validatedCoupon.type === 'percent') {
           discountAmount = (subtotal * validatedCoupon.discount) / 100;
@@ -526,7 +520,7 @@ function POS() {
           discountAmount = (subtotal * validatedCoupon.discount) / 100;
           console.log(`📊 Default to percentage: ${validatedCoupon.discount}% = ₹${discountAmount}`);
         }
-        
+
         console.log('✅ Discount amount calculated:', discountAmount);
         setDiscount(discountAmount);
         setInputCoupon('');
@@ -546,57 +540,302 @@ function POS() {
     console.log('🗑️ Coupon removed');
   };
 
-  // ---------------- PAYMENT HANDLERS ----------------
+  // ✅ NEW: Create Order Function
+  const createOrder = async (paymentMethod) => {
+    if (cartItems.length === 0) {
+      alert('Cart is empty!');
+      return null;
+    }
 
-  const handleUpiPayment = () => {
+    try {
+      setLoading(true);
+      console.log('🛒 Creating order...');
+      console.log('📦 Cart items:', cartItems);
+      console.log('👤 Customer ID:', selectedCustomerId);
+      console.log('💳 Payment method:', paymentMethod);
+
+      // Build order items array
+      const orderItems = cartItems.map(item => ({
+        product_id: item.product_id,
+        quantity: item.qty,
+        price: item.price,
+        name: item.name,
+        size: item.size
+      }));
+
+      // Calculate totals
+      const orderSubtotal = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+      const orderDiscount = discount;
+      const discountedSubtotal = orderSubtotal - orderDiscount;
+      const orderCgst = discountedSubtotal * 0.025;
+      const orderSgst = discountedSubtotal * 0.025;
+      const orderTotal = discountedSubtotal + orderCgst + orderSgst;
+
+      // Build order payload
+      const orderPayload = {
+        customer_id: selectedCustomerId || null,
+        items: orderItems,
+        subtotal: parseFloat(orderSubtotal.toFixed(2)),
+        discount: parseFloat(orderDiscount.toFixed(2)),
+        cgst: parseFloat(orderCgst.toFixed(2)),
+        sgst: parseFloat(orderSgst.toFixed(2)),
+        total: parseFloat(orderTotal.toFixed(2)),
+        payment_method: paymentMethod,
+        payment_status: paymentMethod === 'cash' ? 'paid' : 'pending',
+        order_status: 'confirmed',
+        notes: notes || '',
+        coupon_code: couponCode || null
+      };
+
+      console.log('📤 Sending order payload:', orderPayload);
+
+      // Make API request
+      const res = await api.post('/orders/', orderPayload);
+
+      console.log('✅ Order created successfully:', res.data);
+
+      // Extract order ID from response
+      let orderId = null;
+      if (res.data.id) {
+        orderId = res.data.id;
+      } else if (res.data.order_id) {
+        orderId = res.data.order_id;
+      } else if (res.data.data?.id) {
+        orderId = res.data.data.id;
+      }
+
+      console.log('🆔 Order ID:', orderId);
+
+      // Clear cart and reset state
+      setCartItems([]);
+      setNotes('');
+      removeCoupon();
+      setIsPreviewMode(false);
+      setSelectedCustomer('Guest');
+      setSelectedCustomerId(0);
+
+      return { success: true, orderId, data: res.data };
+
+    } catch (error) {
+      console.error('❌ Error creating order:', error);
+      console.error('📋 Error details:', error.response?.data);
+      console.error('🔢 Error status:', error.response?.status);
+
+      let errorMsg = 'Failed to create order';
+
+      if (error.response?.data?.detail) {
+        const detail = error.response.data.detail;
+        if (Array.isArray(detail)) {
+          errorMsg = detail.map(err => `${err.loc?.join('.')} : ${err.msg}`).join(', ');
+        } else if (typeof detail === 'string') {
+          errorMsg = detail;
+        }
+      } else if (error.response?.data?.message) {
+        errorMsg = error.response.data.message;
+      }
+
+      alert(`Error creating order: ${errorMsg}`);
+      return { success: false, error: errorMsg };
+
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ FIXED: Payment Handlers with Order Creation
+  const handleUpiPayment = async () => {
+    console.log('💳 UPI Payment initiated');
+    const result = await createOrder('upi');
+
+    if (result && result.success) {
+      alert(`✅ Order #${result.orderId} created successfully!\n💳 Payment Method: UPI\n💰 Total: ₹${total.toFixed(2)}`);
+    }
+  };
+
+  const handleCashPayment = async () => {
+    console.log('💵 Cash Payment initiated');
+    const result = await createOrder('cash');
+
+    if (result && result.success) {
+      alert(`✅ Order #${result.orderId} created successfully!\n💵 Payment Method: Cash\n💰 Total: ₹${total.toFixed(2)}`);
+    }
+  };
+
+  const handleCardPayment = async () => {
+    console.log('💳 Card Payment initiated');
+    const result = await createOrder('card');
+
+    if (result && result.success) {
+      alert(`✅ Order #${result.orderId} created successfully!\n💳 Payment Method: Card\n💰 Total: ₹${total.toFixed(2)}`);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    console.log('💾 Saving order as draft');
+
     if (cartItems.length === 0) {
       alert('Cart is empty!');
       return;
     }
-    alert('UPI Payment initiated');
+
+    try {
+      setLoading(true);
+
+      const orderItems = cartItems.map(item => ({
+        product_id: item.product_id,
+        quantity: item.qty,
+        price: item.price,
+        name: item.name,
+        size: item.size
+      }));
+
+      const orderSubtotal = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+      const orderDiscount = discount;
+      const discountedSubtotal = orderSubtotal - orderDiscount;
+      const orderCgst = discountedSubtotal * 0.025;
+      const orderSgst = discountedSubtotal * 0.025;
+      const orderTotal = discountedSubtotal + orderCgst + orderSgst;
+
+      const draftPayload = {
+        customer_id: selectedCustomerId || null,
+        items: orderItems,
+        subtotal: parseFloat(orderSubtotal.toFixed(2)),
+        discount: parseFloat(orderDiscount.toFixed(2)),
+        cgst: parseFloat(orderCgst.toFixed(2)),
+        sgst: parseFloat(orderSgst.toFixed(2)),
+        total: parseFloat(orderTotal.toFixed(2)),
+        payment_method: 'pending',
+        payment_status: 'pending',
+        order_status: 'draft',  // Mark as draft
+        notes: notes || '',
+        coupon_code: couponCode || null
+      };
+
+      console.log('📤 Saving draft:', draftPayload);
+
+      const res = await api.post('/orders/', draftPayload);
+
+      console.log('✅ Draft saved:', res.data);
+
+      let orderId = res.data.id || res.data.order_id || res.data.data?.id;
+
+      alert(`✅ Order #${orderId} saved as draft!`);
+
+      // Clear cart
+      setCartItems([]);
+      setNotes('');
+      removeCoupon();
+      setIsPreviewMode(false);
+      setSelectedCustomer('Guest');
+      setSelectedCustomerId(0);
+
+    } catch (error) {
+      console.error('❌ Error saving draft:', error);
+      alert('Failed to save draft order');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleCashPayment = () => {
+  const handlePrint = async () => {
+    console.log('🖨️ Printing bill');
+
     if (cartItems.length === 0) {
       alert('Cart is empty!');
       return;
     }
-    alert('Cash Payment recorded');
-  };
 
-  const handleCardPayment = () => {
-    if (cartItems.length === 0) {
-      alert('Cart is empty!');
+    // Create a printable invoice
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow pop-ups to print the bill');
       return;
     }
-    alert('Card Payment initiated');
-  };
 
-  const handleSaveDraft = () => {
-    if (cartItems.length === 0) {
-      alert('Cart is empty!');
-      return;
-    }
-    alert('Order saved as draft');
-  };
+    const invoiceHTML = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Invoice #${Date.now()}</title>
+        <style>body { font-family: Arial, sans-serif; padding: 20px; }
+      .header { text-align: center; margin-bottom: 30px; }
+      .header h1 { margin: 0; }
+      .info { margin-bottom: 20px; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+      th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+      th { background-color: #f5f5f5; }
+      .totals { text-align: right; }
+      .totals div { margin: 5px 0; }
+      .grand-total { font-size: 1.2em; font-weight: bold; margin-top: 10px; padding-top: 10px; border-top: 2px solid #000; }
+      @media print {
+        body { padding: 0; }
+        button { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>Restaurant Invoice</h1>
+      <p>Date: ${new Date().toLocaleString()}</p>
+    </div>
+    
+    <div class="info">
+      <strong>Customer:</strong> ${selectedCustomer}<br/>
+      ${notes ? `<strong>Notes:</strong> ${notes}` : ''}
+    </div>
 
-  const handlePrint = () => {
-    if (cartItems.length === 0) {
-      alert('Cart is empty!');
-      return;
-    }
-    alert('Printing bill...');
-  };
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Size</th>
+          <th>Qty</th>
+          <th>Price</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${cartItems.map(item => `
+          <tr>
+            <td>${item.name}</td>
+            <td>${item.size}</td>
+            <td>${item.qty}</td>
+            <td>₹${item.price.toFixed(2)}</td>
+            <td>₹${(item.price * item.qty).toFixed(2)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
 
+    <div class="totals">
+      <div><strong>Subtotal:</strong> ₹${subtotal.toFixed(2)}</div>
+      ${discount > 0 ? `<div><strong>Discount ${couponCode ? `(${couponCode})` : ''}:</strong> -₹${discount.toFixed(2)}</div>` : ''}
+      <div><strong>CGST (2.5%):</strong> ₹${cgst.toFixed(2)}</div>
+      <div><strong>SGST (2.5%):</strong> ₹${sgst.toFixed(2)}</div>
+      <div class="grand-total"><strong>Grand Total:</strong> ₹${total.toFixed(2)}</div>
+    </div>
+
+    <div style="margin-top: 40px; text-align: center;">
+      <button onclick="window.print()" style="padding: 10px 20px; background: #1ABC9C; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px;">
+        Print Invoice
+      </button>
+      <button onclick="window.close()" style="padding: 10px 20px; background: #95a5a6; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin-left: 10px;">
+        Close
+      </button>
+    </div>
+  </body>
+  </html>
+`;
+
+    printWindow.document.write(invoiceHTML);
+    printWindow.document.close();
+  };
   // ---------------- UI HELPERS ----------------
-
   const handleAddToCartClick = (item) => {
     if (!item || !item.id) {
       console.error('Invalid item:', item);
       return;
-    }
-
-    const availableSizes = item.sizes || [];
+    } const availableSizes = item.sizes || [];
 
     if (availableSizes.length === 1) {
       addToCartWithSize(availableSizes[0], item);
@@ -606,11 +845,8 @@ function POS() {
     setSelectedMenuItem(item);
     setShowSizeModal(true);
   };
-
   const addToCartWithSize = (size, menuItem = selectedMenuItem) => {
-    if (!menuItem) return;
-
-    const finalPrice = size.price || menuItem.basePrice || 0;
+    if (!menuItem) return; const finalPrice = size.price || menuItem.basePrice || 0;
     const productId = size.product_id || menuItem.id;
 
     const existingIndex = cartItems.findIndex((ci) => ci.product_id === productId);
@@ -635,65 +871,50 @@ function POS() {
     setShowSizeModal(false);
     setSelectedMenuItem(null);
   };
-
   const updateCartItemQuantity = (index, change) => {
     const newCart = [...cartItems];
-    newCart[index].qty += change;
-
-    if (newCart[index].qty <= 0) {
+    newCart[index].qty += change; if (newCart[index].qty <= 0) {
       newCart.splice(index, 1);
     }
 
     setCartItems(newCart);
   };
-
   const getMenuItemQuantity = (item) => {
     if (!item) return 0;
-
     return cartItems
       .filter((ci) => item.sizes.some((size) => size.product_id === ci.product_id))
       .reduce((sum, ci) => sum + (ci.qty || 0), 0);
   };
-
   const handleDatabaseClick = () => {
     window.location.href = '/menu';
   };
-
   const handleCustomerSelect = (customer) => {
     if (!customer) return;
     const firstName = customer.first_name || '';
     const lastName = customer.last_name || '';
-    setSelectedCustomer(`${firstName} ${lastName}`.trim() || 'Guest');
+    setSelectedCustomer($, { firstName }, $, { lastName }.trim() || 'Guest');
     setSelectedCustomerId(customer.id || 0);
   };
-
   const handleLoadMore = () => {
     setVisibleRows((prev) => prev + rowsToLoadMore);
   };
-
   const handlePreview = () => {
     setIsPreviewMode(true);
   };
-
   const handleBackToMenu = () => {
     setIsPreviewMode(false);
   };
-
   const visibleItems = allMenuItems.slice(0, visibleRows * itemsPerRow);
   const hasMoreToLoad = visibleItems.length < allMenuItems.length;
-
   const subtotal = cartItems.reduce(
     (sum, item) => sum + (item.price || 0) * (item.qty || 0),
     0
   );
-  
   const discountedSubtotal = subtotal - discount;
   const cgst = discountedSubtotal * 0.025;
   const sgst = discountedSubtotal * 0.025;
   const total = discountedSubtotal + cgst + sgst;
-
   // ---------------- RENDER ----------------
-
   return (
     <div
       className="min-h-screen bg-background text-foreground p-2 sm:p-4 md:p-5 max-w-[100vw] overflow-x-hidden"
@@ -735,7 +956,6 @@ function POS() {
           </div>
         </div>
       )}
-
       {/* Add Customer Modal */}
       {showAddCustomerModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
@@ -893,11 +1113,10 @@ function POS() {
                     return (
                       <div
                         key={coupon.id || i}
-                        className={`bg-muted rounded p-2 sm:p-3 cursor-pointer transition-colors ${
-                          isEligible
+                        className={`bg-muted rounded p-2 sm:p-3 cursor-pointer transition-colors ${isEligible
                             ? 'hover:bg-teal-600 hover:text-white border-2 border-transparent hover:border-teal-700'
                             : 'opacity-60 cursor-not-allowed border-2 border-red-300'
-                        }`}
+                          }`}
                         onClick={() => {
                           if (isEligible) {
                             setInputCoupon(coupon.code);
@@ -919,8 +1138,8 @@ function POS() {
                         </p>
                         {minOrder > 0 && (
                           <p className={`text-xs mt-1 ${isEligible ? 'text-green-600' : 'text-red-500'}`}>
-                            {isEligible 
-                              ? `✓ Min order: ₹${minOrder}` 
+                            {isEligible
+                              ? `✓ Min order: ₹${minOrder}`
                               : `✗ Min order: ₹${minOrder} (Need ₹${(minOrder - subtotal).toFixed(2)} more)`
                             }
                           </p>
@@ -938,7 +1157,7 @@ function POS() {
 
             {/* Action Buttons */}
             <div className="flex gap-2">
-              <button 
+              <button
                 onClick={applyCoupon}
                 disabled={!inputCoupon.trim()}
                 className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1211,7 +1430,7 @@ function POS() {
                 {cartItems.map((item, i) => (
                   <div
                     key={i}
-                    className="flex items-center justify-between border-b border-border pb-4 last:border-b-0 last:pb-0"
+                    className="flex items-center justify-between border-b border-border pb-4 last:border-b-0Continue1:27 PMlast:pb-0"
                   >
                     <div className="flex-1">
                       <h3 className="text-card-foreground font-semibold">
@@ -1221,7 +1440,6 @@ function POS() {
                         {item.size} - ₹{item.price || 0} each
                       </p>
                     </div>
-
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-2 bg-muted rounded-lg p-1">
                         <button
@@ -1329,30 +1547,34 @@ function POS() {
               <div className="grid grid-cols-3 gap-2 mb-4">
                 <button
                   onClick={handleUpiPayment}
-                  className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700"
+                  disabled={loading}
+                  className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700 disabled:opacity-50"
                 >
-                  UPI
+                  {loading ? '...' : 'UPI'}
                 </button>
                 <button
                   onClick={handleCashPayment}
-                  className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700"
+                  disabled={loading}
+                  className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700 disabled:opacity-50"
                 >
-                  Cash
+                  {loading ? '...' : 'Cash'}
                 </button>
                 <button
                   onClick={handleCardPayment}
-                  className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700"
+                  disabled={loading}
+                  className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700 disabled:opacity-50"
                 >
-                  Card
+                  {loading ? '...' : 'Card'}
                 </button>
               </div>
 
               <div className="space-y-2">
                 <button
                   onClick={handleSaveDraft}
-                  className="w-full py-2.5 bg-gray-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-gray-700 transition-colors"
+                  disabled={loading}
+                  className="w-full py-2.5 bg-gray-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-gray-700 transition-colors disabled:opacity-50"
                 >
-                  Save Draft
+                  {loading ? 'Saving...' : 'Save Draft'}
                 </button>
                 <button
                   onClick={handlePrint}
@@ -1369,5 +1591,4 @@ function POS() {
     </div>
   );
 }
-
 export default POS;
