@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Search, Calendar, RefreshCw, Printer, Download, Eye, X, AlertCircle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
+
 // API Configuration
 const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
 // For local development, uncomment this:
 // const API_BASE_URL = 'http://localhost:8000/api/v1';
+
 
 const PastOrders = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -27,6 +29,7 @@ const PastOrders = () => {
     avgTicketSize: 0,
     weeklyTotal: 0
   });
+
 
   // Fetch orders from API
   const fetchOrders = async (showLoader = true) => {
@@ -60,8 +63,11 @@ const PastOrders = () => {
       const data = await response.json();
       console.log('Fetched orders:', data);
 
+      // FIX: Extract the 'data' array from the response object
+      const ordersArray = data.data || [];
+
       // Transform API data to match component format
-      const transformedOrders = transformOrdersData(data);
+      const transformedOrders = transformOrdersData(ordersArray);
       setOrders(transformedOrders);
 
       // Calculate statistics from fetched data
@@ -74,6 +80,7 @@ const PastOrders = () => {
       if (showLoader) setLoading(false);
     }
   };
+
 
   // Fetch single order details
   const fetchOrderDetails = async (orderId) => {
@@ -96,6 +103,7 @@ const PastOrders = () => {
       return null;
     }
   };
+
 
   // Transform API response to component format
   const transformOrdersData = (apiData) => {
@@ -157,6 +165,7 @@ const PastOrders = () => {
     });
   };
 
+
   // Calculate statistics from orders data
   const calculateStatistics = (ordersData) => {
     const today = new Date().toISOString().split('T')[0];
@@ -185,6 +194,7 @@ const PastOrders = () => {
     setWeeklyRevenueData(weeklyData);
   };
 
+
   // Calculate weekly revenue for chart
   const calculateWeeklyRevenue = (ordersData) => {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -212,10 +222,12 @@ const PastOrders = () => {
     return weekData;
   };
 
+
   // Initial data fetch
   useEffect(() => {
     fetchOrders();
   }, [statusFilter]); // Re-fetch when status filter changes
+
 
   // Filter orders based on search and payment filter
   const filteredOrders = orders.filter(order => {
@@ -230,11 +242,13 @@ const PastOrders = () => {
     return matchesSearch && matchesPayment && matchesDate;
   });
 
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await fetchOrders(false);
     setIsRefreshing(false);
   };
+
 
   const handlePrintBill = async (order) => {
     // Fetch full order details if needed
@@ -251,9 +265,11 @@ const PastOrders = () => {
     setShowBillModal(true);
   };
 
+
   const handleActualPrint = () => {
     window.print();
   };
+
 
   const handleDownloadBill = (order) => {
     const billContent = `Restaurant Bill
@@ -287,9 +303,11 @@ Thank you for your visit!`;
     window.URL.revokeObjectURL(url);
   };
 
+
   const handleViewBill = async (order) => {
     await handlePrintBill(order);
   };
+
 
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
@@ -304,6 +322,7 @@ Thank you for your visit!`;
     return null;
   };
 
+
   // Loading State
   if (loading) {
     return (
@@ -315,6 +334,7 @@ Thank you for your visit!`;
       </div>
     );
   }
+
 
   // Error State
   if (error) {
@@ -334,6 +354,7 @@ Thank you for your visit!`;
       </div>
     );
   }
+
 
   return (
     <div className="min-h-screen bg-background">
@@ -552,7 +573,9 @@ Thank you for your visit!`;
                 className="w-full text-sm sm:text-[15px] px-3.5 py-2.5 rounded-md border border-border bg-muted text-foreground focus:outline-none appearance-none cursor-pointer"
               >
                 <option>All / Paid / Refunded</option>
+                <option>Pending</option>
                 <option>Paid</option>
+                <option>Completed</option>
                 <option>Refunded</option>
               </select>
             </div>
@@ -567,6 +590,7 @@ Thank you for your visit!`;
                 <option>All / UPI / Cash</option>
                 <option>UPI</option>
                 <option>Cash</option>
+                <option>Card</option>
               </select>
             </div>
           </div>
@@ -762,4 +786,5 @@ Thank you for your visit!`;
     </div>
   );
 };
+
 export default PastOrders;
