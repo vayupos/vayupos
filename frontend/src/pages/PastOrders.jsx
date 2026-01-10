@@ -2,18 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Search, Calendar, RefreshCw, Printer, Download, Eye, X, AlertCircle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-
 // API Configuration
 const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
 // For local development, uncomment this:
 // const API_BASE_URL = 'http://localhost:8000/api/v1';
 
-
 const PastOrders = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [statusFilter, setStatusFilter] = useState('All / Paid / Refunded');
-  const [paymentFilter, setPaymentFilter] = useState('All / UPI / Cash');
+  const [selectedDate, setSelectedDate] = useState(''); // Changed to empty string for "All dates"
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [paymentFilter, setPaymentFilter] = useState('All');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showBillModal, setShowBillModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -30,7 +28,6 @@ const PastOrders = () => {
     weeklyTotal: 0
   });
 
-
   // Fetch orders from API
   const fetchOrders = async (showLoader = true) => {
     if (showLoader) setLoading(true);
@@ -43,7 +40,7 @@ const PastOrders = () => {
       });
 
       // Add optional filters if set
-      if (statusFilter !== 'All / Paid / Refunded') {
+      if (statusFilter !== 'All') {
         params.append('status', statusFilter.toLowerCase());
       }
 
@@ -63,8 +60,9 @@ const PastOrders = () => {
       const data = await response.json();
       console.log('Fetched orders:', data);
 
-      // FIX: Extract the 'data' array from the response object
+      // FIX 1: Extract the 'data' array from the response object
       const ordersArray = data.data || [];
+      console.log('Orders array:', ordersArray);
 
       // Transform API data to match component format
       const transformedOrders = transformOrdersData(ordersArray);
@@ -80,7 +78,6 @@ const PastOrders = () => {
       if (showLoader) setLoading(false);
     }
   };
-
 
   // Fetch single order details
   const fetchOrderDetails = async (orderId) => {
@@ -103,7 +100,6 @@ const PastOrders = () => {
       return null;
     }
   };
-
 
   // Transform API response to component format
   const transformOrdersData = (apiData) => {
@@ -165,7 +161,6 @@ const PastOrders = () => {
     });
   };
 
-
   // Calculate statistics from orders data
   const calculateStatistics = (ordersData) => {
     const today = new Date().toISOString().split('T')[0];
@@ -194,7 +189,6 @@ const PastOrders = () => {
     setWeeklyRevenueData(weeklyData);
   };
 
-
   // Calculate weekly revenue for chart
   const calculateWeeklyRevenue = (ordersData) => {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -222,33 +216,35 @@ const PastOrders = () => {
     return weekData;
   };
 
-
   // Initial data fetch
   useEffect(() => {
     fetchOrders();
   }, [statusFilter]); // Re-fetch when status filter changes
 
-
-  // Filter orders based on search and payment filter
+  // FIX 2: Updated filter logic with proper date comparison
   const filteredOrders = orders.filter(order => {
     const matchesSearch = order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          order.customer.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesPayment = paymentFilter === 'All / UPI / Cash' || 
+    
+    // Payment filter - handle "All" option
+    const matchesPayment = paymentFilter === 'All' || 
                           order.payment.toLowerCase() === paymentFilter.toLowerCase();
     
-    // Date filter
+    // Date filter - if no date selected, show all
     const matchesDate = !selectedDate || order.createdAt?.split('T')[0] === selectedDate;
     
-    return matchesSearch && matchesPayment && matchesDate;
+    // Status filter - handle "All" option
+    const matchesStatus = statusFilter === 'All' || 
+                         order.status.toLowerCase() === statusFilter.toLowerCase();
+    
+    return matchesSearch && matchesPayment && matchesDate && matchesStatus;
   });
-
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await fetchOrders(false);
     setIsRefreshing(false);
   };
-
 
   const handlePrintBill = async (order) => {
     // Fetch full order details if needed
@@ -265,11 +261,9 @@ const PastOrders = () => {
     setShowBillModal(true);
   };
 
-
   const handleActualPrint = () => {
     window.print();
   };
-
 
   const handleDownloadBill = (order) => {
     const billContent = `Restaurant Bill
@@ -303,11 +297,9 @@ Thank you for your visit!`;
     window.URL.revokeObjectURL(url);
   };
 
-
   const handleViewBill = async (order) => {
     await handlePrintBill(order);
   };
-
 
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
@@ -322,7 +314,6 @@ Thank you for your visit!`;
     return null;
   };
 
-
   // Loading State
   if (loading) {
     return (
@@ -334,7 +325,6 @@ Thank you for your visit!`;
       </div>
     );
   }
-
 
   // Error State
   if (error) {
@@ -354,7 +344,6 @@ Thank you for your visit!`;
       </div>
     );
   }
-
 
   return (
     <div className="min-h-screen bg-background">
@@ -565,32 +554,32 @@ Thank you for your visit!`;
               </div>
             </div>
 
-            {/* Status */}
+            {/* FIX 3: Updated Status dropdown options */}
             <div className="md:col-span-3">
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="w-full text-sm sm:text-[15px] px-3.5 py-2.5 rounded-md border border-border bg-muted text-foreground focus:outline-none appearance-none cursor-pointer"
               >
-                <option>All / Paid / Refunded</option>
-                <option>Pending</option>
-                <option>Paid</option>
-                <option>Completed</option>
-                <option>Refunded</option>
+                <option value="All">All</option>
+                <option value="pending">Pending</option>
+                <option value="completed">Completed</option>
+                <option value="paid">Paid</option>
+                <option value="refunded">Refunded</option>
               </select>
             </div>
 
-            {/* Payment */}
+            {/* FIX 4: Updated Payment dropdown options */}
             <div className="md:col-span-2">
               <select
                 value={paymentFilter}
                 onChange={(e) => setPaymentFilter(e.target.value)}
                 className="w-full text-sm sm:text-[15px] px-3.5 py-2.5 rounded-md border border-border bg-muted text-foreground focus:outline-none appearance-none cursor-pointer"
               >
-                <option>All / UPI / Cash</option>
-                <option>UPI</option>
-                <option>Cash</option>
-                <option>Card</option>
+                <option value="All">All</option>
+                <option value="Cash">Cash</option>
+                <option value="UPI">UPI</option>
+                <option value="Card">Card</option>
               </select>
             </div>
           </div>
