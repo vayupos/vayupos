@@ -1,5 +1,3 @@
-"""Pydantic schemas for request and response validation"""
-
 import re
 from typing import Optional, List
 from datetime import datetime
@@ -12,10 +10,8 @@ from app.models.order import OrderStatus
 from app.models.payment import PaymentMethod, PaymentStatus
 from app.models.inventory_log import InventoryAction
 
-
 # Common decimal type for money (2 decimal places)
 Money = condecimal(max_digits=10, decimal_places=2)
-
 
 # ============= User Schemas =============
 class UserBase(BaseModel):
@@ -137,7 +133,6 @@ class ProductResponse(ProductBase):
 
 
 # ============= Customer Schemas =============
-
 PHONE_PATTERN = re.compile(r"^[6-9]\d{9}$")
 EMAIL_PATTERN = re.compile(r"^[^\s@]+@[^\s@]+\.(com|org|in)$", re.IGNORECASE)
 
@@ -252,6 +247,7 @@ class OrderCreate(BaseModel):
     discount: Money = Field(default=0, ge=0)
     tax: Money = Field(default=0, ge=0)
     notes: Optional[str] = None
+    payment_method: str = Field(default="Cash", description="Cash, UPI, Card")
 
 
 class OrderUpdate(BaseModel):
@@ -275,7 +271,8 @@ class OrderResponse(BaseModel):
     discount: Money
     total: Money
     notes: Optional[str] = None
-    order_items: List[OrderItemResponse] = []
+    order_items: List[OrderItemResponse] = Field(default_factory=list)
+    payment_method: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     completed_at: Optional[datetime] = None

@@ -23,6 +23,10 @@ class Order(Base):
     customer_id = Column(Integer, ForeignKey("customers.id", ondelete="SET NULL"), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=False)
     status = Column(Enum(OrderStatus), nullable=False, default=OrderStatus.PENDING)
+
+    # Payment method for the order (Cash, UPI, Card, etc.)
+    payment_method = Column(String(50), nullable=True, default="Cash")
+
     subtotal = Column(Numeric(10, 2), nullable=False, default=0)
     tax = Column(Numeric(10, 2), nullable=False, default=0)
     discount = Column(Numeric(10, 2), nullable=False, default=0)
@@ -39,4 +43,7 @@ class Order(Base):
     payments = relationship("Payment", back_populates="order", cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"<Order(id={self.id}, order_number='{self.order_number}', status='{self.status.value}', total={self.total})>"
+        return (
+            f"<Order(id={self.id}, order_number='{self.order_number}', "
+            f"status='{self.status.value}', payment_method='{self.payment_method}', total={self.total})>"
+        )

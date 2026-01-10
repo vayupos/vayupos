@@ -1,13 +1,14 @@
-"""Order service"""
-from sqlalchemy.orm import Session
-from app.models import Order, OrderItem, OrderStatus, Product, Customer, InventoryAction
-from app.schemas import OrderCreate, OrderUpdate
-from app.core.exceptions import not_found_exception, bad_request_exception
-from app.services.inventory_service import InventoryService
 from typing import Optional, Tuple
 from decimal import Decimal
 from datetime import datetime
 import uuid
+
+from sqlalchemy.orm import Session
+
+from app.models import Order, OrderItem, OrderStatus, Product, Customer, InventoryAction
+from app.schemas import OrderCreate, OrderUpdate
+from app.core.exceptions import not_found_exception, bad_request_exception
+from app.services.inventory_service import InventoryService
 
 
 class OrderService:
@@ -44,12 +45,14 @@ class OrderService:
             item_subtotal = unit_price * item.quantity - item.discount
             subtotal += item_subtotal
 
-            order_items_data.append({
-                "product": product,
-                "item": item,
-                "unit_price": unit_price,
-                "subtotal": item_subtotal,
-            })
+            order_items_data.append(
+                {
+                    "product": product,
+                    "item": item,
+                    "unit_price": unit_price,
+                    "subtotal": item_subtotal,
+                }
+            )
 
         # Calculate totals
         tax = order_create.tax or Decimal("0")
@@ -61,6 +64,7 @@ class OrderService:
             order_number=OrderService._generate_order_number(),
             customer_id=order_create.customer_id,
             user_id=user_id,
+            payment_method=order_create.payment_method or "Cash",
             subtotal=subtotal,
             tax=tax,
             discount=discount,
@@ -80,7 +84,8 @@ class OrderService:
             # Check stock
             if product.stock_quantity < item.quantity:
                 raise bad_request_exception(
-                    f"Insufficient stock for {product.name}. Available: {product.stock_quantity}, Requested: {item.quantity}"
+                    f"Insufficient stock for {product.name}. "
+                    f"Available: {product.stock_quantity}, Requested: {item.quantity}"
                 )
 
             order_item = OrderItem(
@@ -203,6 +208,10 @@ class OrderService:
     @staticmethod
     def get_customer_orders(db: Session, customer_id: int, limit: int = 50) -> list[Order]:
         """Get all orders for a customer"""
-        return db.query(Order).filter(Order.customer_id == customer_id).order_by(
-            Order.created_at.desc()
-        ).limit(limit).all()
+        return (
+            db.query(Order)
+            .filter(Order.customer_id == customer_id)
+            .order_by(Order.created_at.desc())
+            .limit(limit)
+            .all()
+        )
