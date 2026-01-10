@@ -540,7 +540,7 @@ function POS() {
     console.log('🗑️ Coupon removed');
   };
 
-  // ✅ FIXED: Create Order Function
+  // ✅ FIXED: Create Order Function - Correctly sends payment_method in snake_case
   const createOrder = async (paymentMethod) => {
     if (cartItems.length === 0) {
       alert('Cart is empty!');
@@ -571,16 +571,16 @@ function POS() {
       const orderSgst = discountedSubtotal * 0.025;
       const orderTotal = discountedSubtotal + orderCgst + orderSgst;
 
-      // Build order payload - ✅ FIXED: Changed 'items' to 'order_items'
+      // ✅ CRITICAL FIX: Ensure payment_method is in snake_case (NOT camelCase)
       const orderPayload = {
         customer_id: selectedCustomerId || null,
-        order_items: orderItems,  // ✅ FIXED: Changed from 'items' to 'order_items'
+        order_items: orderItems,  // ✅ Correct: snake_case
         subtotal: parseFloat(orderSubtotal.toFixed(2)),
         discount: parseFloat(orderDiscount.toFixed(2)),
         cgst: parseFloat(orderCgst.toFixed(2)),
         sgst: parseFloat(orderSgst.toFixed(2)),
         total: parseFloat(orderTotal.toFixed(2)),
-        payment_method: paymentMethod,
+        payment_method: paymentMethod,  // ✅ CRITICAL: snake_case (NOT paymentMethod)
         payment_status: paymentMethod === 'cash' ? 'paid' : 'pending',
         order_status: 'confirmed',
         notes: notes || '',
@@ -588,6 +588,7 @@ function POS() {
       };
 
       console.log('📤 Sending order payload:', orderPayload);
+      console.log('🔍 Payment method being sent:', orderPayload.payment_method);
 
       // Make API request
       const res = await api.post('/orders/', orderPayload);
@@ -620,6 +621,8 @@ function POS() {
       console.error('❌ Error creating order:', error);
       console.error('📋 Error details:', error.response?.data);
       console.error('🔢 Error status:', error.response?.status);
+      console.error('🔗 Request URL:', error.config?.url);
+      console.error('📦 Request payload:', error.config?.data);
 
       let errorMsg = 'Failed to create order';
 
@@ -642,10 +645,10 @@ function POS() {
     }
   };
 
-  // ✅ FIXED: Payment Handlers with Order Creation
+  // ✅ Payment Handlers - All correctly pass payment method as string
   const handleUpiPayment = async () => {
     console.log('💳 UPI Payment initiated');
-    const result = await createOrder('upi');
+    const result = await createOrder('upi');  // ✅ Lowercase string
 
     if (result && result.success) {
       alert(`✅ Order #${result.orderId} created successfully!\n💳 Payment Method: UPI\n💰 Total: ₹${total.toFixed(2)}`);
@@ -654,7 +657,7 @@ function POS() {
 
   const handleCashPayment = async () => {
     console.log('💵 Cash Payment initiated');
-    const result = await createOrder('cash');
+    const result = await createOrder('cash');  // ✅ Lowercase string
 
     if (result && result.success) {
       alert(`✅ Order #${result.orderId} created successfully!\n💵 Payment Method: Cash\n💰 Total: ₹${total.toFixed(2)}`);
@@ -663,7 +666,7 @@ function POS() {
 
   const handleCardPayment = async () => {
     console.log('💳 Card Payment initiated');
-    const result = await createOrder('card');
+    const result = await createOrder('card');  // ✅ Lowercase string
 
     if (result && result.success) {
       alert(`✅ Order #${result.orderId} created successfully!\n💳 Payment Method: Card\n💰 Total: ₹${total.toFixed(2)}`);
@@ -696,16 +699,16 @@ function POS() {
       const orderSgst = discountedSubtotal * 0.025;
       const orderTotal = discountedSubtotal + orderCgst + orderSgst;
 
-      // ✅ FIXED: Changed 'items' to 'order_items'
+      // ✅ CRITICAL: payment_method in snake_case
       const draftPayload = {
         customer_id: selectedCustomerId || null,
-        order_items: orderItems,  // ✅ FIXED: Changed from 'items' to 'order_items'
+        order_items: orderItems,  // ✅ Correct: snake_case
         subtotal: parseFloat(orderSubtotal.toFixed(2)),
         discount: parseFloat(orderDiscount.toFixed(2)),
         cgst: parseFloat(orderCgst.toFixed(2)),
         sgst: parseFloat(orderSgst.toFixed(2)),
         total: parseFloat(orderTotal.toFixed(2)),
-        payment_method: 'pending',
+        payment_method: 'pending',  // ✅ CRITICAL: snake_case
         payment_status: 'pending',
         order_status: 'draft',
         notes: notes || '',
@@ -747,876 +750,854 @@ function POS() {
     }
 
     const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('Please allow pop-ups to print the bill');
-      return;
-    }
+    if (!printWindow) {  alert('Please allow pop-ups to print the bill');
+  return;
+}
 
-    const invoiceHTML = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Invoice #${Date.now()}</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 20px; }
-          .header { text-align: center; margin-bottom: 30px; }
-          .header h1 { margin: 0; }
-          .info { margin-bottom: 20px; }
-          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-          th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
-          th { background-color: #f5f5f5; }
-          .totals { text-align: right; }
-          .totals div { margin: 5px 0; }
-          .grand-total { font-size: 1.2em; font-weight: bold; margin-top: 10px; padding-top: 10px; border-top: 2px solid #000; }
-          @media print {
-            body { padding: 0; }
-            button { display: none; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>Restaurant Invoice</h1>
-          <p>Date: ${new Date().toLocaleString()}</p>
-        </div>
-        
-        <div class="info">
-          <strong>Customer:</strong> ${selectedCustomer}<br/>
-          ${notes ? `<strong>Notes:</strong> ${notes}` : ''}
-        </div>
+const invoiceHTML = `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <title>Invoice #${Date.now()}</title>
+    <style>
+      body { font-family: Arial, sans-serif; padding: 20px; }
+      .header { text-align: center; margin-bottom: 30px; }
+      .header h1 { margin: 0; }
+      .info { margin-bottom: 20px; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+      th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+      th { background-color: #f5f5f5; }
+      .totals { text-align: right; }
+      .totals div { margin: 5px 0; }
+      .grand-total { font-size: 1.2em; font-weight: bold; margin-top: 10px; padding-top: 10px; border-top: 2px solid #000; }
+      @media print {
+        body { padding: 0; }
+        button { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>Restaurant Invoice</h1>
+      <p>Date: ${new Date().toLocaleString()}</p>
+    </div>
+    
+    <div class="info">
+      <strong>Customer:</strong> ${selectedCustomer}<br/>
+      ${notes ? `<strong>Notes:</strong> ${notes}` : ''}
+    </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Size</th>
-              <th>Qty</th>
-              <th>Price</th>
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${cartItems.map(item => `
-              <tr>
-                <td>${item.name}</td>
-                <td>${item.size}</td>
-                <td>${item.qty}</td>
-                <td>₹${item.price.toFixed(2)}</td>
-                <td>₹${(item.price * item.qty).toFixed(2)}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Size</th>
+          <th>Qty</th>
+          <th>Price</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${cartItems.map(item => `
+          <tr>
+            <td>${item.name}</td>
+            <td>${item.size}</td>
+            <td>${item.qty}</td>
+            <td>₹${item.price.toFixed(2)}</td>
+            <td>₹${(item.price * item.qty).toFixed(2)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
 
-        <div class="totals">
-          <div><strong>Subtotal:</strong> ₹${subtotal.toFixed(2)}</div>
-          ${discount > 0 ? `<div><strong>Discount ${couponCode ? `(${couponCode})` : ''}:</strong> -₹${discount.toFixed(2)}</div>` : ''}
-          <div><strong>CGST (2.5%):</strong> ₹${cgst.toFixed(2)}</div>
-          <div><strong>SGST (2.5%):</strong> ₹${sgst.toFixed(2)}</div>
-          <div class="grand-total"><strong>Grand Total:</strong> ₹${total.toFixed(2)}</div>
-        </div>
+    <div class="totals">
+      <div><strong>Subtotal:</strong> ₹${subtotal.toFixed(2)}</div>
+      ${discount > 0 ? `<div><strong>Discount ${couponCode ? `(${couponCode})` : ''}:</strong> -₹${discount.toFixed(2)}</div>` : ''}
+      <div><strong>CGST (2.5%):</strong> ₹${cgst.toFixed(2)}</div>
+      <div><strong>SGST (2.5%):</strong> ₹${sgst.toFixed(2)}</div>
+      <div class="grand-total"><strong>Grand Total:</strong> ₹${total.toFixed(2)}</div>
+    </div>
 
-        <div style="margin-top: 40px; text-align: center;">
-          <button onclick="window.print()" style="padding: 10px 20px; background: #1ABC9C; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px;">
-            Print Invoice
-          </button>
-          <button onclick="window.close()" style="padding: 10px 20px; background: #95a5a6; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin-left: 10px;">
-            Close
-          </button>
-        </div>
-      </body>
-      </html>
-    `;
+    <div style="margin-top: 40px; text-align: center;">
+      <button onclick="window.print()" style="padding: 10px 20px; background: #1ABC9C; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px;">
+        Print Invoice
+      </button>
+      <button onclick="window.close()" style="padding: 10px 20px; background: #95a5a6; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin-left: 10px;">
+        Close
+      </button>
+    </div>
+  </body>
+  </html>
+`;
 
-    printWindow.document.write(invoiceHTML);
-    printWindow.document.close();
-  };
+printWindow.document.write(invoiceHTML);
+printWindow.document.close();
+};
+// ---------------- UI HELPERS ----------------
+const handleAddToCartClick = (item) => {
+if (!item || !item.id) {
+console.error('Invalid item:', item);
+return;
+}
+const availableSizes = item.sizes || [];
 
-  // ---------------- UI HELPERS ----------------
+if (availableSizes.length === 1) {
+  addToCartWithSize(availableSizes[0], item);
+  return;
+}
 
-  const handleAddToCartClick = (item) => {
-    if (!item || !item.id) {
-      console.error('Invalid item:', item);
-      return;
-    }
+setSelectedMenuItem(item);
+setShowSizeModal(true);
+};
+const addToCartWithSize = (size, menuItem = selectedMenuItem) => {
+if (!menuItem) return;
+const finalPrice = size.price || menuItem.basePrice || 0;
+const productId = size.product_id || menuItem.id;
 
-    const availableSizes = item.sizes || [];
+const existingIndex = cartItems.findIndex((ci) => ci.product_id === productId);
 
-    if (availableSizes.length === 1) {
-      addToCartWithSize(availableSizes[0], item);
-      return;
-    }
+if (existingIndex >= 0) {
+  const newCart = [...cartItems];
+  newCart[existingIndex].qty += 1;
+  setCartItems(newCart);
+} else {
+  setCartItems([
+    ...cartItems,
+    {
+      product_id: productId,
+      name: menuItem.name,
+      size: size.name,
+      qty: 1,
+      price: finalPrice,
+    },
+  ]);
+}
 
-    setSelectedMenuItem(item);
-    setShowSizeModal(true);
-  };
+setShowSizeModal(false);
+setSelectedMenuItem(null);
+};
+const updateCartItemQuantity = (index, change) => {
+const newCart = [...cartItems];
+newCart[index].qty += change;
+if (newCart[index].qty <= 0) {
+  newCart.splice(index, 1);
+}
 
-  const addToCartWithSize = (size, menuItem = selectedMenuItem) => {
-    if (!menuItem) return;
-
-    const finalPrice = size.price || menuItem.basePrice || 0;
-    const productId = size.product_id || menuItem.id;
-
-    const existingIndex = cartItems.findIndex((ci) => ci.product_id === productId);
-
-    if (existingIndex >= 0) {
-      const newCart = [...cartItems];
-      newCart[existingIndex].qty += 1;
-      setCartItems(newCart);
-    } else {
-      setCartItems([
-        ...cartItems,
-        {
-          product_id: productId,
-          name: menuItem.name,
-          size: size.name,
-          qty: 1,
-          price: finalPrice,
-        },
-      ]);
-    }
-
-    setShowSizeModal(false);
-    setSelectedMenuItem(null);
-  };
-
-  const updateCartItemQuantity = (index, change) => {
-    const newCart = [...cartItems];
-    newCart[index].qty += change;
-
-    if (newCart[index].qty <= 0) {
-      newCart.splice(index, 1);
-    }
-
-    setCartItems(newCart);
-  };
-
-  const getMenuItemQuantity = (item) => {
-    if (!item) return 0;
-
-    return cartItems
-      .filter((ci) => item.sizes.some((size) => size.product_id === ci.product_id))
-      .reduce((sum, ci) => sum + (ci.qty || 0), 0);
-  };
-
-  const handleDatabaseClick = () => {
-    window.location.href = '/menu';
-  };
-
-  // ✅ FIXED: Customer Select Function
-  const handleCustomerSelect = (customer) => {
-    if (!customer) return;
-    const firstName = customer.first_name || '';
-    const lastName = customer.last_name || '';
-    const fullName = `${firstName} ${lastName}`.trim();
-    setSelectedCustomer(fullName || 'Guest');
-    setSelectedCustomerId(customer.id || 0);
-    console.log('✅ Customer selected:', fullName, 'ID:', customer.id);
-  };
-
-  const handleLoadMore = () => {
-    setVisibleRows((prev) => prev + rowsToLoadMore);
-  };
-
-  const handlePreview = () => {
-    setIsPreviewMode(true);
-  };
-
-  const handleBackToMenu = () => {
-    setIsPreviewMode(false);
-  };
-
-  const visibleItems = allMenuItems.slice(0, visibleRows * itemsPerRow);
-  const hasMoreToLoad = visibleItems.length < allMenuItems.length;
-
-  const subtotal = cartItems.reduce(
-    (sum, item) => sum + (item.price || 0) * (item.qty || 0),
-    0
-  );
-  const discountedSubtotal = subtotal - discount;
-  const cgst = discountedSubtotal * 0.025;
-  const sgst = discountedSubtotal * 0.025;
-  const total = discountedSubtotal + cgst + sgst;
-
-  // ---------------- RENDER ----------------
-
-  return (
-    <div
-      className="min-h-screen bg-background text-foreground p-2 sm:p-4 md:p-5 max-w-[100vw] overflow-x-hidden"
-      style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
-    >
-      {/* Size Selection Modal */}
-      {showSizeModal && selectedMenuItem && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
-          <div className="bg-card rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-sm sm:text-lg md:text-xl font-semibold text-card-foreground">
-                Select Size
-              </h3>
-              <button
-                onClick={() => {
-                  setShowSizeModal(false);
-                  setSelectedMenuItem(null);
-                }}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <p className="text-sm text-muted-foreground mb-4">
-              {selectedMenuItem.name || 'Item'}
-            </p>
-            <div className="space-y-2">
-              {(selectedMenuItem.sizes || []).map((size, i) => (
-                <button
-                  key={i}
-                  onClick={() => addToCartWithSize(size)}
-                  className="w-full p-3 bg-muted hover:bg-teal-600 hover:text-white rounded-lg transition-colors flex justify-between items-center"
-                >
-                  <span className="font-medium">{size.name}</span>
-                  <span>₹{size.price || 0}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Add Customer Modal */}
-      {showAddCustomerModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
-          <div className="bg-card rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-3 sm:mb-4">
-              <h3 className="text-sm sm:text-lg md:text-xl font-semibold text-card-foreground">
-                Add New Customer
-              </h3>
-              <button
-                onClick={() => setShowAddCustomerModal(false)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <input
-              type="text"
-              placeholder="First name *"
-              value={newCustomer.first_name}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, first_name: e.target.value })
-              }
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
-            />
-            <input
-              type="text"
-              placeholder="Last name"
-              value={newCustomer.last_name}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, last_name: e.target.value })
-              }
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
-            />
-            <input
-              type="text"
-              placeholder="+91 Phone number"
-              value={newCustomer.phone}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, phone: e.target.value })
-              }
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
-            />
-            <input
-              type="email"
-              placeholder="example@mail.com (optional)"
-              value={newCustomer.email}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, email: e.target.value })
-              }
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
-            />
-            <input
-              type="text"
-              placeholder="Address"
-              value={newCustomer.address}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, address: e.target.value })
-              }
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
-            />
-            <input
-              type="text"
-              placeholder="City"
-              value={newCustomer.city}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, city: e.target.value })
-              }
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
-            />
-            <input
-              type="text"
-              placeholder="State"
-              value={newCustomer.state}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, state: e.target.value })
-              }
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
-            />
-            <input
-              type="text"
-              placeholder="Zip code"
-              value={newCustomer.zip_code}
-              onChange={(e) =>
-                setNewCustomer({ ...newCustomer, zip_code: e.target.value })
-              }
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-3 sm:mb-4"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={addCustomer}
-                disabled={loading}
-                className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium disabled:opacity-50"
-              >
-                {loading ? 'Adding...' : 'Add Customer'}
-              </button>
-              <button
-                onClick={() => setShowAddCustomerModal(false)}
-                className="flex-1 py-2 sm:py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base font-medium"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Backend-Powered Coupon Modal */}
-      {showCouponModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
-          <div className="bg-card rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-3 sm:mb-4">
-              <h3 className="text-sm sm:text-lg md:text-xl font-semibold text-card-foreground">
-                Apply Coupon
-              </h3>
-              <button
-                onClick={() => {
-                  setShowCouponModal(false);
-                  setInputCoupon('');
-                }}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Manual Input */}
-            <input
-              type="text"
-              placeholder="Enter coupon code"
-              value={inputCoupon}
-              onChange={(e) => setInputCoupon(e.target.value.toUpperCase())}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter' && inputCoupon.trim()) {
-                  applyCoupon();
-                }
-              }}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-3 sm:mb-4"
-            />
-
-            {/* Backend Available Coupons */}
-            {loadingCoupons ? (
-              <div className="text-center py-4 text-muted-foreground">
-                Loading coupons...
-              </div>
-            ) : availableCoupons.length > 0 ? (
-              <div className="mb-4">
-                <p className="text-sm font-semibold text-foreground mb-2">
-                  Available Coupons (Subtotal: ₹{subtotal.toFixed(2)})
-                </p>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {availableCoupons.map((coupon, i) => {
-                    const minOrder = coupon.min_order || 0;
-                    const isEligible = subtotal >= minOrder;
-                    return (
-                      <div
-                        key={coupon.id || i}
-                        className={`bg-muted rounded p-2 sm:p-3 cursor-pointer transition-colors ${
-                          isEligible
-                            ? 'hover:bg-teal-600 hover:text-white border-2 border-transparent hover:border-teal-700'
-                            : 'opacity-60 cursor-not-allowed border-2 border-red-300'
-                        }`}
-                        onClick={() => {
-                          if (isEligible) {
-                            setInputCoupon(coupon.code);
-                          }
-                        }}
-                      >
-                        <div className="flex justify-between items-center">
-                          <span className="font-semibold text-sm sm:text-base">
-                            {coupon.code}
-                          </span>
-                          <span className="text-xs sm:text-sm">
-                            {coupon.type === 'percentage' || coupon.type === 'percent'
-                              ? `${coupon.discount}% off`
-                              : `₹${coupon.discount} off`}
-                          </span>
-                        </div>
-                        <p className="text-xs sm:text-sm mt-1 opacity-80">
-                          {coupon.description}
-                        </p>
-                        {minOrder > 0 && (
-                          <p className={`text-xs mt-1 ${isEligible ? 'text-green-600' : 'text-red-500'}`}>
-                            {isEligible
-                              ? `✓ Min order: ₹${minOrder}`
-                              : `✗ Min order: ₹${minOrder} (Need ₹${(minOrder - subtotal).toFixed(2)} more)`
-                            }
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-4 text-muted-foreground mb-4">
-                {loadingCoupons ? 'Loading coupons...' : 'No coupons available'}
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex gap-2">
-              <button
-                onClick={applyCoupon}
-                disabled={!inputCoupon.trim()}
-                className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Apply Coupon
-              </button>
-              <button
-                onClick={() => {
-                  setShowCouponModal(false);
-                  setInputCoupon('');
-                }}
-                className="flex-1 py-2 sm:py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base font-medium hover:bg-accent"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-5">
-        <h2 className="text-base sm:text-xl md:text-2xl font-semibold text-foreground">
-          POS System
-        </h2>
-      </div>
-
-      {/* Customer Panel */}
-      <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full mb-3 sm:mb-4 md:mb-5">
-        <div className="flex items-center justify-between mb-3 sm:mb-4">
-          <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">
-            Customer
-          </h2>
+setCartItems(newCart);
+};
+const getMenuItemQuantity = (item) => {
+if (!item) return 0;
+return cartItems
+  .filter((ci) => item.sizes.some((size) => size.product_id === ci.product_id))
+  .reduce((sum, ci) => sum + (ci.qty || 0), 0);
+};
+const handleDatabaseClick = () => {
+window.location.href = '/menu';
+};
+const handleCustomerSelect = (customer) => {
+if (!customer) return;
+const firstName = customer.first_name || '';
+const lastName = customer.last_name || '';
+const fullName = `${firstName} ${lastName}`.trim();
+setSelectedCustomer(fullName || 'Guest');
+setSelectedCustomerId(customer.id || 0);
+console.log('✅ Customer selected:', fullName, 'ID:', customer.id);
+};
+const handleLoadMore = () => {
+setVisibleRows((prev) => prev + rowsToLoadMore);
+};
+const handlePreview = () => {
+setIsPreviewMode(true);
+};
+const handleBackToMenu = () => {
+setIsPreviewMode(false);
+};
+const visibleItems = allMenuItems.slice(0, visibleRows * itemsPerRow);
+const hasMoreToLoad = visibleItems.length < allMenuItems.length;
+const subtotal = cartItems.reduce(
+(sum, item) => sum + (item.price || 0) * (item.qty || 0),
+0
+);
+const discountedSubtotal = subtotal - discount;
+const cgst = discountedSubtotal * 0.025;
+const sgst = discountedSubtotal * 0.025;
+const total = discountedSubtotal + cgst + sgst;
+// ---------------- RENDER ----------------
+return (
+<div
+className="min-h-screen bg-background text-foreground p-2 sm:p-4 md:p-5 max-w-[100vw] overflow-x-hidden"
+style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
+>
+{/* Size Selection Modal */}
+{showSizeModal && selectedMenuItem && (
+<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
+<div className="bg-card rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-md">
+<div className="flex justify-between items-center mb-4">
+<h3 className="text-sm sm:text-lg md:text-xl font-semibold text-card-foreground">
+Select Size
+</h3>
+<button
+onClick={() => {
+setShowSizeModal(false);
+setSelectedMenuItem(null);
+}}
+className="text-muted-foreground hover:text-foreground"
+>
+<X size={20} />
+</button>
+</div>
+<p className="text-sm text-muted-foreground mb-4">
+{selectedMenuItem.name || 'Item'}
+</p>
+<div className="space-y-2">
+{(selectedMenuItem.sizes || []).map((size, i) => (
+<button
+key={i}
+onClick={() => addToCartWithSize(size)}
+className="w-full p-3 bg-muted hover:bg-teal-600 hover:text-white rounded-lg transition-colors flex justify-between items-center"
+>
+<span className="font-medium">{size.name}</span>
+<span>₹{size.price || 0}</span>
+</button>
+))}
+</div>
+</div>
+</div>
+)}
+  {/* Add Customer Modal */}
+  {showAddCustomerModal && (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
+      <div className="bg-card rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-3 sm:mb-4">
+          <h3 className="text-sm sm:text-lg md:text-xl font-semibold text-card-foreground">
+            Add New Customer
+          </h3>
           <button
-            onClick={() => setShowAddCustomerModal(true)}
-            className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
+            onClick={() => setShowAddCustomerModal(false)}
+            className="text-muted-foreground hover:text-foreground"
           >
-            <Plus size={16} />
-            <span>Add</span>
+            <X size={20} />
           </button>
         </div>
-        <div className="mb-3 sm:mb-4">
-          <label className="text-muted-foreground text-sm mb-2 block">
-            Select customer
-          </label>
-          <div className="relative">
-            <Search
-              size={16}
-              className="text-muted-foreground absolute left-3 top-1/2 transform -translate-y-1/2"
-            />
-            <input
-              type="text"
-              placeholder="Search name, phone..."
-              value={searchCustomer}
-              onChange={(e) => setSearchCustomer(e.target.value)}
-              className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-4 py-2 pl-10 text-sm sm:text-base"
-            />
+
+        <input
+          type="text"
+          placeholder="First name *"
+          value={newCustomer.first_name}
+          onChange={(e) =>
+            setNewCustomer({ ...newCustomer, first_name: e.target.value })
+          }
+          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
+        />
+        <input
+          type="text"
+          placeholder="Last name"
+          value={newCustomer.last_name}
+          onChange={(e) =>
+            setNewCustomer({ ...newCustomer, last_name: e.target.value })
+          }
+          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
+        />
+        <input
+          type="text"
+          placeholder="+91 Phone number"
+          value={newCustomer.phone}
+          onChange={(e) =>
+            setNewCustomer({ ...newCustomer, phone: e.target.value })
+          }
+          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
+        />
+        <input
+          type="email"
+          placeholder="example@mail.com (optional)"
+          value={newCustomer.email}
+          onChange={(e) =>
+            setNewCustomer({ ...newCustomer, email: e.target.value })
+          }
+          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
+        />
+        <input
+          type="text"
+          placeholder="Address"
+          value={newCustomer.address}
+          onChange={(e) =>
+            setNewCustomer({ ...newCustomer, address: e.target.value })
+          }
+          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
+        />
+        <input
+          type="text"
+          placeholder="City"
+          value={newCustomer.city}
+          onChange={(e) =>
+            setNewCustomer({ ...newCustomer, city: e.target.value })
+          }
+          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
+        />
+        <input
+          type="text"
+          placeholder="State"
+          value={newCustomer.state}
+          onChange={(e) =>
+            setNewCustomer({ ...newCustomer, state: e.target.value })
+          }
+          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
+        />
+        <input
+          type="text"
+          placeholder="Zip code"
+          value={newCustomer.zip_code}
+          onChange={(e) =>
+            setNewCustomer({ ...newCustomer, zip_code: e.target.value })
+          }
+          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-3 sm:mb-4"
+        />
+        <div className="flex gap-2">
+          <button
+            onClick={addCustomer}
+            disabled={loading}
+            className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium disabled:opacity-50"
+          >
+            {loading ? 'Adding...' : 'Add Customer'}
+          </button>
+          <button
+            onClick={() => setShowAddCustomerModal(false)}
+            className="flex-1 py-2 sm:py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base font-medium"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {/* Backend-Powered Coupon Modal */}
+  {showCouponModal && (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
+      <div className="bg-card rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-3 sm:mb-4">
+          <h3 className="text-sm sm:text-lg md:text-xl font-semibold text-card-foreground">
+            Apply Coupon
+          </h3>
+          <button
+            onClick={() => {
+              setShowCouponModal(false);
+              setInputCoupon('');
+            }}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Manual Input */}
+        <input
+          type="text"
+          placeholder="Enter coupon code"
+          value={inputCoupon}
+          onChange={(e) => setInputCoupon(e.target.value.toUpperCase())}
+          onKeyPress={(e) => {
+            if (e.key === 'Enter' && inputCoupon.trim()) {
+              applyCoupon();
+            }
+          }}
+          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-3 sm:mb-4"
+        />
+
+        {/* Backend Available Coupons */}
+        {loadingCoupons ? (
+          <div className="text-center py-4 text-muted-foreground">
+            Loading coupons...
           </div>
-        </div>
-        <div className="flex flex-wrap gap-2 mb-3 sm:mb-4">
-          {customers.map((customer, i) => {
-            if (!customer) return null;
+        ) : availableCoupons.length > 0 ? (
+          <div className="mb-4">
+            <p className="text-sm font-semibold text-foreground mb-2">
+              Available Coupons (Subtotal: ₹{subtotal.toFixed(2)})
+            </p>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {availableCoupons.map((coupon, i) => {
+                const minOrder = coupon.min_order || 0;
+                const isEligible = subtotal >= minOrder;
+                return (
+                  <div
+                    key={coupon.id || i}
+                    className={`bg-muted rounded p-2 sm:p-3 cursor-pointer transition-colors ${
+                      isEligible
+                        ? 'hover:bg-teal-600 hover:text-white border-2 border-transparent hover:border-teal-700'
+                        : 'opacity-60 cursor-not-allowed border-2 border-red-300'
+                    }`}
+                    onClick={() => {
+                      if (isEligible) {
+                        setInputCoupon(coupon.code);
+                      }
+                    }}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold text-sm sm:text-base">
+                        {coupon.code}
+                      </span>
+                      <span className="text-xs sm:text-sm">
+                        {coupon.type === 'percentage' || coupon.type === 'percent'
+                          ? `${coupon.discount}% off`
+                          : `₹${coupon.discount} off`}
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm mt-1 opacity-80">
+                      {coupon.description}
+                    </p>
+                    {minOrder > 0 && (
+                      <p className={`text-xs mt-1 ${isEligible ? 'text-green-600' : 'text-red-500'}`}>
+                        {isEligible
+                          ? `✓ Min order: ₹${minOrder}`
+                          : `✗ Min order: ₹${minOrder} (Need ₹${(minOrder - subtotal).toFixed(2)} more)`
+                        }
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-4 text-muted-foreground mb-4">
+            {loadingCoupons ? 'Loading coupons...' : 'No coupons available'}
+          </div>
+        )}
 
-            const firstName = customer.first_name || '';
-            const lastName = customer.last_name || '';
-            const initial = firstName.charAt(0)?.toUpperCase() || '?';
-            const colors = ['#4A5568', '#2D5A7B', '#8B6F47', '#6B7280'];
-            const bgColor = colors[i % colors.length];
-            const displayName = `${firstName} ${lastName}`.trim() || 'Unknown';
-            const isSelected = selectedCustomerId === customer.id;
-
-            return (
-              <button
-                key={i}
-                onClick={() => handleCustomerSelect(customer)}
-                className="px-2.5 py-1.5 sm:px-3 sm:py-2 border border-teal-600 rounded-full text-sm cursor-pointer flex items-center gap-1.5 sm:gap-2 transition-colors flex-shrink-0"
-                style={{
-                  backgroundColor: isSelected ? '#1ABC9C' : 'transparent',
-                  color: isSelected ? 'white' : 'inherit',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isSelected) {
-                    e.currentTarget.style.backgroundColor = '#1ABC9C';
-                    e.currentTarget.style.color = 'white';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isSelected) {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.color = 'inherit';
-                  }
-                }}
-              >
-                <div
-                  className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
-                  style={{ backgroundColor: bgColor }}
-                >
-                  {firstName === 'Guest' ? '👤' : initial}
-                </div>
-                <span className="text-sm whitespace-nowrap">{displayName}</span>
-              </button>
-            );
-          })}
+        {/* Action Buttons */}
+        <div className="flex gap-2">
+          <button
+            onClick={applyCoupon}
+            disabled={!inputCoupon.trim()}
+            className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Apply Coupon
+          </button>
+          <button
+            onClick={() => {
+              setShowCouponModal(false);
+              setInputCoupon('');
+            }}
+            className="flex-1 py-2 sm:py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base font-medium hover:bg-accent"
+          >
+            Cancel
+          </button>
         </div>
-        <div>
-          <label className="text-muted-foreground text-sm mb-2 block">Notes</label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows="2"
-            className="w-full bg-muted text-foreground border border-border rounded-md outline-none resize-y px-3 py-2 text-sm sm:text-base"
+      </div>
+    </div>
+  )}
+
+  {/* Header */}
+  <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-5">
+    <h2 className="text-base sm:text-xl md:text-2xl font-semibold text-foreground">
+      POS System
+    </h2>
+  </div>
+
+  {/* Customer Panel */}
+  <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full mb-3 sm:mb-4 md:mb-5">
+    <div className="flex items-center justify-between mb-3 sm:mb-4">
+      <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">
+        Customer
+      </h2>
+      <button
+        onClick={() => setShowAddCustomerModal(true)}
+        className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
+      >
+        <Plus size={16} />
+        <span>Add</span>
+      </button>
+    </div>
+    <div className="mb-3 sm:mb-4">
+      <label className="text-muted-foreground text-sm mb-2 block">
+        Select customer
+      </label>
+      <div className="relative">
+        <Search
+          size={16}
+          className="text-muted-foreground absolute left-3 top-1/2 transform -translate-y-1/2"
+        />
+        <input
+          type="text"
+          placeholder="Search name, phone..."
+          value={searchCustomer}
+          onChange={(e) => setSearchCustomer(e.target.value)}
+          className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-4 py-2 pl-10 text-sm sm:text-base"
+        />
+      </div>
+    </div>
+    <div className="flex flex-wrap gap-2 mb-3 sm:mb-4">
+      {customers.map((customer, i) => {
+        if (!customer) return null;
+
+        const firstName = customer.first_name || '';
+        const lastName = customer.last_name || '';
+        const initial = firstName.charAt(0)?.toUpperCase() || '?';
+        const colors = ['#4A5568', '#2D5A7B', '#8B6F47', '#6B7280'];
+        const bgColor = colors[i % colors.length];
+        const displayName = `${firstName} ${lastName}`.trim() || 'Unknown';
+        const isSelected = selectedCustomerId === customer.id;
+
+        return (
+          <button
+            key={i}
+            onClick={() => handleCustomerSelect(customer)}
+            className="px-2.5 py-1.5 sm:px-3 sm:py-2 border border-teal-600 rounded-full text-sm cursor-pointer flex items-center gap-1.5 sm:gap-2 transition-colors flex-shrink-0"
+            style={{
+              backgroundColor: isSelected ? '#1ABC9C' : 'transparent',
+              color: isSelected ? 'white' : 'inherit',
+            }}
+            onMouseEnter={(e) => {
+              if (!isSelected) {
+                e.currentTarget.style.backgroundColor = '#1ABC9C';
+                e.currentTarget.style.color = 'white';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isSelected) {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = 'inherit';
+              }
+            }}
+          >
+            <div
+              className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
+              style={{ backgroundColor: bgColor }}
+            >
+              {firstName === 'Guest' ? '👤' : initial}
+            </div>
+            <span className="text-sm whitespace-nowrap">{displayName}</span>
+          </button>
+        );
+      })}
+    </div>
+    <div>
+      <label className="text-muted-foreground text-sm mb-2 block">Notes</label>
+      <textarea
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        rows="2"
+        className="w-full bg-muted text-foreground border border-border rounded-md outline-none resize-y px-3 py-2 text-sm sm:text-base"
+      />
+    </div>
+  </div>
+
+  {/* Conditional rendering based on preview mode */}
+  {!isPreviewMode ? (
+    <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full">
+      <div className="flex items-center justify-between mb-3 sm:mb-4 flex-wrap gap-2">
+        <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">
+          Menu
+        </h2>
+        <button
+          onClick={handleDatabaseClick}
+          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
+        >
+          <Database size={16} />
+          <span>DB</span>
+        </button>
+      </div>
+      <div className="mb-3 sm:mb-4">
+        <label className="text-muted-foreground text-sm mb-2 block">
+          Search items
+        </label>
+        <div className="relative">
+          <Search
+            size={16}
+            className="text-muted-foreground absolute left-3 top-1/2 transform -translate-y-1/2"
+          />
+          <input
+            type="text"
+            placeholder="Search..."
+            value={searchMenu}
+            onChange={(e) => setSearchMenu(e.target.value)}
+            className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-4 py-2 pl-10 text-sm sm:text-base"
           />
         </div>
       </div>
+      <div className="mb-3 sm:mb-4">
+        <label className="text-muted-foreground text-sm mb-2 block">
+          Categories
+        </label>
+        <select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base"
+        >
+          {categories.map((cat, i) => (
+            <option key={i} value={cat?.name || 'All'}>
+              {cat?.name || 'All'}
+            </option>
+          ))}
+        </select>
+      </div>
 
-      {/* Conditional rendering based on preview mode */}
-      {!isPreviewMode ? (
-        <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full">
-          <div className="flex items-center justify-between mb-3 sm:mb-4 flex-wrap gap-2">
-            <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">
-              Menu
-            </h2>
-            <button
-              onClick={handleDatabaseClick}
-              className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
-            >
-              <Database size={16} />
-              <span>DB</span>
-            </button>
-          </div>
-          <div className="mb-3 sm:mb-4">
-            <label className="text-muted-foreground text-sm mb-2 block">
-              Search items
-            </label>
-            <div className="relative">
-              <Search
-                size={16}
-                className="text-muted-foreground absolute left-3 top-1/2 transform -translate-y-1/2"
-              />
-              <input
-                type="text"
-                placeholder="Search..."
-                value={searchMenu}
-                onChange={(e) => setSearchMenu(e.target.value)}
-                className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-4 py-2 pl-10 text-sm sm:text-base"
-              />
-            </div>
-          </div>
-          <div className="mb-3 sm:mb-4">
-            <label className="text-muted-foreground text-sm mb-2 block">
-              Categories
-            </label>
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base"
-            >
-              {categories.map((cat, i) => (
-                <option key={i} value={cat?.name || 'All'}>
-                  {cat?.name || 'All'}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {loading ? (
-            <div className="text-center py-8 text-muted-foreground">Loading...</div>
-          ) : visibleItems.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No items found
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-4">
-                {visibleItems.map((item, i) => {
-                  if (!item || !item.id) return null;
-
-                  const quantity = getMenuItemQuantity(item);
-                  const imageUrl = item.image_url;
-                  const itemName = item.name || 'Item';
-                  const fallbackImage = `https://via.placeholder.com/200x200/1ABC9C/FFFFFF?text=${encodeURIComponent(
-                    itemName.substring(0, 3)
-                  )}`;
-
-                  return (
-                    <div
-                      key={i}
-                      className="bg-secondary rounded-lg overflow-hidden flex flex-col shadow-sm"
-                    >
-                      <div className="aspect-square w-full overflow-hidden bg-gray-200">
-                        <img
-                          src={imageUrl || fallbackImage}
-                          alt={itemName}
-                          className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
-                          loading="lazy"
-                          onError={(e) => {
-                            console.log(
-                              'Image failed to load, using fallback:',
-                              imageUrl
-                            );
-                            e.target.onerror = null;
-                            e.target.src = fallbackImage;
-                          }}
-                        />
-                      </div>
-                      <div className="p-2 sm:p-2.5 flex flex-col gap-1.5 sm:gap-2">
-                        <div>
-                          <h3 className="text-foreground text-sm font-semibold mb-0.5 sm:mb-1 line-clamp-2 leading-tight">
-                            {itemName}
-                          </h3>
-                        </div>
-                        <button
-                          onClick={() => handleAddToCartClick(item)}
-                          className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-full text-sm cursor-pointer flex items-center justify-center gap-1 hover:bg-teal-700 w-full"
-                        >
-                          <Plus size={14} />
-                          <span>
-                            {quantity === 0 ? 'Add' : `${quantity} in cart`}
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="flex justify-between items-center mt-4">
-                {hasMoreToLoad && (
-                  <button
-                    onClick={handleLoadMore}
-                    disabled={loading}
-                    className="px-4 py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Load More
-                  </button>
-                )}
-                <button
-                  onClick={handlePreview}
-                  disabled={cartItems.length === 0}
-                  className="px-4 py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-2 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed ml-auto"
-                >
-                  <Eye size={16} />
-                  <span>Preview</span>
-                </button>
-              </div>
-            </>
-          )}
+      {loading ? (
+        <div className="text-center py-8 text-muted-foreground">Loading...</div>
+      ) : visibleItems.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          No items found
         </div>
       ) : (
-        <div className="space-y-4">
-          <button
-            onClick={handleBackToMenu}
-            className="px-4 py-2 bg-gray-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-2 hover:bg-gray-700"
-          >
-            <ArrowLeft size={16} />
-            <span>Back to Menu</span>
-          </button>
+        <>
+          <div className="grid grid-cols-4 gap-2 sm:gap-3 mb-4">
+            {visibleItems.map((item, i) => {
+              if (!item || !item.id) return null;
 
-          <div className="bg-card rounded-lg shadow-sm p-4 md:p-6">
-            <h2 className="text-lg font-semibold text-card-foreground mb-4">
-              Selected Dishes
-            </h2>
+              const quantity = getMenuItemQuantity(item);
+              const imageUrl = item.image_url;
+              const itemName = item.name || 'Item';
+              const fallbackImage = `https://via.placeholder.com/200x200/1ABC9C/FFFFFF?text=${encodeURIComponent(
+                itemName.substring(0, 3)
+              )}`;
 
-            {cartItems.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                No items in cart
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {cartItems.map((item, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between border-b border-border pb-4 last:border-b-0 last:pb-0"
-                  >
-                    <div className="flex-1">
-                      <h3 className="text-card-foreground font-semibold">
-                        {item.name || 'Item'}
-                      </h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {item.size} - ₹{item.price || 0} each
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2 bg-muted rounded-lg p-1">
-                        <button
-                          onClick={() => updateCartItemQuantity(i, -1)}
-                          className="w-8 h-8 flex items-center justify-center bg-card hover:bg-accent rounded text-card-foreground cursor-pointer transition-colors"
-                        >
-                          <Minus size={16} />
-                        </button>
-                        <span className="w-12 text-center font-semibold text-card-foreground">
-                          {item.qty || 0}
-                        </span>
-                        <button
-                          onClick={() => updateCartItemQuantity(i, 1)}
-                          className="w-8 h-8 flex items-center justify-center bg-teal-600 hover:bg-teal-700 text-white rounded cursor-pointer transition-colors"
-                        >
-                          <Plus size={16} />
-                        </button>
-                      </div>
-
-                      <div className="w-24 text-right">
-                        <p className="text-card-foreground font-semibold">
-                          ₹{((item.price || 0) * (item.qty || 0)).toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
+              return (
+                <div
+                  key={i}
+                  className="bg-secondary rounded-lg overflow-hidden flex flex-col shadow-sm"
+                >
+                  <div className="aspect-square w-full overflow-hidden bg-gray-200">
+                    <img
+                      src={imageUrl || fallbackImage}
+                      alt={itemName}
+                      className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
+                      loading="lazy"
+                      onError={(e) => {
+                        console.log(
+                          'Image failed to load, using fallback:',
+                          imageUrl
+                        );
+                        e.target.onerror = null;
+                        e.target.src = fallbackImage;
+                      }}
+                    />
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-card rounded-lg shadow-sm p-4 md:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-card-foreground">
-                Billing Summary
-              </h2>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowCouponModal(true)}
-                  disabled={loadingCoupons}
-                  className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 hover:bg-teal-700 flex-shrink-0 disabled:opacity-50"
-                >
-                  <Tag size={16} />
-                  <span>{loadingCoupons ? 'Loading...' : 'Coupon'}</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setCartItems([]);
-                    removeCoupon();
-                  }}
-                  className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 hover:bg-teal-700 flex-shrink-0"
-                >
-                  <Trash2 size={16} />
-                  <span>Clear</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex justify-between text-base">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span className="text-card-foreground font-semibold">
-                  ₹{subtotal.toFixed(2)}
-                </span>
-              </div>
-
-              <div className="flex justify-between text-base">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-muted-foreground">Discount</span>
-                  {couponCode && (
-                    <span
-                      className="px-2 py-0.5 bg-teal-600 text-white text-xs rounded cursor-pointer hover:bg-red-600 transition-colors"
-                      onClick={removeCoupon}
-                      title="Click to remove"
+                  <div className="p-2 sm:p-2.5 flex flex-col gap-1.5 sm:gap-2">
+                    <div>
+                      <h3 className="text-foreground text-sm font-semibold mb-0.5 sm:mb-1 line-clamp-2 leading-tight">
+                        {itemName}
+                      </h3>
+                    </div>
+                    <button
+                      onClick={() => handleAddToCartClick(item)}
+                      className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-full text-sm cursor-pointer flex items-center justify-center gap-1 hover:bg-teal-700 w-full"
                     >
-                      {couponCode}
-                    </span>
-                  )}
+                      <Plus size={14} />
+                      <span>
+                        {quantity === 0 ? 'Add' : `${quantity} in cart`}
+                      </span>
+                    </button>
+                  </div>
                 </div>
-                <span className="text-card-foreground font-semibold">
-                  {discount > 0 ? `- ₹${discount.toFixed(2)}` : '₹0.00'}
-                </span>
-              </div>
-
-              <div className="flex justify-between text-base">
-                <span className="text-muted-foreground">CGST (2.5%)</span>
-                <span className="text-card-foreground">₹{cgst.toFixed(2)}</span>
-              </div>
-
-              <div className="flex justify-between text-base">
-                <span className="text-muted-foreground">SGST (2.5%)</span>
-                <span className="text-card-foreground">₹{sgst.toFixed(2)}</span>
-              </div>
-
-              <div className="border-t border-border pt-3 flex justify-between text-xl font-bold">
-                <span className="text-card-foreground">Total</span>
-                <span className="text-card-foreground">₹{total.toFixed(2)}</span>
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <h3 className="text-base font-semibold text-card-foreground mb-3">
-                Payment Methods
-              </h3>
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                <button
-                  onClick={handleUpiPayment}
-                  disabled={loading}
-                  className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700 disabled:opacity-50"
-                >
-                  {loading ? '...' : 'UPI'}
-                </button>
-                <button
-                  onClick={handleCashPayment}
-                  disabled={loading}
-                  className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700 disabled:opacity-50"
-                >
-                  {loading ? '...' : 'Cash'}
-                </button>
-                <button
-                  onClick={handleCardPayment}
-                  disabled={loading}
-                  className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700 disabled:opacity-50"
-                >
-                  {loading ? '...' : 'Card'}
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                <button
-                  onClick={handleSaveDraft}
-                  disabled={loading}
-                  className="w-full py-2.5 bg-gray-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-gray-700 transition-colors disabled:opacity-50"
-                >
-                  {loading ? 'Saving...' : 'Save Draft'}
-                </button>
-                <button
-                  onClick={handlePrint}
-                  className="w-full py-2.5 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer flex items-center justify-center gap-2 font-medium hover:bg-teal-700 transition-colors"
-                >
-                  <Printer size={16} />
-                  <span>Print Bill</span>
-                </button>
-              </div>
-            </div>
+              );
+            })}
           </div>
-        </div>
+
+          <div className="flex justify-between items-center mt-4">
+            {hasMoreToLoad && (
+              <button
+                onClick={handleLoadMore}
+                disabled={loading}
+                className="px-4 py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Load More
+              </button>
+            )}
+            <button
+              onClick={handlePreview}
+              disabled={cartItems.length === 0}
+              className="px-4 py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-2 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed ml-auto"
+            >
+              <Eye size={16} />
+              <span>Preview</span>
+            </button>
+          </div>
+        </>
       )}
     </div>
-  );
-}
+  ) : (
+    <div className="space-y-4">
+      <button
+        onClick={handleBackToMenu}
+        className="px-4 py-2 bg-gray-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-2 hover:bg-gray-700"
+      >
+        <ArrowLeft size={16} />
+        <span>Back to Menu</span>
+      </button>
 
+      <div className="bg-card rounded-lg shadow-sm p-4 md:p-6">
+        <h2 className="text-lg font-semibold text-card-foreground mb-4">
+          Selected Dishes
+        </h2>
+
+        {cartItems.length === 0 ? (
+          <div className="text-center py-8text-muted-foreground">
+No items in cart
+</div>
+) : (
+<div className="space-y-4">
+{cartItems.map((item, i) => (
+<div
+                 key={i}
+                 className="flex items-center justify-between border-b border-border pb-4 last:border-b-0 last:pb-0"
+               >
+<div className="flex-1">
+<h3 className="text-card-foreground font-semibold">
+{item.name || 'Item'}
+</h3>
+<p className="text-sm text-muted-foreground mt-1">
+{item.size} - ₹{item.price || 0} each
+</p>
+</div>
+<div className="flex items-center gap-4">
+<div className="flex items-center gap-2 bg-muted rounded-lg p-1">
+<button
+onClick={() => updateCartItemQuantity(i, -1)}
+className="w-8 h-8 flex items-center justify-center bg-card hover:bg-accent rounded text-card-foreground cursor-pointer transition-colors"
+>
+<Minus size={16} />
+</button>
+<span className="w-12 text-center font-semibold text-card-foreground">
+{item.qty || 0}
+</span>
+<button
+onClick={() => updateCartItemQuantity(i, 1)}
+className="w-8 h-8 flex items-center justify-center bg-teal-600 hover:bg-teal-700 text-white rounded cursor-pointer transition-colors"
+>
+<Plus size={16} />
+</button>
+</div>
+                  <div className="w-24 text-right">
+                    <p className="text-card-foreground font-semibold">
+                      ₹{((item.price || 0) * (item.qty || 0)).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-card rounded-lg shadow-sm p-4 md:p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-card-foreground">
+            Billing Summary
+          </h2>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowCouponModal(true)}
+              disabled={loadingCoupons}
+              className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 hover:bg-teal-700 flex-shrink-0 disabled:opacity-50"
+            >
+              <Tag size={16} />
+              <span>{loadingCoupons ? 'Loading...' : 'Coupon'}</span>
+            </button>
+            <button
+              onClick={() => {
+                setCartItems([]);
+                removeCoupon();
+              }}
+              className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 hover:bg-teal-700 flex-shrink-0"
+            >
+              <Trash2 size={16} />
+              <span>Clear</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex justify-between text-base">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span className="text-card-foreground font-semibold">
+              ₹{subtotal.toFixed(2)}
+            </span>
+          </div>
+
+          <div className="flex justify-between text-base">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-muted-foreground">Discount</span>
+              {couponCode && (
+                <span
+                  className="px-2 py-0.5 bg-teal-600 text-white text-xs rounded cursor-pointer hover:bg-red-600 transition-colors"
+                  onClick={removeCoupon}
+                  title="Click to remove"
+                >
+                  {couponCode}
+                </span>
+              )}
+            </div>
+            <span className="text-card-foreground font-semibold">
+              {discount > 0 ? `- ₹${discount.toFixed(2)}` : '₹0.00'}
+            </span>
+          </div>
+
+          <div className="flex justify-between text-base">
+            <span className="text-muted-foreground">CGST (2.5%)</span>
+            <span className="text-card-foreground">₹{cgst.toFixed(2)}</span>
+          </div>
+
+          <div className="flex justify-between text-base">
+            <span className="text-muted-foreground">SGST (2.5%)</span>
+            <span className="text-card-foreground">₹{sgst.toFixed(2)}</span>
+          </div>
+
+          <div className="border-t border-border pt-3 flex justify-between text-xl font-bold">
+            <span className="text-card-foreground">Total</span>
+            <span className="text-card-foreground">₹{total.toFixed(2)}</span>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <h3 className="text-base font-semibold text-card-foreground mb-3">
+            Payment Methods
+          </h3>
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            <button
+              onClick={handleUpiPayment}
+              disabled={loading}
+              className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700 disabled:opacity-50"
+            >
+              {loading ? '...' : 'UPI'}
+            </button>
+            <button
+              onClick={handleCashPayment}
+              disabled={loading}
+              className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700 disabled:opacity-50"
+            >
+              {loading ? '...' : 'Cash'}
+            </button>
+            <button
+              onClick={handleCardPayment}
+              disabled={loading}
+              className="px-4 py-3 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-teal-700 disabled:opacity-50"
+            >
+              {loading ? '...' : 'Card'}
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            <button
+              onClick={handleSaveDraft}
+              disabled={loading}
+              className="w-full py-2.5 bg-gray-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-gray-700 transition-colors disabled:opacity-50"
+            >
+              {loading ? 'Saving...' : 'Save Draft'}
+            </button>
+            <button
+              onClick={handlePrint}
+              className="w-full py-2.5 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer flex items-center justify-center gap-2 font-medium hover:bg-teal-700 transition-colors"
+            >
+              <Printer size={16} />
+              <span>Print Bill</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )}
+</div>
+);
+}
 export default POS;
+
