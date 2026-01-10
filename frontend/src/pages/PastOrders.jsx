@@ -4,12 +4,10 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 // API Configuration
 const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
-// For local development, uncomment this:
-// const API_BASE_URL = 'http://localhost:8000/api/v1';
 
 const PastOrders = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDate, setSelectedDate] = useState(''); // Changed to empty string for "All dates"
+  const [selectedDate, setSelectedDate] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [paymentFilter, setPaymentFilter] = useState('All');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -28,7 +26,7 @@ const PastOrders = () => {
     weeklyTotal: 0
   });
 
-  // Fetch orders from API
+  // FIXED: Enhanced fetchOrders with ALL filters
   const fetchOrders = async (showLoader = true) => {
     if (showLoader) setLoading(true);
     setError(null);
@@ -39,41 +37,49 @@ const PastOrders = () => {
         limit: '100'
       });
 
-      // Add optional filters if set
+      // Add ALL filters to API call
       if (statusFilter !== 'All') {
-        params.append('status', statusFilter.toLowerCase());
+        let statusValue = statusFilter.toLowerCase();
+        if (statusValue === 'complete') statusValue = 'completed';
+        if (statusValue === 'refund') statusValue = 'refunded';
+        params.append('status', statusValue);
       }
+      if (paymentFilter !== 'All') {
+        params.append('payment_method', paymentFilter.toLowerCase());
+      }
+      if (selectedDate) {
+        params.append('date', selectedDate);
+      }
+      if (searchQuery) {
+        params.append('search', searchQuery);
+      }
+
+      console.log('Fetching with params:', params.toString());
 
       const response = await fetch(`${API_BASE_URL}/orders?${params.toString()}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          // Add authorization if needed
-          // 'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch orders: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('API Error:', response.status, errorText);
+        throw new Error(`API failed (${response.status}): ${errorText}`);
       }
 
       const data = await response.json();
       console.log('Fetched orders:', data);
 
-      // FIX 1: Extract the 'data' array from the response object
       const ordersArray = data.data || [];
-      console.log('Orders array:', ordersArray);
-
-      // Transform API data to match component format
       const transformedOrders = transformOrdersData(ordersArray);
       setOrders(transformedOrders);
-
-      // Calculate statistics from fetched data
       calculateStatistics(transformedOrders);
 
     } catch (err) {
-      console.error('Error fetching orders:', err);
-      setError(err.message || 'Failed to load orders. Please try again.');
+      console.error('Fetch error:', err);
+      setError(err.message || 'Failed to load orders');
     } finally {
       if (showLoader) setLoading(false);
     }
@@ -101,7 +107,7 @@ const PastOrders = () => {
     }
   };
 
-  // Transform API response to component format
+  // FIXED: Normalize status and payment in transformOrdersData
   const transformOrdersData = (apiData) => {
     if (!Array.isArray(apiData)) return [];
 
@@ -112,10 +118,7 @@ const PastOrders = () => {
         ? `${customer.first_name} ${customer.last_name || ''}`.trim()
         : 'Walk-in';
       
-      // Get first letter for avatar
       const avatar = customerName.charAt(0).toUpperCase();
-      
-      // Generate color based on customer name
       const colors = ['#F59E0B', '#3B82F6', '#8B5CF6', '#10B981', '#EF4444', '#6B7280'];
       const colorIndex = customerName.length % colors.length;
 
@@ -125,10 +128,7 @@ const PastOrders = () => {
       const discount = parseFloat(order.discount || 0);
       const total = parseFloat(order.total || 0);
 
-      // Determine order type
       const orderType = order.order_type || 'Dine-in';
-
-      // Format time
       const orderTime = order.created_at 
         ? new Date(order.created_at).toLocaleTimeString('en-US', { 
             hour: '2-digit', 
@@ -136,8 +136,13 @@ const PastOrders = () => {
           })
         : '--:--';
 
-      // Get payment method
-      const paymentMethod = order.payment_method || 'Cash';
+      // FIXED: Normalize status and payment
+      let normalizedStatus = (order.status || 'completed').toLowerCase().trim();
+      if (normalizedStatus === 'complete') normalizedStatus = 'completed';
+      if (normalizedStatus === 'refund') normalizedStatus = 'refunded';
+
+      let normalizedPayment = (order.payment_method || order.payment || 'Cash').trim();
+      normalizedPayment = normalizedPayment.charAt(0).toUpperCase() + normalizedPayment.slice(1).toLowerCase();
 
       return {
         id: order.order_number || `#${order.id}`,
@@ -154,18 +159,16 @@ const PastOrders = () => {
         gst: tax,
         discount: discount > 0 ? discount : null,
         total: total,
-        payment: paymentMethod,
-        status: order.status || 'completed',
+        payment: normalizedPayment,
+        status: normalizedStatus,
         createdAt: order.created_at
       };
     });
   };
 
-  // Calculate statistics from orders data
   const calculateStatistics = (ordersData) => {
     const today = new Date().toISOString().split('T')[0];
     
-    // Filter today's orders
     const todaysOrders = ordersData.filter(order => {
       const orderDate = order.createdAt?.split('T')[0];
       return orderDate === today;
@@ -175,7 +178,6 @@ const PastOrders = () => {
     const todayRevenue = todaysOrders.reduce((sum, order) => sum + order.total, 0);
     const avgTicket = todayOrderCount > 0 ? todayRevenue / todayOrderCount : 0;
 
-    // Calculate weekly data (last 7 days)
     const weeklyData = calculateWeeklyRevenue(ordersData);
     const weeklyTotal = weeklyData.reduce((sum, day) => sum + day.revenue, 0);
 
@@ -189,7 +191,6 @@ const PastOrders = () => {
     setWeeklyRevenueData(weeklyData);
   };
 
-  // Calculate weekly revenue for chart
   const calculateWeeklyRevenue = (ordersData) => {
     const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const weekData = Array(7).fill(null).map((_, i) => {
@@ -203,7 +204,6 @@ const PastOrders = () => {
       };
     });
 
-    // Aggregate orders by day
     ordersData.forEach(order => {
       const orderDate = order.createdAt?.split('T')[0];
       const dayData = weekData.find(d => d.date === orderDate);
@@ -216,27 +216,28 @@ const PastOrders = () => {
     return weekData;
   };
 
-  // Initial data fetch
+  // FIXED: useEffect with ALL filter dependencies
   useEffect(() => {
     fetchOrders();
-  }, [statusFilter]); // Re-fetch when status filter changes
+  }, [statusFilter, paymentFilter, selectedDate, searchQuery]);
 
-  // FIX 2: Updated filter logic with proper date comparison
+  // FIXED: Enhanced client-side filtering with normalization
   const filteredOrders = orders.filter(order => {
     const matchesSearch = order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          order.customer.name.toLowerCase().includes(searchQuery.toLowerCase());
     
-    // Payment filter - handle "All" option
     const matchesPayment = paymentFilter === 'All' || 
-                          order.payment.toLowerCase() === paymentFilter.toLowerCase();
+                           order.payment.toLowerCase() === paymentFilter.toLowerCase();
     
-    // Date filter - if no date selected, show all
     const matchesDate = !selectedDate || order.createdAt?.split('T')[0] === selectedDate;
     
-    // Status filter - handle "All" option
+    const orderStatusLower = order.status.toLowerCase().trim();
+    const statusLower = statusFilter.toLowerCase();
     const matchesStatus = statusFilter === 'All' || 
-                         order.status.toLowerCase() === statusFilter.toLowerCase();
-    
+      (orderStatusLower === statusLower ||
+       (statusLower === 'complete' && orderStatusLower.includes('complete')) ||
+       (statusLower === 'refund' && orderStatusLower.includes('refund')));
+
     return matchesSearch && matchesPayment && matchesDate && matchesStatus;
   });
 
@@ -247,7 +248,6 @@ const PastOrders = () => {
   };
 
   const handlePrintBill = async (order) => {
-    // Fetch full order details if needed
     if (order.orderId) {
       const fullOrderDetails = await fetchOrderDetails(order.orderId);
       if (fullOrderDetails) {
@@ -267,7 +267,7 @@ const PastOrders = () => {
 
   const handleDownloadBill = (order) => {
     const billContent = `Restaurant Bill
-    
+
 Order ID: ${order.id}
 Type: ${order.type}
 Date: ${order.createdAt?.split('T')[0] || selectedDate}
@@ -314,7 +314,6 @@ Thank you for your visit!`;
     return null;
   };
 
-  // Loading State
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -326,7 +325,6 @@ Thank you for your visit!`;
     );
   }
 
-  // Error State
   if (error) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -347,11 +345,9 @@ Thank you for your visit!`;
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Bill Modal */}
       {showBillModal && selectedOrder && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
             <div className="sticky top-0 bg-white dark:bg-card border-b border-border px-6 py-4 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-foreground">Bill Preview</h3>
               <button
@@ -362,7 +358,6 @@ Thank you for your visit!`;
               </button>
             </div>
 
-            {/* Bill Content */}
             <div className="p-6" id="bill-content">
               <div className="font-mono">
                 <h2 className="text-center text-xl font-bold border-b-2 border-foreground pb-3 mb-4 text-foreground">
@@ -414,7 +409,6 @@ Thank you for your visit!`;
               </div>
             </div>
 
-            {/* Modal Footer */}
             <div className="sticky bottom-0 bg-white dark:bg-card border-t border-border px-6 py-4 flex gap-3">
               <button
                 onClick={handleActualPrint}
@@ -442,7 +436,6 @@ Thank you for your visit!`;
       )}
 
       <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto">
-        {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3 sm:gap-4">
           <h1 className="text-xl sm:text-2xl lg:text-[26px] font-bold text-foreground">Past Orders</h1>
           <button
@@ -455,7 +448,6 @@ Thank you for your visit!`;
           </button>
         </div>
 
-        {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 mb-4 sm:mb-6">
           <div className="rounded-lg px-4 sm:px-6 py-4 sm:py-5 border border-border bg-card">
             <div className="text-xs sm:text-[13px] mb-2 font-medium text-muted-foreground">Today Orders</div>
@@ -471,7 +463,6 @@ Thank you for your visit!`;
           </div>
         </div>
 
-        {/* Weekly Analytics Graph */}
         <div className="rounded-lg shadow-md border border-border bg-card px-4 sm:px-6 py-4 sm:py-6 mb-4 sm:mb-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-2">
             <div>
@@ -515,9 +506,7 @@ Thank you for your visit!`;
           </div>
         </div>
 
-        {/* Past Orders Card */}
         <div className="rounded-lg shadow-md border border-border bg-card px-4 sm:px-6 py-4 sm:py-6">
-          {/* Orders Header */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3 sm:gap-4">
             <h2 className="text-lg sm:text-xl lg:text-[22px] font-bold text-foreground">Order History</h2>
             <div className="text-sm text-muted-foreground">
@@ -525,9 +514,7 @@ Thank you for your visit!`;
             </div>
           </div>
 
-          {/* Filters Row */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4 sm:mb-6">
-            {/* Search */}
             <div className="md:col-span-5">
               <div className="relative">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={17} />
@@ -541,7 +528,6 @@ Thank you for your visit!`;
               </div>
             </div>
 
-            {/* Date */}
             <div className="md:col-span-2">
               <div className="relative">
                 <input
@@ -554,7 +540,6 @@ Thank you for your visit!`;
               </div>
             </div>
 
-            {/* FIX 3: Updated Status dropdown options */}
             <div className="md:col-span-3">
               <select
                 value={statusFilter}
@@ -569,7 +554,6 @@ Thank you for your visit!`;
               </select>
             </div>
 
-            {/* FIX 4: Updated Payment dropdown options */}
             <div className="md:col-span-2">
               <select
                 value={paymentFilter}
@@ -584,7 +568,6 @@ Thank you for your visit!`;
             </div>
           </div>
 
-          {/* Empty State */}
           {filteredOrders.length === 0 && (
             <div className="text-center py-12">
               <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -598,7 +581,6 @@ Thank you for your visit!`;
             <div className="block lg:hidden space-y-3 sm:space-y-4">
               {filteredOrders.map((order) => (
                 <div key={order.id} className="bg-muted rounded-lg p-3 sm:p-4">
-                  {/* Order Header */}
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <div className="font-semibold text-sm sm:text-base text-foreground">{order.id}</div>
@@ -609,7 +591,6 @@ Thank you for your visit!`;
                     </span>
                   </div>
 
-                  {/* Customer */}
                   <div className="flex items-center gap-2 sm:gap-2.5 mb-3 pb-3 border-b border-border">
                     <div
                       className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-semibold text-xs sm:text-[13px] flex-shrink-0 text-white"
@@ -620,7 +601,6 @@ Thank you for your visit!`;
                     <span className="text-sm sm:text-[15px] text-foreground">{order.customer.name}</span>
                   </div>
 
-                  {/* Order Details */}
                   <div className="space-y-1.5 sm:space-y-2 mb-3 pb-3 border-b border-border">
                     <div className="flex justify-between text-xs sm:text-sm">
                       <span className="text-muted-foreground">Items</span>
@@ -646,7 +626,6 @@ Thank you for your visit!`;
                     </div>
                   </div>
 
-                  {/* Actions */}
                   <div className="grid grid-cols-3 gap-2">
                     <button
                       onClick={() => handlePrintBill(order)}
