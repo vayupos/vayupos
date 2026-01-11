@@ -11,7 +11,7 @@ from app.core.database import init_db, get_db  # init_db() is SYNC
 from app.api.v1 import (
     auth, users, products, categories,
     customers, orders, inventory, payment, reports,
-    coupons, dish_templates, upload
+    coupons, dish_templates, upload, staff
 )
 
 settings = get_settings()
@@ -82,3 +82,4 @@ app.include_router(reports.router, prefix="/api/v1", tags=["Reports"])
 app.include_router(coupons.router, prefix="/api/v1", tags=["Coupons"])
 app.include_router(dish_templates.router, prefix="/api/v1", tags=["DishTemplates"])
 app.include_router(upload.router, prefix="/api/v1", tags=["Upload"])
+app.include_router(staff.router, prefix="/api/v1", tags=["Staff"])
