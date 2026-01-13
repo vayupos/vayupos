@@ -70,17 +70,39 @@ const StaffManagement = () => {
             setError(null);
             
             const params = new URLSearchParams();
-            if (searchQuery) params.append('search', searchQuery);
-            if (roleFilter !== 'All') params.append('role', roleFilter);
-            if (statusFilter) params.append('status', statusFilter);
             
-            const response = await fetch(`${API_BASE_URL}/staff?${params.toString()}`);
+            // Only add search parameter if it has a non-empty value
+            const trimmedSearch = searchQuery?.trim() || '';
+            if (trimmedSearch) {
+                params.append('search', trimmedSearch);
+            }
+            
+            // Only add role filter if not "All"
+            if (roleFilter && roleFilter !== 'All') {
+                params.append('role', roleFilter);
+            }
+            
+            // Only add status filter if it has a value
+            if (statusFilter) {
+                params.append('status', statusFilter);
+            }
+            
+            const queryString = params.toString();
+            const url = `${API_BASE_URL}/staff${queryString ? '?' + queryString : ''}`;
+            
+            console.log('Fetching staff from:', url);
+            console.log('Query params:', Object.fromEntries(params));
+            
+            const response = await fetch(url);
             
             if (!response.ok) {
-                throw new Error('Failed to fetch staff');
+                const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+                console.error('API Error Response:', errorData);
+                throw new Error(errorData?.detail || 'Failed to fetch staff');
             }
             
             const data = await response.json();
+            console.log('Received staff data:', data);
             
             // Transform API data to match component format
             const transformedStaff = data.map(member => ({
@@ -104,8 +126,9 @@ const StaffManagement = () => {
             
             setStaff(transformedStaff);
         } catch (err) {
-            setError(err.message);
             console.error('Error fetching staff:', err);
+            setError(err.message);
+            setStaff([]);
         } finally {
             setLoading(false);
         }
@@ -202,6 +225,8 @@ const StaffManagement = () => {
                 aadhar: newStaff.aadhar.replace(/\s/g, '') || null,
             };
 
+            console.log('Adding staff:', requestBody);
+
             const response = await fetch(`${API_BASE_URL}/staff`, {
                 method: 'POST',
                 headers: {
@@ -274,6 +299,8 @@ const StaffManagement = () => {
                 status: editingStaff.status,
             };
 
+            console.log('Updating staff:', requestBody);
+
             const response = await fetch(`${API_BASE_URL}/staff/${editingStaff.id}`, {
                 method: 'PUT',
                 headers: {
@@ -341,7 +368,7 @@ const StaffManagement = () => {
             }
 
             const message = await response.json();
-            alert(message);
+            alert(typeof message === 'string' ? message : 'Salary entry added successfully!');
             
             // Refresh upcoming salaries
             fetchUpcomingSalaries();
@@ -359,17 +386,24 @@ const StaffManagement = () => {
         setStatusFilter('Active');
         setJoinedAfter('2023-01-01');
         setSalaryRange('₹10k - ₹30k');
-        fetchStaff();
+        // Trigger fetch with reset filters
+        setTimeout(() => fetchStaff(), 0);
     };
 
-    // Apply filters when they change
+    // Apply filters when they change - with debounce for search
     useEffect(() => {
-        if (showSearch) {
+        const timeoutId = setTimeout(() => {
             fetchStaff();
-        }
+        }, 500); // 500ms debounce for search
+
+        return () => clearTimeout(timeoutId);
     }, [searchQuery, roleFilter, statusFilter]);
 
     const filteredStaff = staff;
+
+    // Determine if we should show "no results" message
+    const hasActiveFilters = searchQuery.trim() || roleFilter !== 'All' || statusFilter !== 'Active';
+    const showNoResults = !loading && filteredStaff.length === 0 && !error;
 
     return (
         <div className="min-h-screen bg-background">
@@ -402,7 +436,7 @@ const StaffManagement = () => {
                     </div>
                 </div>
 
-                {/* Error Message */}
+                {/* Error Message - Only for actual errors, not empty results */}
                 {error && (
                     <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
                         Error: {error}
@@ -557,9 +591,29 @@ const StaffManagement = () => {
                             </div>
                         ))}
 
-                        {filteredStaff.length === 0 && !loading && (
-                            <div className="py-6 text-center text-sm text-muted-foreground">
-                                No staff found. Try adjusting your filters.
+                        {showNoResults && (
+                            <div className="py-8 text-center">
+                                <div className="text-muted-foreground mb-2">
+                                    <Search className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                                </div>
+                                <p className="text-sm font-medium text-card-foreground mb-1">
+                                    No staff matching filters
+                                </p>
+                                <p className="text-xs text-muted-foreground mb-4">
+                                    {hasActiveFilters 
+                                        ? 'Try adjusting your search criteria or filters'
+                                        : 'Click "New Staff" to add your first team member'
+                                    }
+                                </p>
+                                {hasActiveFilters && (
+                                    <button
+                                        onClick={handleResetFilters}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                                    >
+                                        <RotateCw className="w-3 h-3" />
+                                        <span>Clear filters</span>
+                                    </button>
+                                )}
                             </div>
                         )}
                     </div>
@@ -679,61 +733,61 @@ const StaffManagement = () => {
                                             onChange={(e) =>
                                                 setNewStaff({ ...newStaff, role: e.target.value })
                                             }
-                                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                        >
-                                            <option value="Cashier">Cashier</option>
-                                            <option value="Waiter">Waiter</option>
-                                            <option value="Chef">Chef</option>
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs text-muted-foreground mb-1.5">
-                                            Joined On
-                                        </label>
-                                        <input
-                                            type="date"
-                                            value={newStaff.joined}
-                                            onChange={(e) =>
-                                                setNewStaff({ ...newStaff, joined: e.target.value })
-                                            }
-                                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                        />
-                                    </div>
-                                </div>
-
+                                            className ="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+>
+<option value="Cashier">Cashier</option>
+<option value="Waiter">Waiter</option>
+<option value="Chef">Chef</option>
+</select>
+</div>
                                 <div>
                                     <label className="block text-xs text-muted-foreground mb-1.5">
-                                        Salary (₹ / month) *
+                                        Joined On
                                     </label>
                                     <input
-                                        type="number"
-                                        value={newStaff.salary}
+                                        type="date"
+                                        value={newStaff.joined}
                                         onChange={(e) =>
-                                            setNewStaff({ ...newStaff, salary: e.target.value })
+                                            setNewStaff({ ...newStaff, joined: e.target.value })
                                         }
                                         className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
                                     />
                                 </div>
+                            </div>
 
-                                <div>
-                                    <label className="block text-xs text-muted-foreground mb-1.5">
-                                        Aadhar Number
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={newStaff.aadhar}
-                                        onChange={(e) =>
-                                            setNewStaff({
-                                                ...newStaff,
-                                                aadhar: formatAadhar(e.target.value),
-                                            })
-                                        }
-                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-placeholder="1234 5678 9012"
-/>
-</div>
-</div>
+                            <div>
+                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                    Salary (₹ / month) *
+                                </label>
+                                <input
+                                    type="number"
+                                    value={newStaff.salary}
+                                    onChange={(e) =>
+                                        setNewStaff({ ...newStaff, salary: e.target.value })
+                                    }
+                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                    Aadhar Number
+                                </label>
+                                <input
+                                    type="text"
+                                    value={newStaff.aadhar}
+                                    onChange={(e) =>
+                                        setNewStaff({
+                                            ...newStaff,
+                                            aadhar: formatAadhar(e.target.value),
+                                        })
+                                    }
+                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                    placeholder="1234 5678 9012"
+                                />
+                            </div>
+                        </div>
+
                         <div className="flex justify-end gap-2 mt-5">
                             <button
                                 onClick={() => setShowNewStaffModal(false)}
@@ -906,3 +960,4 @@ placeholder="1234 5678 9012"
 );
 };
 export default StaffManagement;
+
