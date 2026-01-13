@@ -18,12 +18,32 @@ import {
 
 const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
 
-// ✅ AUTHENTICATION HELPER
+// ✅ ENHANCED: Better token detection
 const getAuthHeaders = () => {
-    const token = localStorage.getItem('token') || localStorage.getItem('acces_Token');
+    // Check all possible token locations
+    const tokenKeys = ['token', 'acces_Token', 'access_token', 'authToken', 'jwt', 'bearer', 'Token'];
+    let token = null;
+    let tokenKey = null;
+    
+    for (const key of tokenKeys) {
+        const value = localStorage.getItem(key);
+        if (value && value.length > 10) { // Valid tokens are usually long
+            token = value;
+            tokenKey = key;
+            break;
+        }
+    }
+    
+    console.log('🔑 Auth Check:', {
+        found: !!token,
+        key: tokenKey,
+        length: token ? token.length : 0,
+        preview: token ? token.substring(0, 20) + '...' : 'none'
+    });
     
     if (!token) {
-        console.error('No authentication token found in localStorage');
+        console.error('❌ No authentication token found');
+        console.log('📦 Available localStorage keys:', Object.keys(localStorage));
         return {
             'Content-Type': 'application/json',
         };
@@ -39,14 +59,13 @@ const StaffManagement = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [roleFilter, setRoleFilter] = useState('All');
     const [statusFilter, setStatusFilter] = useState('Active');
-    const [joinedAfter, setJoinedAfter] = useState('2023-01-01');
-    const [salaryRange, setSalaryRange] = useState('₹10k - ₹30k');
     const [showSearch, setShowSearch] = useState(false);
     const [showNewStaffModal, setShowNewStaffModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [editingStaff, setEditingStaff] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [debugInfo, setDebugInfo] = useState(null);
 
     const [newStaff, setNewStaff] = useState({
         name: '',
@@ -75,17 +94,43 @@ const StaffManagement = () => {
 
     const getRandomColor = () => colors[Math.floor(Math.random() * colors.length)];
 
+    // 🔍 DEBUG: Check auth on mount
+    useEffect(() => {
+        console.log('🚀 Staff Management mounted');
+        
+        // Detailed localStorage check
+        const allKeys = Object.keys(localStorage);
+        console.log('📦 localStorage keys:', allKeys);
+        
+        const debug = {
+            timestamp: new Date().toISOString(),
+            localStorageKeys: allKeys,
+            tokens: {}
+        };
+        
+        ['token', 'acces_Token', 'access_token', 'authToken'].forEach(key => {
+            const value = localStorage.getItem(key);
+            debug.tokens[key] = value ? `EXISTS (${value.length} chars)` : 'NOT FOUND';
+        });
+        
+        console.log('🔍 Debug Info:', debug);
+        setDebugInfo(debug);
+        
+    }, []);
+
     // Fetch staff on component mount
     useEffect(() => {
         fetchStaff();
         fetchUpcomingSalaries();
     }, []);
 
-    // ✅ FIXED: Stable fetchStaff using useCallback to prevent re-creation
+    // ✅ FIXED: Stable fetchStaff using useCallback
     const fetchStaff = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
+            
+            console.log('📡 Starting fetchStaff...');
             
             const params = new URLSearchParams();
             
@@ -105,20 +150,27 @@ const StaffManagement = () => {
             const queryString = params.toString();
             const url = `${API_BASE_URL}/staff${queryString ? '?' + queryString : ''}`;
             
-            console.log('Fetching staff from:', url);
+            console.log('🌐 Fetching from:', url);
+            
+            const headers = getAuthHeaders();
+            console.log('📤 Headers:', headers.Authorization ? 'Token included' : 'NO TOKEN!');
             
             const response = await fetch(url, {
                 method: 'GET',
-                headers: getAuthHeaders(),
+                headers: headers,
             });
+            
+            console.log('📥 Response:', response.status, response.statusText);
             
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('API Error:', response.status, errorText);
+                console.error('❌ API Error:', response.status, errorText);
                 
-                // Silent fail for auth errors
+                // Handle auth errors
                 if (response.status === 401 || response.status === 403) {
-                    console.warn('Authentication failed - user may need to login');
+                    console.error('🔒 Auth failed - Status:', response.status);
+                    console.log('Current localStorage:', Object.keys(localStorage));
+                    setError(`Authentication failed (${response.status}). Please check if you're logged in.`);
                     setStaff([]);
                     setLoading(false);
                     return;
@@ -128,13 +180,13 @@ const StaffManagement = () => {
             }
             
             const data = await response.json();
-            console.log('Received staff data:', data);
+            console.log('✅ Received staff data:', data);
             
             // Handle both array and object responses
             const staffArray = Array.isArray(data) ? data : (data.data || []);
             
             if (!Array.isArray(staffArray)) {
-                console.error('Unexpected data format:', data);
+                console.error('⚠️ Unexpected data format:', data);
                 setStaff([]);
                 return;
             }
@@ -158,19 +210,21 @@ const StaffManagement = () => {
                 aadhar: member.aadhar || '',
             }));
             
+            console.log('✅ Transformed staff:', transformedStaff.length, 'members');
             setStaff(transformedStaff);
         } catch (err) {
-            console.error('Error fetching staff:', err);
+            console.error('❌ Error fetching staff:', err);
             setError(err.message);
             setStaff([]);
         } finally {
             setLoading(false);
         }
-    }, [searchQuery, roleFilter, statusFilter]); // ✅ Now dependencies are correct
+    }, [searchQuery, roleFilter, statusFilter]);
 
     // ✅ FIXED: Fetch upcoming salaries
     const fetchUpcomingSalaries = async () => {
         try {
+            console.log('📡 Fetching upcoming salaries...');
             const response = await fetch(`${API_BASE_URL}/staff/upcoming-salaries`, {
                 method: 'GET',
                 headers: getAuthHeaders(),
@@ -178,7 +232,7 @@ const StaffManagement = () => {
             
             if (!response.ok) {
                 if (response.status === 401 || response.status === 403) {
-                    console.warn('Authentication failed for upcoming salaries');
+                    console.warn('⚠️ Auth failed for upcoming salaries');
                     return;
                 }
                 throw new Error('Failed to fetch upcoming salaries');
@@ -199,7 +253,7 @@ const StaffManagement = () => {
             
             setUpcomingSalaries(transformedSalaries);
         } catch (err) {
-            console.error('Error fetching upcoming salaries:', err);
+            console.error('❌ Error fetching upcoming salaries:', err);
         }
     };
 
@@ -242,7 +296,6 @@ const StaffManagement = () => {
         document.body.removeChild(link);
     };
 
-    // ✅ FIXED: Add staff
     const handleAddStaff = async () => {
         if (!newStaff.name || !newStaff.phone || !newStaff.salary) {
             alert('Please fill all required fields');
@@ -267,7 +320,7 @@ const StaffManagement = () => {
                 aadhar: newStaff.aadhar.replace(/\s/g, '') || null,
             };
 
-            console.log('Adding staff:', requestBody);
+            console.log('➕ Adding staff:', requestBody);
 
             const response = await fetch(`${API_BASE_URL}/staff`, {
                 method: 'POST',
@@ -319,7 +372,6 @@ const StaffManagement = () => {
         }
     };
 
-    // ✅ FIXED: Update staff
     const handleUpdateStaff = async () => {
         if (!editingStaff.name || !editingStaff.phone || !editingStaff.salary) {
             alert('Please fill all required fields');
@@ -344,7 +396,7 @@ const StaffManagement = () => {
                 status: editingStaff.status,
             };
 
-            console.log('Updating staff:', requestBody);
+            console.log('✏️ Updating staff:', requestBody);
 
             const response = await fetch(`${API_BASE_URL}/staff/${editingStaff.id}`, {
                 method: 'PUT',
@@ -375,7 +427,6 @@ const StaffManagement = () => {
         }
     };
 
-    // ✅ FIXED: Delete staff
     const handleDelete = async (id) => {
         if (window.confirm('Are you sure you want to delete this staff member?')) {
             try {
@@ -406,7 +457,6 @@ const StaffManagement = () => {
         }
     };
 
-    // ✅ FIXED: Add salary
     const handleAddSalary = async (id) => {
         try {
             setLoading(true);
@@ -439,37 +489,41 @@ const StaffManagement = () => {
         setSearchQuery('');
         setRoleFilter('All');
         setStatusFilter('Active');
-        setJoinedAfter('2023-01-01');
-        setSalaryRange('₹10k - ₹30k');
         setTimeout(() => fetchStaff(), 0);
     };
 
-    // ✅ FIXED: Now fetchStaff is stable and won't cause infinite loops
+    // ✅ FIXED: Now fetchStaff is stable
     useEffect(() => {
         const timeoutId = setTimeout(() => {
             fetchStaff();
         }, 500);
 
         return () => clearTimeout(timeoutId);
-    }, [fetchStaff]); // ✅ Safe to include fetchStaff now because it's memoized
+    }, [fetchStaff]);
 
     const filteredStaff = staff;
     const hasActiveFilters = searchQuery.trim() || roleFilter !== 'All' || statusFilter !== 'Active';
     const showNoResults = !loading && filteredStaff.length === 0 && !error;
 
-    // Loading state like PastOrders
+    // Loading state
     if (loading && staff.length === 0) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center">
                 <div className="text-center">
                     <RotateCw className="animate-spin h-12 w-12 text-primary mx-auto mb-4" />
                     <p className="text-lg text-foreground">Loading staff...</p>
+                    {debugInfo && (
+                        <div className="mt-4 p-4 bg-muted rounded text-left text-xs max-w-md mx-auto">
+                            <p className="font-bold mb-2">Debug Info:</p>
+                            <pre className="whitespace-pre-wrap">{JSON.stringify(debugInfo, null, 2)}</pre>
+                        </div>
+                    )}
                 </div>
             </div>
         );
     }
 
-    // Error state like PastOrders (only for critical errors)
+    // Error state
     if (error && staff.length === 0) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -477,12 +531,28 @@ const StaffManagement = () => {
                     <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
                     <h2 className="text-xl font-bold text-foreground mb-2">Error Loading Staff</h2>
                     <p className="text-muted-foreground mb-4">{error}</p>
-                    <button
-                        onClick={() => fetchStaff()}
-                        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-                    >
-                        Try Again
-                    </button>
+                    
+                    {debugInfo && (
+                        <div className="mb-4 p-3 bg-muted rounded text-left text-xs">
+                            <p className="font-bold mb-2">Debug Info:</p>
+                            <pre className="whitespace-pre-wrap">{JSON.stringify(debugInfo, null, 2)}</pre>
+                        </div>
+                    )}
+                    
+                    <div className="flex gap-2 justify-center">
+                        <button
+                            onClick={() => fetchStaff()}
+                            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                        >
+                            Try Again
+                        </button>
+                        <button
+                            onClick={() => window.location.href = '/login'}
+                            className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/90 transition-colors"
+                        >
+                            Go to Login
+                        </button>
+                    </div>
                 </div>
             </div>
         );
@@ -491,6 +561,20 @@ const StaffManagement = () => {
     return (
         <div className="min-h-screen bg-background">
             <div className="p-3 sm:p-4 lg:p-6 xl:p-8 max-w-[1400px] mx-auto">
+                {/* Debug Info Banner - REMOVE THIS AFTER DEBUGGING */}
+                {debugInfo && (
+                    <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                        <p className="font-bold mb-1">🔍 Debug Info (remove this after fixing):</p>
+                        <p className="mb-1">localStorage keys: {debugInfo.localStorageKeys.join(', ')}</p>
+                        <p className="font-semibold">Token checks:</p>
+                        <ul className="ml-4">
+                            {Object.entries(debugInfo.tokens).map(([key, value]) => (
+                                <li key={key}>{key}: {value}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+                
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 sm:mb-6">
                     <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-foreground">Staff</h1>
