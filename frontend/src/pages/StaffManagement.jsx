@@ -20,7 +20,7 @@ const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
 // ✅ AUTHENTICATION HELPER - ADD THIS RIGHT AFTER API_BASE_URL
 const getAuthHeaders = () => {
     // Try both possible token keys from your login
-    const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
+    const token = localStorage.getItem('token') || localStorage.getItem('acces_Token');
     
     if (!token) {
         console.error('No authentication token found in localStorage');
