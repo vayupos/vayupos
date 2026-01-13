@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Search,
     UserPlus,
@@ -81,8 +81,8 @@ const StaffManagement = () => {
         fetchUpcomingSalaries();
     }, []);
 
-    // ✅ FIXED: Fetch staff with proper error handling like PastOrders
-    const fetchStaff = async () => {
+    // ✅ FIXED: Stable fetchStaff using useCallback to prevent re-creation
+    const fetchStaff = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
@@ -166,7 +166,7 @@ const StaffManagement = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [searchQuery, roleFilter, statusFilter]); // ✅ Now dependencies are correct
 
     // ✅ FIXED: Fetch upcoming salaries
     const fetchUpcomingSalaries = async () => {
@@ -444,13 +444,14 @@ const StaffManagement = () => {
         setTimeout(() => fetchStaff(), 0);
     };
 
+    // ✅ FIXED: Now fetchStaff is stable and won't cause infinite loops
     useEffect(() => {
         const timeoutId = setTimeout(() => {
             fetchStaff();
         }, 500);
 
         return () => clearTimeout(timeoutId);
-    }, [searchQuery, roleFilter, statusFilter]);
+    }, [fetchStaff]); // ✅ Safe to include fetchStaff now because it's memoized
 
     const filteredStaff = staff;
     const hasActiveFilters = searchQuery.trim() || roleFilter !== 'All' || statusFilter !== 'Active';
