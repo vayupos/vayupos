@@ -13,28 +13,20 @@ import {
     PlusCircle,
     X,
     Download,
+    AlertCircle,
 } from 'lucide-react';
 
 const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
 
-// ✅ IMPROVED AUTHENTICATION HELPER WITH DEBUGGING
+// ✅ AUTHENTICATION HELPER
 const getAuthHeaders = () => {
-    // Check all possible token keys
-    const token = localStorage.getItem('access_Token') || 
-                  localStorage.getItem('token') || 
-                  localStorage.getItem('accessToken') ||
-                  localStorage.getItem('authToken');
-    
-    console.log('=== TOKEN DEBUG ===');
-    console.log('Checking localStorage keys:', Object.keys(localStorage));
-    console.log('Token found:', token ? 'YES' : 'NO');
-    console.log('Token value:', token ? token.substring(0, 20) + '...' : 'null');
+    const token = localStorage.getItem('token') || localStorage.getItem('acces_Token');
     
     if (!token) {
-        console.error('❌ No authentication token found in localStorage');
-        console.log('Available keys in localStorage:', Object.keys(localStorage));
-        // Don't return headers without token for authenticated requests
-        return null;
+        console.error('No authentication token found in localStorage');
+        return {
+            'Content-Type': 'application/json',
+        };
     }
     
     return {
@@ -55,7 +47,6 @@ const StaffManagement = () => {
     const [editingStaff, setEditingStaff] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [authError, setAuthError] = useState(false);
 
     const [newStaff, setNewStaff] = useState({
         name: '',
@@ -84,30 +75,17 @@ const StaffManagement = () => {
 
     const getRandomColor = () => colors[Math.floor(Math.random() * colors.length)];
 
-    // ✅ CHECK AUTHENTICATION ON MOUNT
+    // Fetch staff on component mount
     useEffect(() => {
-        const headers = getAuthHeaders();
-        if (!headers) {
-            setAuthError(true);
-            setError('Please login to access this page. No authentication token found.');
-            return;
-        }
-        setAuthError(false);
         fetchStaff();
         fetchUpcomingSalaries();
     }, []);
 
-    // ✅ IMPROVED: Fetch staff with better error handling
+    // ✅ FIXED: Fetch staff with proper error handling like PastOrders
     const fetchStaff = async () => {
         try {
             setLoading(true);
             setError(null);
-            
-            const headers = getAuthHeaders();
-            if (!headers) {
-                setAuthError(true);
-                throw new Error('Authentication token not found. Please login again.');
-            }
             
             const params = new URLSearchParams();
             
@@ -127,32 +105,41 @@ const StaffManagement = () => {
             const queryString = params.toString();
             const url = `${API_BASE_URL}/staff${queryString ? '?' + queryString : ''}`;
             
-            console.log('📡 Fetching staff from:', url);
-            console.log('📡 Headers:', headers);
+            console.log('Fetching staff from:', url);
             
             const response = await fetch(url, {
                 method: 'GET',
-                headers: headers,
+                headers: getAuthHeaders(),
             });
             
-            console.log('📡 Response status:', response.status);
-            
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-                console.error('❌ API Error Response:', errorData);
+                const errorText = await response.text();
+                console.error('API Error:', response.status, errorText);
                 
+                // Silent fail for auth errors
                 if (response.status === 401 || response.status === 403) {
-                    setAuthError(true);
-                    throw new Error('Authentication failed. Please login again.');
+                    console.warn('Authentication failed - user may need to login');
+                    setStaff([]);
+                    setLoading(false);
+                    return;
                 }
                 
-                throw new Error(errorData?.detail || `Failed to fetch staff (${response.status})`);
+                throw new Error(`API failed (${response.status}): ${errorText}`);
             }
             
             const data = await response.json();
-            console.log('✅ Received staff data:', data);
+            console.log('Received staff data:', data);
             
-            const transformedStaff = data.map(member => ({
+            // Handle both array and object responses
+            const staffArray = Array.isArray(data) ? data : (data.data || []);
+            
+            if (!Array.isArray(staffArray)) {
+                console.error('Unexpected data format:', data);
+                setStaff([]);
+                return;
+            }
+            
+            const transformedStaff = staffArray.map(member => ({
                 id: member.id,
                 name: member.name,
                 phone: member.phone,
@@ -172,9 +159,8 @@ const StaffManagement = () => {
             }));
             
             setStaff(transformedStaff);
-            setAuthError(false);
         } catch (err) {
-            console.error('❌ Error fetching staff:', err);
+            console.error('Error fetching staff:', err);
             setError(err.message);
             setStaff([]);
         } finally {
@@ -182,23 +168,17 @@ const StaffManagement = () => {
         }
     };
 
-    // ✅ IMPROVED: Fetch upcoming salaries
+    // ✅ FIXED: Fetch upcoming salaries
     const fetchUpcomingSalaries = async () => {
         try {
-            const headers = getAuthHeaders();
-            if (!headers) {
-                console.error('Cannot fetch upcoming salaries: No auth token');
-                return;
-            }
-            
             const response = await fetch(`${API_BASE_URL}/staff/upcoming-salaries`, {
                 method: 'GET',
-                headers: headers,
+                headers: getAuthHeaders(),
             });
             
             if (!response.ok) {
                 if (response.status === 401 || response.status === 403) {
-                    console.error('Authentication failed for upcoming salaries');
+                    console.warn('Authentication failed for upcoming salaries');
                     return;
                 }
                 throw new Error('Failed to fetch upcoming salaries');
@@ -262,6 +242,7 @@ const StaffManagement = () => {
         document.body.removeChild(link);
     };
 
+    // ✅ FIXED: Add staff
     const handleAddStaff = async () => {
         if (!newStaff.name || !newStaff.phone || !newStaff.salary) {
             alert('Please fill all required fields');
@@ -275,12 +256,6 @@ const StaffManagement = () => {
 
         try {
             setLoading(true);
-            
-            const headers = getAuthHeaders();
-            if (!headers) {
-                throw new Error('Authentication token not found. Please login again.');
-            }
-            
             const salaryNum = parseFloat(newStaff.salary.replace(/[^0-9]/g, '')) || 0;
             
             const requestBody = {
@@ -292,11 +267,11 @@ const StaffManagement = () => {
                 aadhar: newStaff.aadhar.replace(/\s/g, '') || null,
             };
 
-            console.log('📡 Adding staff:', requestBody);
+            console.log('Adding staff:', requestBody);
 
             const response = await fetch(`${API_BASE_URL}/staff`, {
                 method: 'POST',
-                headers: headers,
+                headers: getAuthHeaders(),
                 body: JSON.stringify(requestBody),
             });
 
@@ -311,7 +286,6 @@ const StaffManagement = () => {
             }
 
             const data = await response.json();
-            console.log('✅ Staff added:', data);
             
             setNewStaff({
                 name: '',
@@ -345,6 +319,7 @@ const StaffManagement = () => {
         }
     };
 
+    // ✅ FIXED: Update staff
     const handleUpdateStaff = async () => {
         if (!editingStaff.name || !editingStaff.phone || !editingStaff.salary) {
             alert('Please fill all required fields');
@@ -358,12 +333,6 @@ const StaffManagement = () => {
 
         try {
             setLoading(true);
-            
-            const headers = getAuthHeaders();
-            if (!headers) {
-                throw new Error('Authentication token not found. Please login again.');
-            }
-            
             const salaryNum = parseFloat(editingStaff.salary.replace(/[^0-9]/g, ''));
 
             const requestBody = {
@@ -375,11 +344,11 @@ const StaffManagement = () => {
                 status: editingStaff.status,
             };
 
-            console.log('📡 Updating staff:', requestBody);
+            console.log('Updating staff:', requestBody);
 
             const response = await fetch(`${API_BASE_URL}/staff/${editingStaff.id}`, {
                 method: 'PUT',
-                headers: headers,
+                headers: getAuthHeaders(),
                 body: JSON.stringify(requestBody),
             });
 
@@ -406,19 +375,15 @@ const StaffManagement = () => {
         }
     };
 
+    // ✅ FIXED: Delete staff
     const handleDelete = async (id) => {
         if (window.confirm('Are you sure you want to delete this staff member?')) {
             try {
                 setLoading(true);
                 
-                const headers = getAuthHeaders();
-                if (!headers) {
-                    throw new Error('Authentication token not found. Please login again.');
-                }
-                
                 const response = await fetch(`${API_BASE_URL}/staff/${id}`, {
                     method: 'DELETE',
-                    headers: headers,
+                    headers: getAuthHeaders(),
                 });
 
                 if (!response.ok) {
@@ -441,18 +406,14 @@ const StaffManagement = () => {
         }
     };
 
+    // ✅ FIXED: Add salary
     const handleAddSalary = async (id) => {
         try {
             setLoading(true);
             
-            const headers = getAuthHeaders();
-            if (!headers) {
-                throw new Error('Authentication token not found. Please login again.');
-            }
-            
             const response = await fetch(`${API_BASE_URL}/staff/salaries/${id}/add`, {
                 method: 'POST',
-                headers: headers,
+                headers: getAuthHeaders(),
             });
 
             if (!response.ok) {
@@ -484,8 +445,6 @@ const StaffManagement = () => {
     };
 
     useEffect(() => {
-        if (authError) return; // Don't fetch if auth error
-        
         const timeoutId = setTimeout(() => {
             fetchStaff();
         }, 500);
@@ -497,25 +456,31 @@ const StaffManagement = () => {
     const hasActiveFilters = searchQuery.trim() || roleFilter !== 'All' || statusFilter !== 'Active';
     const showNoResults = !loading && filteredStaff.length === 0 && !error;
 
-    // ✅ SHOW AUTH ERROR UI
-    if (authError) {
+    // Loading state like PastOrders
+    if (loading && staff.length === 0) {
+        return (
+            <div className="min-h-screen bg-background flex items-center justify-center">
+                <div className="text-center">
+                    <RotateCw className="animate-spin h-12 w-12 text-primary mx-auto mb-4" />
+                    <p className="text-lg text-foreground">Loading staff...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Error state like PastOrders (only for critical errors)
+    if (error && staff.length === 0) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center p-4">
-                <div className="bg-card rounded-xl border border-border p-8 max-w-md w-full text-center">
-                    <div className="text-red-500 mb-4">
-                        <X className="w-16 h-16 mx-auto" />
-                    </div>
-                    <h2 className="text-xl font-semibold text-card-foreground mb-2">
-                        Authentication Required
-                    </h2>
-                    <p className="text-muted-foreground mb-6">
-                        Please login to access the staff management page.
-                    </p>
+                <div className="max-w-md w-full bg-card border border-border rounded-lg p-6 text-center">
+                    <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                    <h2 className="text-xl font-bold text-foreground mb-2">Error Loading Staff</h2>
+                    <p className="text-muted-foreground mb-4">{error}</p>
                     <button
-                        onClick={() => window.location.href = '/login'}
-                        className="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                        onClick={() => fetchStaff()}
+                        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
                     >
-                        Go to Login
+                        Try Again
                     </button>
                 </div>
             </div>
@@ -552,20 +517,6 @@ const StaffManagement = () => {
                         </button>
                     </div>
                 </div>
-
-                {/* Error Message */}
-                {error && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
-                        <strong>Error:</strong> {error}
-                    </div>
-                )}
-
-                {/* Loading Indicator */}
-                {loading && (
-                    <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg mb-4">
-                        Loading...
-                    </div>
-                )}
 
                 {/* Filters */}
                 <div className="bg-card rounded-xl border border-border p-3 sm:p-4 lg:p-5 mb-4 sm:mb-6">
@@ -756,324 +707,326 @@ const StaffManagement = () => {
                                             className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white"
                                             style={{ backgroundColor: entry.color }}
                                         >
-                                        {entry.avatar}
-                                    </div>
-                                    <div>
-                                        <div className="text-sm font-medium text-card-foreground">
-                                            {entry.name}
+                                            {entry.avatar}
                                         </div>
-                                        <div className="text-xs text-muted-foreground">
-                                            {entry.role} • {entry.category}
+                                        <div>
+                                            <div className="text-sm font-medium text-card-foreground">
+                                                {entry.name}
+                                            </div>
+                                            <div className="text-xs text-muted-foreground">
+                                                {entry.role} • {entry.category}
+                                            </div>
                                         </div>
                                     </div>
+
+                                    <div className="hidden sm:block text-sm text-card-foreground">
+                                        {entry.amount}
+                                    </div>
+
+                                    <div className="hidden sm:block text-xs text-muted-foreground">
+                                        Due on {entry.dueDate}
+                                    </div>
+
+                                    <button
+                                        onClick={() => handleAddSalary(entry.id)}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs sm:text-sm font-medium hover:bg-teal-700 transition-colors"
+                                    >
+                                        <PlusCircle className="w-4 h-4" />
+                                        <span>Add Now</span>
+                                    </button>
                                 </div>
+                            ))}
 
-                                <div className="hidden sm:block text-sm text-card-foreground">
-                                    {entry.amount}
+                            {upcomingSalaries.length === 0 && !loading && (
+                                <div className="py-4 text-center text-sm text-muted-foreground">
+                                    No upcoming salary entries.
                                 </div>
-
-                                <div className="hidden sm:block text-xs text-muted-foreground">
-                                    Due on {entry.dueDate}
-                                </div>
-
-                                <button
-                                    onClick={() => handleAddSalary(entry.id)}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs sm:text-sm font-medium hover:bg-teal-700 transition-colors"
-                                >
-                                    <PlusCircle className="w-4 h-4" />
-                                    <span>Add Now</span>
-                                </button>
-                            </div>
-                        ))}
-
-                        {upcomingSalaries.length === 0 && !loading && (
-                            <div className="py-4 text-center text-sm text-muted-foreground">
-                                No upcoming salary entries.
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            {/* New Staff Modal */}
-            {showNewStaffModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-2">
-                    <div className="bg-card rounded-xl border border-border w-full max-w-md p-4 sm:p-5">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
-                                Add New Staff
-                            </h2>
-                            <button
-                                onClick={() => setShowNewStaffModal(false)}
-                                className="text-muted-foreground hover:text-foreground"
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
-                        </div>
-
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
-                                    Name *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={newStaff.name}
-                                    onChange={(e) =>
-                                        setNewStaff({ ...newStaff, name: e.target.value })
-                                    }
-                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                />
+                {/* New Staff Modal */}
+                {showNewStaffModal && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-2">
+                        <div className="bg-card rounded-xl border border-border w-full max-w-md p-4 sm:p-5">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
+                                    Add New Staff
+                                </h2>
+                                <button
+                                    onClick={() => setShowNewStaffModal(false)}
+                                    className="text-muted-foreground hover:text-foreground"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
                             </div>
 
-                            <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
-                                    Phone *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={newStaff.phone}
-                                    onChange={(e) =>
-                                        setNewStaff({ ...newStaff, phone: e.target.value })
-                                    }
-                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-3">
                                 <div>
                                     <label className="block text-xs text-muted-foreground mb-1.5">
-                                        Role
-                                    </label>
-                                    <select
-                                        value={newStaff.role}
-                                        onChange={(e) =>
-                                            setNewStaff({ ...newStaff, role: e.target.value })
-                                        }
-                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                    >
-                                        <option value="Cashier">Cashier</option>
-                                        <option value="Waiter">Waiter</option>
-                                        <option value="Chef">Chef</option>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs text-muted-foreground mb-1.5">
-                                        Joined On
+                                        Name *
                                     </label>
                                     <input
-                                        type="date"
-                                        value={newStaff.joined}
+                                        type="text"
+                                        value={newStaff.name}
                                         onChange={(e) =>
-                                            setNewStaff({ ...newStaff, joined: e.target.value })
+                                            setNewStaff({ ...newStaff, name: e.target.value })
                                         }
                                         className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
                                     />
                                 </div>
-                            </div>
 
-                            <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
-                                    Salary (₹ / month) *
-                                </label>
-                                <input
-                                    type="number"
-                                    value={newStaff.salary}
-                                    onChange={(e) =>
-                                        setNewStaff({ ...newStaff, salary: e.target.value })
-                                    }
-                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
-                                    Aadhar Number
-                                </label>
-                                <input
-                                    type="text"
-                                    value={newStaff.aadhar}
-                                    onChange={(e) =>
-                                        setNewStaff({
-                                            ...newStaff,
-                                            aadhar: formatAadhar(e.target.value),
-                                        })
-                                    }
-                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                    placeholder="1234 5678 9012"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end gap-2 mt-5">
-                            <button
-                                onClick={() => setShowNewStaffModal(false)}
-                                className="px-3 py-2 rounded-lg text-xs sm:text-sm bg-muted text-foreground hover:bg-accent transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleAddStaff}
-                                disabled={loading}
-                                className="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
-                            >
-                                <Save className="w-4 h-4" />
-                                <span>{loading ? 'Saving...' : 'Save'}</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Edit Staff Modal */}
-            {showEditModal && editingStaff && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-2">
-                    <div className="bg-card rounded-xl border border-border w-full max-w-md p-4 sm:p-5">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
-                                Edit Staff
-                            </h2>
-                            <button
-                                onClick={() => setShowEditModal(false)}
-                                className="text-muted-foreground hover:text-foreground"
-                            >
-                                <X className="w-4 h-4" />
-                            </button>
-                        </div>
-
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
-                                    Name *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={editingStaff.name}
-                                    onChange={(e) =>
-                                        setEditingStaff({ ...editingStaff, name: e.target.value })
-                                    }
-                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
-                                    Phone *
-                                </label>
-                                <input
-                                    type="text"
-                                    value={editingStaff.phone}
-                                    onChange={(e) =>
-                                        setEditingStaff({
-                                            ...editingStaff,
-                                            phone: e.target.value,
-                                        })
-                                    }
-                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <label className="block text-xs text-muted-foreground mb-1.5">
-                                        Role
+                                        Phone *
                                     </label>
-                                    <select
-                                        value={editingStaff.role}
+                                    <input
+                                        type="text"
+                                        value={newStaff.phone}
                                         onChange={(e) =>
-                                            setEditingStaff({
-                                                ...editingStaff,
-                                                role: e.target.value,
-                                            })
+                                            setNewStaff({ ...newStaff, phone: e.target.value })
                                         }
                                         className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                    >
-                                        <option value="Cashier">Cashier</option>
-                                        <option value="Waiter">Waiter</option>
-                                        <option value="Chef">Chef</option>
-                                    </select>
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs text-muted-foreground mb-1.5">
+                                            Role
+                                        </label>
+                                        <select
+                                            value={newStaff.role}
+                                            onChange={(e) =>
+                                                setNewStaff({ ...newStaff, role: e.target.value })
+                                            }
+                                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                        >
+                                            <option value="Cashier">Cashier</option>
+                                            <option value="Waiter">Waiter</option>
+                                            <option value="Chef">Chef</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs text-muted-foreground mb-1.5">
+                                            Joined On
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={newStaff.joined}
+                                            onChange={(e) =>
+                                                setNewStaff({ ...newStaff, joined: e.target.value })
+                                            }
+                                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                        />
+                                    </div>
                                 </div>
 
                                 <div>
                                     <label className="block text-xs text-muted-foreground mb-1.5">
-                                        Status
+                                        Salary (₹ / month) *
                                     </label>
-                                    <select
-                                        value={editingStaff.status}
+                                    <input
+                                        type="number"
+                                        value={newStaff.salary}
                                         onChange={(e) =>
-                                            setEditingStaff({
-                                                ...editingStaff,
-                                                status: e.target.value,
+                                            setNewStaff({ ...newStaff, salary: e.target.value })
+                                        }
+                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                        Aadhar Number
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={newStaff.aadhar}
+                                        onChange={(e) =>
+                                            setNewStaff({
+                                                ...newStaff,
+                                                aadhar: formatAadhar(e.target.value),
                                             })
                                         }
                                         className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                    >
-                                        <option value="Active">Active</option>
-                                        <option value="Inactive">Inactive</option>
-                                    </select>
+                                        placeholder="1234 5678 9012"
+                                    />
                                 </div>
                             </div>
 
-                            <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
-                                    Salary (₹ / month) *
-                                </label>
-                                <input
-                                    type="number"
-                                    value={editingStaff.salary}
-                                    onChange={(e) =>
-                                        setEditingStaff({
-                                            ...editingStaff,
-                                            salary: e.target.value,
-                                        })
-                                    }
-                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                />
+                            <div className="flex justify-end gap-2 mt-5">
+                                <button
+                                    onClick={() => setShowNewStaffModal(false)}
+                                    className="px-3 py-2 rounded-lg text-xs sm:text-sm bg-muted text-foreground hover:bg-accent transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleAddStaff}
+                                    disabled={loading}
+                                    className="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                                >
+                                    <Save className="w-4 h-4" />
+                                    <span>{loading ? 'Saving...' : 'Save'}</span>
+                                </button>
                             </div>
-
-                            <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
-                                    Aadhar Number
-                                </label>
-                                <input
-                                    type="text"
-                                    value={editingStaff.aadhar}
-                                    onChange={(e) =>
-                                        setEditingStaff({
-                                            ...editingStaff,
-                                            aadhar: formatAadhar(e.target.value),
-                                        })
-                                    }
-                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                    placeholder="1234 5678 9012"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end gap-2 mt-5">
-                            <button
-                                onClick={() => {
-                                    setShowEditModal(false);
-                                    setEditingStaff(null);
-                                }}
-                                className="px-3 py-2 rounded-lg text-xs sm:text-sm bg-muted text-foreground hover:bg-accent transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleUpdateStaff}
-                                disabled={loading}
-                                className="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
-                            >
-                                <Save className="w-4 h-4" />
-                                <span>{loading ? 'Saving...' : 'Save Changes'}</span>
-                            </button>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
+
+                {/* Edit Staff Modal */}
+                {showEditModal && editingStaff && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-2">
+                        <div className="bg-card rounded-xl border border-border w-full max-w-md p-4 sm:p-5">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
+                                    Edit Staff
+                                </h2>
+                                <button
+                                    onClick={() => setShowEditModal(false)}
+                                    className="text-muted-foreground hover:text-foreground"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                        Name *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editingStaff.name}
+                                        onChange={(e) =>
+                                            setEditingStaff({ ...editingStaff, name: e.target.value })
+                                        }
+                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                        Phone *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editingStaff.phone}
+                                        onChange={(e) =>
+                                            setEditingStaff({
+                                                ...editingStaff,
+                                                phone: e.target.value,
+                                            })
+                                        }
+                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block text-xs text-muted-foreground mb-1.5">
+                                            Role
+                                        </label>
+                                        <select
+                                            value={editingStaff.role}
+                                            onChange={(e) =>
+                                                setEditingStaff({
+                                                    ...editingStaff,
+                                                    role: e.target.value,
+                                                })
+                                            }
+                                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                        >
+                                            <option value="Cashier">Cashier</option>
+                                            <option value="Waiter">Waiter</option>
+                                            <option value="Chef">Chef</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs text-muted-foreground mb-1.5">
+                                            Status
+                                        </label>
+                                        <select
+                                            value={editingStaff.status}
+                                            onChange={(e) =>
+                                                setEditingStaff({
+                                                    ...editingStaff,
+                                                    status: e.target.value,
+                                                })
+                                            }
+                                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                        >
+                                            <option value="Active">Active</option>
+                                            <option value="Inactive">Inactive</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                        Salary (₹ / month) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={editingStaff.salary}
+                                        onChange={(e) =>
+                                            setEditingStaff({
+                                                ...editingStaff,
+                                                salary: e.target.value,
+                                            })
+                                        }
+                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                        Aadhar Number
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={editingStaff.aadhar}
+                                        onChange={(e) =>
+                                            setEditingStaff({
+                                                ...editingStaff,
+                                                aadhar: formatAadhar(e.target.value),
+                                            })
+                                        }
+                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                        placeholder="1234 5678 9012"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end gap-2 mt-5">
+                                <button
+                                    onClick={() => {
+                                        setShowEditModal(false);
+                                        setEditingStaff(null);
+                                    }}
+                                    className="px-3 py-2 rounded-lg text-xs sm:text-sm bg-muted text-foreground hover:bg-accent transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleUpdateStaff}
+                                    disabled={loading}
+                                    className="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                                >
+                                    <Save className="w-4 h-4" />
+                                    <span>{loading ? 'Saving...' : 'Save Changes'}</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
-    </div>
-);};
+    );
+};
+
 export default StaffManagement;
