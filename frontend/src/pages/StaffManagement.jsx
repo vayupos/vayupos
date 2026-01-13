@@ -17,6 +17,24 @@ import {
 
 const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
 
+// ✅ AUTHENTICATION HELPER - ADD THIS RIGHT AFTER API_BASE_URL
+const getAuthHeaders = () => {
+    // Try both possible token keys from your login
+    const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
+    
+    if (!token) {
+        console.error('No authentication token found in localStorage');
+        return {
+            'Content-Type': 'application/json',
+        };
+    }
+    
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+    };
+};
+
 const StaffManagement = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [roleFilter, setRoleFilter] = useState('All');
@@ -63,7 +81,7 @@ const StaffManagement = () => {
         fetchUpcomingSalaries();
     }, []);
 
-    // Fetch staff with filters
+    // ✅ FIXED: Fetch staff with authentication
     const fetchStaff = async () => {
         try {
             setLoading(true);
@@ -71,18 +89,15 @@ const StaffManagement = () => {
             
             const params = new URLSearchParams();
             
-            // Only add search parameter if it has a non-empty value
             const trimmedSearch = searchQuery?.trim() || '';
             if (trimmedSearch) {
                 params.append('search', trimmedSearch);
             }
             
-            // Only add role filter if not "All"
             if (roleFilter && roleFilter !== 'All') {
                 params.append('role', roleFilter);
             }
             
-            // Only add status filter if it has a value
             if (statusFilter) {
                 params.append('status', statusFilter);
             }
@@ -91,20 +106,27 @@ const StaffManagement = () => {
             const url = `${API_BASE_URL}/staff${queryString ? '?' + queryString : ''}`;
             
             console.log('Fetching staff from:', url);
-            console.log('Query params:', Object.fromEntries(params));
             
-            const response = await fetch(url);
+            // ✅ ADDED AUTHENTICATION HEADERS
+            const response = await fetch(url, {
+                headers: getAuthHeaders(),
+            });
             
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
                 console.error('API Error Response:', errorData);
+                
+                // ✅ CHECK FOR AUTH ERRORS
+                if (response.status === 401 || response.status === 403) {
+                    throw new Error('Authentication failed. Please login again.');
+                }
+                
                 throw new Error(errorData?.detail || 'Failed to fetch staff');
             }
             
             const data = await response.json();
             console.log('Received staff data:', data);
             
-            // Transform API data to match component format
             const transformedStaff = data.map(member => ({
                 id: member.id,
                 name: member.name,
@@ -134,12 +156,19 @@ const StaffManagement = () => {
         }
     };
 
-    // Fetch upcoming salaries
+    // ✅ FIXED: Fetch upcoming salaries with authentication
     const fetchUpcomingSalaries = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/staff/upcoming-salaries`);
+            // ✅ ADDED AUTHENTICATION HEADERS
+            const response = await fetch(`${API_BASE_URL}/staff/upcoming-salaries`, {
+                headers: getAuthHeaders(),
+            });
             
             if (!response.ok) {
+                if (response.status === 401 || response.status === 403) {
+                    console.error('Authentication failed for upcoming salaries');
+                    return;
+                }
                 throw new Error('Failed to fetch upcoming salaries');
             }
             
@@ -201,6 +230,7 @@ const StaffManagement = () => {
         document.body.removeChild(link);
     };
 
+    // ✅ FIXED: Add staff with authentication
     const handleAddStaff = async () => {
         if (!newStaff.name || !newStaff.phone || !newStaff.salary) {
             alert('Please fill all required fields');
@@ -227,16 +257,20 @@ const StaffManagement = () => {
 
             console.log('Adding staff:', requestBody);
 
+            // ✅ ADDED AUTHENTICATION HEADERS
             const response = await fetch(`${API_BASE_URL}/staff`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: getAuthHeaders(),
                 body: JSON.stringify(requestBody),
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
+                
+                if (response.status === 401 || response.status === 403) {
+                    throw new Error('Authentication failed. Please login again.');
+                }
+                
                 throw new Error(errorData.detail || 'Failed to add staff');
             }
 
@@ -253,7 +287,6 @@ const StaffManagement = () => {
             setShowNewStaffModal(false);
             alert('Staff member added successfully!');
             
-            // Refresh staff list
             fetchStaff();
             fetchUpcomingSalaries();
         } catch (err) {
@@ -275,6 +308,7 @@ const StaffManagement = () => {
         }
     };
 
+    // ✅ FIXED: Update staff with authentication
     const handleUpdateStaff = async () => {
         if (!editingStaff.name || !editingStaff.phone || !editingStaff.salary) {
             alert('Please fill all required fields');
@@ -301,16 +335,20 @@ const StaffManagement = () => {
 
             console.log('Updating staff:', requestBody);
 
+            // ✅ ADDED AUTHENTICATION HEADERS
             const response = await fetch(`${API_BASE_URL}/staff/${editingStaff.id}`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: getAuthHeaders(),
                 body: JSON.stringify(requestBody),
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
+                
+                if (response.status === 401 || response.status === 403) {
+                    throw new Error('Authentication failed. Please login again.');
+                }
+                
                 throw new Error(errorData.detail || 'Failed to update staff');
             }
 
@@ -318,7 +356,6 @@ const StaffManagement = () => {
             setEditingStaff(null);
             alert('Staff member updated successfully!');
             
-            // Refresh staff list
             fetchStaff();
         } catch (err) {
             alert(`Error updating staff: ${err.message}`);
@@ -328,22 +365,27 @@ const StaffManagement = () => {
         }
     };
 
+    // ✅ FIXED: Delete staff with authentication
     const handleDelete = async (id) => {
         if (window.confirm('Are you sure you want to delete this staff member?')) {
             try {
                 setLoading(true);
                 
+                // ✅ ADDED AUTHENTICATION HEADERS
                 const response = await fetch(`${API_BASE_URL}/staff/${id}`, {
                     method: 'DELETE',
+                    headers: getAuthHeaders(),
                 });
 
                 if (!response.ok) {
+                    if (response.status === 401 || response.status === 403) {
+                        throw new Error('Authentication failed. Please login again.');
+                    }
                     throw new Error('Failed to delete staff');
                 }
 
                 alert('Staff member deleted successfully!');
                 
-                // Refresh staff list
                 fetchStaff();
                 fetchUpcomingSalaries();
             } catch (err) {
@@ -355,22 +397,27 @@ const StaffManagement = () => {
         }
     };
 
+    // ✅ FIXED: Add salary with authentication
     const handleAddSalary = async (id) => {
         try {
             setLoading(true);
             
+            // ✅ ADDED AUTHENTICATION HEADERS
             const response = await fetch(`${API_BASE_URL}/staff/salaries/${id}/add`, {
                 method: 'POST',
+                headers: getAuthHeaders(),
             });
 
             if (!response.ok) {
+                if (response.status === 401 || response.status === 403) {
+                    throw new Error('Authentication failed. Please login again.');
+                }
                 throw new Error('Failed to add salary entry');
             }
 
             const message = await response.json();
             alert(typeof message === 'string' ? message : 'Salary entry added successfully!');
             
-            // Refresh upcoming salaries
             fetchUpcomingSalaries();
         } catch (err) {
             alert(`Error adding salary: ${err.message}`);
@@ -386,22 +433,18 @@ const StaffManagement = () => {
         setStatusFilter('Active');
         setJoinedAfter('2023-01-01');
         setSalaryRange('₹10k - ₹30k');
-        // Trigger fetch with reset filters
         setTimeout(() => fetchStaff(), 0);
     };
 
-    // Apply filters when they change - with debounce for search
     useEffect(() => {
         const timeoutId = setTimeout(() => {
             fetchStaff();
-        }, 500); // 500ms debounce for search
+        }, 500);
 
         return () => clearTimeout(timeoutId);
     }, [searchQuery, roleFilter, statusFilter]);
 
     const filteredStaff = staff;
-
-    // Determine if we should show "no results" message
     const hasActiveFilters = searchQuery.trim() || roleFilter !== 'All' || statusFilter !== 'Active';
     const showNoResults = !loading && filteredStaff.length === 0 && !error;
 
@@ -436,7 +479,7 @@ const StaffManagement = () => {
                     </div>
                 </div>
 
-                {/* Error Message - Only for actual errors, not empty results */}
+                {/* Error Message */}
                 {error && (
                     <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
                         Error: {error}
@@ -701,45 +744,45 @@ const StaffManagement = () => {
                                     </label>
                                     <input
                                         type="text"
-                                        value={newStaff.name}
-                                        onChange={(e) =>
-                                            setNewStaff({ ...newStaff, name: e.target.value })
-                                        }
-                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                    />
-                                </div>
+                                        value={newStaff.name}onChange={(e) =>
+                                        setNewStaff({ ...newStaff, name: e.target.value })
+                                    }
+                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                />
+                            </div>
 
+                            <div>
+                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                    Phone *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={newStaff.phone}
+                                    onChange={(e) =>
+                                        setNewStaff({ ...newStaff, phone: e.target.value })
+                                    }
+                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <label className="block text-xs text-muted-foreground mb-1.5">
-                                        Phone *
+                                        Role
                                     </label>
-                                    <input
-                                        type="text"
-                                        value={newStaff.phone}
+                                    <select
+                                        value={newStaff.role}
                                         onChange={(e) =>
-                                            setNewStaff({ ...newStaff, phone: e.target.value })
+                                            setNewStaff({ ...newStaff, role: e.target.value })
                                         }
                                         className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                    />
+                                    >
+                                        <option value="Cashier">Cashier</option>
+                                        <option value="Waiter">Waiter</option>
+                                        <option value="Chef">Chef</option>
+                                    </select>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-xs text-muted-foreground mb-1.5">
-                                            Role
-                                        </label>
-                                        <select
-                                            value={newStaff.role}
-                                            onChange={(e) =>
-                                                setNewStaff({ ...newStaff, role: e.target.value })
-                                            }
-                                            className ="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
->
-<option value="Cashier">Cashier</option>
-<option value="Waiter">Waiter</option>
-<option value="Chef">Chef</option>
-</select>
-</div>
                                 <div>
                                     <label className="block text-xs text-muted-foreground mb-1.5">
                                         Joined On
@@ -957,7 +1000,5 @@ const StaffManagement = () => {
             )}
         </div>
     </div>
-);
-};
+);};
 export default StaffManagement;
-
