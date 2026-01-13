@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Search,
     UserPlus,
@@ -18,12 +18,32 @@ import {
 
 const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
 
-// ✅ AUTHENTICATION HELPER
+// ✅ FIXED: Check access_token FIRST (that's what your login saves!)
 const getAuthHeaders = () => {
-    const token = localStorage.getItem('token') || localStorage.getItem('acces_Token');
+    // Check access_token FIRST, then other possible locations
+    const tokenKeys = ['access_token', 'acces_Token', 'token', 'authToken', 'jwt', 'bearer', 'Token'];
+    let token = null;
+    let tokenKey = null;
+    
+    for (const key of tokenKeys) {
+        const value = localStorage.getItem(key);
+        if (value && value.length > 10) { // Valid tokens are usually long
+            token = value;
+            tokenKey = key;
+            break;
+        }
+    }
+    
+    console.log('🔑 Auth Check:', {
+        found: !!token,
+        key: tokenKey,
+        length: token ? token.length : 0,
+        preview: token ? token.substring(0, 20) + '...' : 'none'
+    });
     
     if (!token) {
-        console.error('No authentication token found in localStorage');
+        console.error('❌ No authentication token found');
+        console.log('📦 Available localStorage keys:', Object.keys(localStorage));
         return {
             'Content-Type': 'application/json',
         };
@@ -39,8 +59,6 @@ const StaffManagement = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [roleFilter, setRoleFilter] = useState('All');
     const [statusFilter, setStatusFilter] = useState('Active');
-    const [joinedAfter, setJoinedAfter] = useState('2023-01-01');
-    const [salaryRange, setSalaryRange] = useState('₹10k - ₹30k');
     const [showSearch, setShowSearch] = useState(false);
     const [showNewStaffModal, setShowNewStaffModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
@@ -81,8 +99,8 @@ const StaffManagement = () => {
         fetchUpcomingSalaries();
     }, []);
 
-    // ✅ FIXED: Fetch staff with proper error handling like PastOrders
-    const fetchStaff = async () => {
+    // ✅ FIXED: Stable fetchStaff using useCallback
+    const fetchStaff = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
@@ -105,20 +123,25 @@ const StaffManagement = () => {
             const queryString = params.toString();
             const url = `${API_BASE_URL}/staff${queryString ? '?' + queryString : ''}`;
             
-            console.log('Fetching staff from:', url);
+            console.log('📡 Fetching from:', url);
+            
+            const headers = getAuthHeaders();
             
             const response = await fetch(url, {
                 method: 'GET',
-                headers: getAuthHeaders(),
+                headers: headers,
             });
+            
+            console.log('📥 Response:', response.status, response.statusText);
             
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('API Error:', response.status, errorText);
+                console.error('❌ API Error:', response.status, errorText);
                 
-                // Silent fail for auth errors
+                // Handle auth errors
                 if (response.status === 401 || response.status === 403) {
-                    console.warn('Authentication failed - user may need to login');
+                    console.error('🔒 Auth failed - Status:', response.status);
+                    setError(`Authentication failed (${response.status}). Please check if you're logged in.`);
                     setStaff([]);
                     setLoading(false);
                     return;
@@ -128,49 +151,52 @@ const StaffManagement = () => {
             }
             
             const data = await response.json();
-            console.log('Received staff data:', data);
+            console.log('✅ Received staff data:', data);
             
             // Handle both array and object responses
             const staffArray = Array.isArray(data) ? data : (data.data || []);
             
             if (!Array.isArray(staffArray)) {
-                console.error('Unexpected data format:', data);
+                console.error('⚠️ Unexpected data format:', data);
                 setStaff([]);
                 return;
             }
             
+            // ✅ FIXED: Changed salary_amount to salary, joined_date to joined
             const transformedStaff = staffArray.map(member => ({
                 id: member.id,
                 name: member.name,
                 phone: member.phone,
                 role: member.role,
-                salary: `₹${member.salary_amount.toLocaleString('en-IN')} / month`,
-                salaryAmount: member.salary_amount,
-                joined: new Date(member.joined_date).toLocaleDateString('en-GB', {
+                salary: `₹${member.salary.toLocaleString('en-IN')} / month`,  // ✅ FIXED
+                salaryAmount: member.salary,  // ✅ FIXED
+                joined: new Date(member.joined).toLocaleDateString('en-GB', {  // ✅ FIXED
                     day: '2-digit',
                     month: 'short',
                     year: 'numeric',
                 }),
-                joinedDate: member.joined_date.split('T')[0],
+                joinedDate: member.joined.split('T')[0],  // ✅ FIXED
                 avatar: member.name.charAt(0).toUpperCase(),
                 color: getRandomColor(),
                 status: member.status,
                 aadhar: member.aadhar || '',
             }));
             
+            console.log('✅ Transformed staff:', transformedStaff.length, 'members');
             setStaff(transformedStaff);
         } catch (err) {
-            console.error('Error fetching staff:', err);
+            console.error('❌ Error fetching staff:', err);
             setError(err.message);
             setStaff([]);
         } finally {
             setLoading(false);
         }
-    };
+    }, [searchQuery, roleFilter, statusFilter]);
 
-    // ✅ FIXED: Fetch upcoming salaries
+    // ✅ FIXED: Fetch upcoming salaries with corrected field names
     const fetchUpcomingSalaries = async () => {
         try {
+            console.log('📡 Fetching upcoming salaries...');
             const response = await fetch(`${API_BASE_URL}/staff/upcoming-salaries`, {
                 method: 'GET',
                 headers: getAuthHeaders(),
@@ -178,7 +204,7 @@ const StaffManagement = () => {
             
             if (!response.ok) {
                 if (response.status === 401 || response.status === 403) {
-                    console.warn('Authentication failed for upcoming salaries');
+                    console.warn('⚠️ Auth failed for upcoming salaries');
                     return;
                 }
                 throw new Error('Failed to fetch upcoming salaries');
@@ -186,20 +212,21 @@ const StaffManagement = () => {
             
             const data = await response.json();
             
+            // ✅ FIXED: Changed salary_amount to salary.amount, due_date to dueDate
             const transformedSalaries = data.map(entry => ({
                 id: entry.id,
                 name: entry.name,
                 role: entry.role,
                 avatar: entry.name.charAt(0).toUpperCase(),
                 color: getRandomColor(),
-                amount: `₹${entry.salary_amount.toLocaleString('en-IN')}`,
-                dueDate: entry.due_date,
+                amount: `₹${entry.salary.amount.toLocaleString('en-IN')}`,  // ✅ FIXED - nested object
+                dueDate: entry.dueDate,  // ✅ FIXED
                 category: entry.category,
             }));
             
             setUpcomingSalaries(transformedSalaries);
         } catch (err) {
-            console.error('Error fetching upcoming salaries:', err);
+            console.error('❌ Error fetching upcoming salaries:', err);
         }
     };
 
@@ -242,7 +269,6 @@ const StaffManagement = () => {
         document.body.removeChild(link);
     };
 
-    // ✅ FIXED: Add staff
     const handleAddStaff = async () => {
         if (!newStaff.name || !newStaff.phone || !newStaff.salary) {
             alert('Please fill all required fields');
@@ -258,16 +284,17 @@ const StaffManagement = () => {
             setLoading(true);
             const salaryNum = parseFloat(newStaff.salary.replace(/[^0-9]/g, '')) || 0;
             
+            // ✅ FIXED: Changed salary_amount to salary, joined_date to joined
             const requestBody = {
                 name: newStaff.name,
                 phone: newStaff.phone,
                 role: newStaff.role,
-                salary_amount: salaryNum,
-                joined_date: new Date(newStaff.joined).toISOString(),
+                salary: salaryNum,  // ✅ FIXED
+                joined: new Date(newStaff.joined).toISOString(),  // ✅ FIXED
                 aadhar: newStaff.aadhar.replace(/\s/g, '') || null,
             };
 
-            console.log('Adding staff:', requestBody);
+            console.log('➕ Adding staff:', requestBody);
 
             const response = await fetch(`${API_BASE_URL}/staff`, {
                 method: 'POST',
@@ -319,7 +346,6 @@ const StaffManagement = () => {
         }
     };
 
-    // ✅ FIXED: Update staff
     const handleUpdateStaff = async () => {
         if (!editingStaff.name || !editingStaff.phone || !editingStaff.salary) {
             alert('Please fill all required fields');
@@ -335,16 +361,17 @@ const StaffManagement = () => {
             setLoading(true);
             const salaryNum = parseFloat(editingStaff.salary.replace(/[^0-9]/g, ''));
 
+            // ✅ FIXED: Changed salary_amount to salary
             const requestBody = {
                 name: editingStaff.name,
                 phone: editingStaff.phone,
                 role: editingStaff.role,
-                salary_amount: salaryNum,
+                salary: salaryNum,  // ✅ FIXED
                 aadhar: editingStaff.aadhar.replace(/\s/g, '') || null,
                 status: editingStaff.status,
             };
 
-            console.log('Updating staff:', requestBody);
+            console.log('✏️ Updating staff:', requestBody);
 
             const response = await fetch(`${API_BASE_URL}/staff/${editingStaff.id}`, {
                 method: 'PUT',
@@ -375,7 +402,6 @@ const StaffManagement = () => {
         }
     };
 
-    // ✅ FIXED: Delete staff
     const handleDelete = async (id) => {
         if (window.confirm('Are you sure you want to delete this staff member?')) {
             try {
@@ -406,7 +432,6 @@ const StaffManagement = () => {
         }
     };
 
-    // ✅ FIXED: Add salary
     const handleAddSalary = async (id) => {
         try {
             setLoading(true);
@@ -439,24 +464,23 @@ const StaffManagement = () => {
         setSearchQuery('');
         setRoleFilter('All');
         setStatusFilter('Active');
-        setJoinedAfter('2023-01-01');
-        setSalaryRange('₹10k - ₹30k');
         setTimeout(() => fetchStaff(), 0);
     };
 
+    // ✅ FIXED: Now fetchStaff is stable
     useEffect(() => {
         const timeoutId = setTimeout(() => {
             fetchStaff();
         }, 500);
 
         return () => clearTimeout(timeoutId);
-    }, [searchQuery, roleFilter, statusFilter]);
+    }, [fetchStaff]);
 
     const filteredStaff = staff;
     const hasActiveFilters = searchQuery.trim() || roleFilter !== 'All' || statusFilter !== 'Active';
     const showNoResults = !loading && filteredStaff.length === 0 && !error;
 
-    // Loading state like PastOrders
+    // Loading state
     if (loading && staff.length === 0) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center">
@@ -468,7 +492,7 @@ const StaffManagement = () => {
         );
     }
 
-    // Error state like PastOrders (only for critical errors)
+    // Error state
     if (error && staff.length === 0) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -476,12 +500,20 @@ const StaffManagement = () => {
                     <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
                     <h2 className="text-xl font-bold text-foreground mb-2">Error Loading Staff</h2>
                     <p className="text-muted-foreground mb-4">{error}</p>
-                    <button
-                        onClick={() => fetchStaff()}
-                        className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-                    >
-                        Try Again
-                    </button>
+                    <div className="flex gap-2 justify-center">
+                        <button
+                            onClick={() => fetchStaff()}
+                            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                        >
+                            Try Again
+                        </button>
+                        <button
+                            onClick={() => window.location.href = '/login'}
+                            className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/90 transition-colors"
+                        >
+                            Go to Login
+                        </button>
+                    </div>
                 </div>
             </div>
         );

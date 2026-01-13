@@ -162,19 +162,20 @@ const StaffManagement = () => {
                 return;
             }
             
+            // ✅ FIXED: Changed salary_amount to salary, joined_date to joined
             const transformedStaff = staffArray.map(member => ({
                 id: member.id,
                 name: member.name,
                 phone: member.phone,
                 role: member.role,
-                salary: `₹${member.salary_amount.toLocaleString('en-IN')} / month`,
-                salaryAmount: member.salary_amount,
-                joined: new Date(member.joined_date).toLocaleDateString('en-GB', {
+                salary: `₹${member.salary.toLocaleString('en-IN')} / month`,  // ✅ FIXED
+                salaryAmount: member.salary,  // ✅ FIXED
+                joined: new Date(member.joined).toLocaleDateString('en-GB', {  // ✅ FIXED
                     day: '2-digit',
                     month: 'short',
                     year: 'numeric',
                 }),
-                joinedDate: member.joined_date.split('T')[0],
+                joinedDate: member.joined.split('T')[0],  // ✅ FIXED
                 avatar: member.name.charAt(0).toUpperCase(),
                 color: getRandomColor(),
                 status: member.status,
@@ -192,7 +193,7 @@ const StaffManagement = () => {
         }
     }, [searchQuery, roleFilter, statusFilter]);
 
-    // ✅ FIXED: Fetch upcoming salaries
+    // ✅ FIXED: Fetch upcoming salaries with corrected field names
     const fetchUpcomingSalaries = async () => {
         try {
             console.log('📡 Fetching upcoming salaries...');
@@ -211,14 +212,15 @@ const StaffManagement = () => {
             
             const data = await response.json();
             
+            // ✅ FIXED: Changed salary_amount to salary.amount, due_date to dueDate
             const transformedSalaries = data.map(entry => ({
                 id: entry.id,
                 name: entry.name,
                 role: entry.role,
                 avatar: entry.name.charAt(0).toUpperCase(),
                 color: getRandomColor(),
-                amount: `₹${entry.salary_amount.toLocaleString('en-IN')}`,
-                dueDate: entry.due_date,
+                amount: `₹${entry.salary.amount.toLocaleString('en-IN')}`,  // ✅ FIXED - nested object
+                dueDate: entry.dueDate,  // ✅ FIXED
                 category: entry.category,
             }));
             
@@ -282,12 +284,13 @@ const StaffManagement = () => {
             setLoading(true);
             const salaryNum = parseFloat(newStaff.salary.replace(/[^0-9]/g, '')) || 0;
             
+            // ✅ FIXED: Changed salary_amount to salary, joined_date to joined
             const requestBody = {
                 name: newStaff.name,
                 phone: newStaff.phone,
                 role: newStaff.role,
-                salary_amount: salaryNum,
-                joined_date: new Date(newStaff.joined).toISOString(),
+                salary: salaryNum,  // ✅ FIXED
+                joined: new Date(newStaff.joined).toISOString(),  // ✅ FIXED
                 aadhar: newStaff.aadhar.replace(/\s/g, '') || null,
             };
 
@@ -358,11 +361,12 @@ const StaffManagement = () => {
             setLoading(true);
             const salaryNum = parseFloat(editingStaff.salary.replace(/[^0-9]/g, ''));
 
+            // ✅ FIXED: Changed salary_amount to salary
             const requestBody = {
                 name: editingStaff.name,
                 phone: editingStaff.phone,
                 role: editingStaff.role,
-                salary_amount: salaryNum,
+                salary: salaryNum,  // ✅ FIXED
                 aadhar: editingStaff.aadhar.replace(/\s/g, '') || null,
                 status: editingStaff.status,
             };

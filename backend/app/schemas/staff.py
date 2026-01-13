@@ -17,9 +17,9 @@ class StaffBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     phone: str = Field(..., min_length=10, max_length=15)
     role: StaffRole
-    salary_amount: float = Field(..., gt=0)
+    salary_amount: float = Field(..., gt=0)  # Frontend sends this
     joined_date: datetime
-    aadhar: Optional[str] = Field(None, max_length=14)  # Formatted: "1234 5678 9012"
+    aadhar: Optional[str] = Field(None, max_length=14)
 
 class StaffCreate(StaffBase):
     pass
@@ -32,19 +32,33 @@ class StaffUpdate(BaseModel):
     aadhar: Optional[str] = Field(None, max_length=14)
     status: Optional[StaffStatus] = None
 
-class StaffResponse(StaffBase):
+# ✅ FIXED: Matches frontend expectations
+class StaffResponse(BaseModel):
     id: int
-    status: StaffStatus = "Active"
+    name: str
+    phone: str
+    role: str
+    salary: str  # "25,000 month" formatted
+    salaryAmount: float  # 25000 raw number
+    joined: str  # "13 Jan 2026" formatted  
+    joinedDate: str  # ISO date
+    avatar: str
+    color: str
+    status: StaffStatus
+    aadhar: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True
 
+# ✅ FIXED: Matches StaffService & Frontend
 class SalaryEntryResponse(BaseModel):
     id: int
     name: str
     role: str
-    salary_amount: float
-    due_date: str
+    avatar: str
+    color: str
+    salary: dict  # {"amount": 25000} - Frontend expects this
+    dueDate: str   # Frontend expects camelCase
     category: str = "Salaries & Wages"

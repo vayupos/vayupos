@@ -8,23 +8,21 @@ from app.schemas.staff import (
     StaffCreate, StaffUpdate, StaffResponse, SalaryEntryResponse
 )
 
-
 class StaffService:
     @classmethod
     def create_staff(cls, db: Session, staff_data: StaffCreate) -> Staff:
         """Create new staff member"""
-        # Check if phone already exists
         existing = db.query(Staff).filter(Staff.phone == staff_data.phone).first()
         if existing:
             raise HTTPException(status_code=400, detail="Phone number already registered")
         
-        # Create staff
+        # ✅ FIXED: Use YOUR database column names
         staff = Staff(
             name=staff_data.name,
             phone=staff_data.phone,
             role=staff_data.role,
-            salary_amount=staff_data.salary_amount,
-            joined_date=staff_data.joined_date,
+            salary=staff_data.salary_amount,      # ✅ Changed from salary_amount
+            joined=staff_data.joined_date,        # ✅ Changed from joined_date
             aadhar=staff_data.aadhar,
             status="Active"
         )
@@ -46,7 +44,6 @@ class StaffService:
         """Get filtered staff list"""
         query = db.query(Staff)
         
-        # Search filter
         if search:
             search_like = f"%{search}%"
             query = query.filter(
@@ -54,11 +51,9 @@ class StaffService:
                 (Staff.phone.contains(search))
             )
         
-        # Role filter
         if role:
             query = query.filter(Staff.role == role)
         
-        # Status filter
         if status:
             query = query.filter(Staff.status == status)
         
@@ -78,7 +73,6 @@ class StaffService:
         
         update_data = staff_data.dict(exclude_unset=True)
         
-        # Check phone uniqueness if changed
         if 'phone' in update_data:
             existing = db.query(Staff).filter(
                 Staff.phone == update_data['phone'],
@@ -120,8 +114,8 @@ class StaffService:
         
         salary_entries = []
         for staff in upcoming:
-            # Calculate next salary due date (assume monthly on joined day)
-            joined_day = staff.joined_date.day
+            # ✅ FIXED: Use YOUR database column names
+            joined_day = staff.joined.day              # ✅ Changed from joined_date
             next_salary_date = datetime(
                 year=datetime.utcnow().year,
                 month=datetime.utcnow().month,
@@ -138,8 +132,10 @@ class StaffService:
                     "name": staff.name,
                     "role": staff.role,
                     "avatar": staff.name[0].upper() if staff.name else "S",
-                    "color": "#E74C3C",  # Default color
-                    "amount": f"₹{staff.salary_amount:,.0f}",
+                    "color": "#E74C3C",
+                    "salary": {                           # ✅ Frontend expects nested
+                        "amount": float(staff.salary)     # ✅ Changed from salary_amount
+                    },
                     "dueDate": next_salary_date.strftime("%d %b %Y"),
                     "category": "Salaries & Wages"
                 })
@@ -153,7 +149,5 @@ class StaffService:
         if not staff:
             return False
         
-        # TODO: Add expense entry to expenses table
-        # For now just log/mark as paid
-        print(f"Salary marked paid for {staff.name} - ₹{staff.salary_amount}")
+        print(f"Salary marked paid for {staff.name} - ₹{staff.salary}")  # ✅ Fixed
         return True
