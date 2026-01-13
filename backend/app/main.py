@@ -24,9 +24,9 @@ app = FastAPI(
 
 # CORS
 origins = [
-    "*",
+    
     "http://localhost:3000",
-    "https://restaurant-vayupos.onrender.com",
+     "https://restaurant-vayu-pos.vercel.app",
 ]
 
 app.add_middleware(
