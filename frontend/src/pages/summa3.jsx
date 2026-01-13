@@ -17,16 +17,24 @@ import {
 
 const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
 
-// ✅ AUTHENTICATION HELPER - ADD THIS RIGHT AFTER API_BASE_URL
+// ✅ IMPROVED AUTHENTICATION HELPER WITH DEBUGGING
 const getAuthHeaders = () => {
-    // Try both possible token keys from your login
-    const token = localStorage.getItem('token') || localStorage.getItem('accessToken');
+    // Check all possible token keys
+    const token = localStorage.getItem('access_Token') || 
+                  localStorage.getItem('token') || 
+                  localStorage.getItem('accessToken') ||
+                  localStorage.getItem('authToken');
+    
+    console.log('=== TOKEN DEBUG ===');
+    console.log('Checking localStorage keys:', Object.keys(localStorage));
+    console.log('Token found:', token ? 'YES' : 'NO');
+    console.log('Token value:', token ? token.substring(0, 20) + '...' : 'null');
     
     if (!token) {
-        console.error('No authentication token found in localStorage');
-        return {
-            'Content-Type': 'application/json',
-        };
+        console.error('❌ No authentication token found in localStorage');
+        console.log('Available keys in localStorage:', Object.keys(localStorage));
+        // Don't return headers without token for authenticated requests
+        return null;
     }
     
     return {
@@ -47,6 +55,7 @@ const StaffManagement = () => {
     const [editingStaff, setEditingStaff] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [authError, setAuthError] = useState(false);
 
     const [newStaff, setNewStaff] = useState({
         name: '',
@@ -75,17 +84,30 @@ const StaffManagement = () => {
 
     const getRandomColor = () => colors[Math.floor(Math.random() * colors.length)];
 
-    // Fetch staff on component mount
+    // ✅ CHECK AUTHENTICATION ON MOUNT
     useEffect(() => {
+        const headers = getAuthHeaders();
+        if (!headers) {
+            setAuthError(true);
+            setError('Please login to access this page. No authentication token found.');
+            return;
+        }
+        setAuthError(false);
         fetchStaff();
         fetchUpcomingSalaries();
     }, []);
 
-    // ✅ FIXED: Fetch staff with authentication
+    // ✅ IMPROVED: Fetch staff with better error handling
     const fetchStaff = async () => {
         try {
             setLoading(true);
             setError(null);
+            
+            const headers = getAuthHeaders();
+            if (!headers) {
+                setAuthError(true);
+                throw new Error('Authentication token not found. Please login again.');
+            }
             
             const params = new URLSearchParams();
             
@@ -105,27 +127,30 @@ const StaffManagement = () => {
             const queryString = params.toString();
             const url = `${API_BASE_URL}/staff${queryString ? '?' + queryString : ''}`;
             
-            console.log('Fetching staff from:', url);
+            console.log('📡 Fetching staff from:', url);
+            console.log('📡 Headers:', headers);
             
-            // ✅ ADDED AUTHENTICATION HEADERS
             const response = await fetch(url, {
-                headers: getAuthHeaders(),
+                method: 'GET',
+                headers: headers,
             });
+            
+            console.log('📡 Response status:', response.status);
             
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-                console.error('API Error Response:', errorData);
+                console.error('❌ API Error Response:', errorData);
                 
-                // ✅ CHECK FOR AUTH ERRORS
                 if (response.status === 401 || response.status === 403) {
+                    setAuthError(true);
                     throw new Error('Authentication failed. Please login again.');
                 }
                 
-                throw new Error(errorData?.detail || 'Failed to fetch staff');
+                throw new Error(errorData?.detail || `Failed to fetch staff (${response.status})`);
             }
             
             const data = await response.json();
-            console.log('Received staff data:', data);
+            console.log('✅ Received staff data:', data);
             
             const transformedStaff = data.map(member => ({
                 id: member.id,
@@ -147,8 +172,9 @@ const StaffManagement = () => {
             }));
             
             setStaff(transformedStaff);
+            setAuthError(false);
         } catch (err) {
-            console.error('Error fetching staff:', err);
+            console.error('❌ Error fetching staff:', err);
             setError(err.message);
             setStaff([]);
         } finally {
@@ -156,12 +182,18 @@ const StaffManagement = () => {
         }
     };
 
-    // ✅ FIXED: Fetch upcoming salaries with authentication
+    // ✅ IMPROVED: Fetch upcoming salaries
     const fetchUpcomingSalaries = async () => {
         try {
-            // ✅ ADDED AUTHENTICATION HEADERS
+            const headers = getAuthHeaders();
+            if (!headers) {
+                console.error('Cannot fetch upcoming salaries: No auth token');
+                return;
+            }
+            
             const response = await fetch(`${API_BASE_URL}/staff/upcoming-salaries`, {
-                headers: getAuthHeaders(),
+                method: 'GET',
+                headers: headers,
             });
             
             if (!response.ok) {
@@ -230,7 +262,6 @@ const StaffManagement = () => {
         document.body.removeChild(link);
     };
 
-    // ✅ FIXED: Add staff with authentication
     const handleAddStaff = async () => {
         if (!newStaff.name || !newStaff.phone || !newStaff.salary) {
             alert('Please fill all required fields');
@@ -244,6 +275,12 @@ const StaffManagement = () => {
 
         try {
             setLoading(true);
+            
+            const headers = getAuthHeaders();
+            if (!headers) {
+                throw new Error('Authentication token not found. Please login again.');
+            }
+            
             const salaryNum = parseFloat(newStaff.salary.replace(/[^0-9]/g, '')) || 0;
             
             const requestBody = {
@@ -255,12 +292,11 @@ const StaffManagement = () => {
                 aadhar: newStaff.aadhar.replace(/\s/g, '') || null,
             };
 
-            console.log('Adding staff:', requestBody);
+            console.log('📡 Adding staff:', requestBody);
 
-            // ✅ ADDED AUTHENTICATION HEADERS
             const response = await fetch(`${API_BASE_URL}/staff`, {
                 method: 'POST',
-                headers: getAuthHeaders(),
+                headers: headers,
                 body: JSON.stringify(requestBody),
             });
 
@@ -275,6 +311,7 @@ const StaffManagement = () => {
             }
 
             const data = await response.json();
+            console.log('✅ Staff added:', data);
             
             setNewStaff({
                 name: '',
@@ -308,7 +345,6 @@ const StaffManagement = () => {
         }
     };
 
-    // ✅ FIXED: Update staff with authentication
     const handleUpdateStaff = async () => {
         if (!editingStaff.name || !editingStaff.phone || !editingStaff.salary) {
             alert('Please fill all required fields');
@@ -322,6 +358,12 @@ const StaffManagement = () => {
 
         try {
             setLoading(true);
+            
+            const headers = getAuthHeaders();
+            if (!headers) {
+                throw new Error('Authentication token not found. Please login again.');
+            }
+            
             const salaryNum = parseFloat(editingStaff.salary.replace(/[^0-9]/g, ''));
 
             const requestBody = {
@@ -333,12 +375,11 @@ const StaffManagement = () => {
                 status: editingStaff.status,
             };
 
-            console.log('Updating staff:', requestBody);
+            console.log('📡 Updating staff:', requestBody);
 
-            // ✅ ADDED AUTHENTICATION HEADERS
             const response = await fetch(`${API_BASE_URL}/staff/${editingStaff.id}`, {
                 method: 'PUT',
-                headers: getAuthHeaders(),
+                headers: headers,
                 body: JSON.stringify(requestBody),
             });
 
@@ -365,16 +406,19 @@ const StaffManagement = () => {
         }
     };
 
-    // ✅ FIXED: Delete staff with authentication
     const handleDelete = async (id) => {
         if (window.confirm('Are you sure you want to delete this staff member?')) {
             try {
                 setLoading(true);
                 
-                // ✅ ADDED AUTHENTICATION HEADERS
+                const headers = getAuthHeaders();
+                if (!headers) {
+                    throw new Error('Authentication token not found. Please login again.');
+                }
+                
                 const response = await fetch(`${API_BASE_URL}/staff/${id}`, {
                     method: 'DELETE',
-                    headers: getAuthHeaders(),
+                    headers: headers,
                 });
 
                 if (!response.ok) {
@@ -397,15 +441,18 @@ const StaffManagement = () => {
         }
     };
 
-    // ✅ FIXED: Add salary with authentication
     const handleAddSalary = async (id) => {
         try {
             setLoading(true);
             
-            // ✅ ADDED AUTHENTICATION HEADERS
+            const headers = getAuthHeaders();
+            if (!headers) {
+                throw new Error('Authentication token not found. Please login again.');
+            }
+            
             const response = await fetch(`${API_BASE_URL}/staff/salaries/${id}/add`, {
                 method: 'POST',
-                headers: getAuthHeaders(),
+                headers: headers,
             });
 
             if (!response.ok) {
@@ -437,6 +484,8 @@ const StaffManagement = () => {
     };
 
     useEffect(() => {
+        if (authError) return; // Don't fetch if auth error
+        
         const timeoutId = setTimeout(() => {
             fetchStaff();
         }, 500);
@@ -447,6 +496,31 @@ const StaffManagement = () => {
     const filteredStaff = staff;
     const hasActiveFilters = searchQuery.trim() || roleFilter !== 'All' || statusFilter !== 'Active';
     const showNoResults = !loading && filteredStaff.length === 0 && !error;
+
+    // ✅ SHOW AUTH ERROR UI
+    if (authError) {
+        return (
+            <div className="min-h-screen bg-background flex items-center justify-center p-4">
+                <div className="bg-card rounded-xl border border-border p-8 max-w-md w-full text-center">
+                    <div className="text-red-500 mb-4">
+                        <X className="w-16 h-16 mx-auto" />
+                    </div>
+                    <h2 className="text-xl font-semibold text-card-foreground mb-2">
+                        Authentication Required
+                    </h2>
+                    <p className="text-muted-foreground mb-6">
+                        Please login to access the staff management page.
+                    </p>
+                    <button
+                        onClick={() => window.location.href = '/login'}
+                        className="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors"
+                    >
+                        Go to Login
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-background">
@@ -482,7 +556,7 @@ const StaffManagement = () => {
                 {/* Error Message */}
                 {error && (
                     <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
-                        Error: {error}
+                        <strong>Error:</strong> {error}
                     </div>
                 )}
 
@@ -682,69 +756,70 @@ const StaffManagement = () => {
                                             className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white"
                                             style={{ backgroundColor: entry.color }}
                                         >
-                                            {entry.avatar}
+                                        {entry.avatar}
+                                    </div>
+                                    <div>
+                                        <div className="text-sm font-medium text-card-foreground">
+                                            {entry.name}
                                         </div>
-                                        <div>
-                                            <div className="text-sm font-medium text-card-foreground">
-                                                {entry.name}
-                                            </div>
-                                            <div className="text-xs text-muted-foreground">
-                                                {entry.role} • {entry.category}
-                                            </div>
+                                        <div className="text-xs text-muted-foreground">
+                                            {entry.role} • {entry.category}
                                         </div>
                                     </div>
-
-                                    <div className="hidden sm:block text-sm text-card-foreground">
-                                        {entry.amount}
-                                    </div>
-
-                                    <div className="hidden sm:block text-xs text-muted-foreground">
-                                        Due on {entry.dueDate}
-                                    </div>
-
-                                    <button
-                                        onClick={() => handleAddSalary(entry.id)}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs sm:text-sm font-medium hover:bg-teal-700 transition-colors"
-                                    >
-                                        <PlusCircle className="w-4 h-4" />
-                                        <span>Add Now</span>
-                                    </button>
                                 </div>
-                            ))}
 
-                            {upcomingSalaries.length === 0 && !loading && (
-                                <div className="py-4 text-center text-sm text-muted-foreground">
-                                    No upcoming salary entries.
+                                <div className="hidden sm:block text-sm text-card-foreground">
+                                    {entry.amount}
                                 </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
 
-                {/* New Staff Modal */}
-                {showNewStaffModal && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-2">
-                        <div className="bg-card rounded-xl border border-border w-full max-w-md p-4 sm:p-5">
-                            <div className="flex items-center justify-between mb-4">
-                                <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
-                                    Add New Staff
-                                </h2>
+                                <div className="hidden sm:block text-xs text-muted-foreground">
+                                    Due on {entry.dueDate}
+                                </div>
+
                                 <button
-                                    onClick={() => setShowNewStaffModal(false)}
-                                    className="text-muted-foreground hover:text-foreground"
+                                    onClick={() => handleAddSalary(entry.id)}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs sm:text-sm font-medium hover:bg-teal-700 transition-colors"
                                 >
-                                    <X className="w-4 h-4" />
+                                    <PlusCircle className="w-4 h-4" />
+                                    <span>Add Now</span>
                                 </button>
                             </div>
+                        ))}
 
-                            <div className="space-y-3">
-                                <div>
-                                    <label className="block text-xs text-muted-foreground mb-1.5">
-                                        Name *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={newStaff.name}onChange={(e) =>
+                        {upcomingSalaries.length === 0 && !loading && (
+                            <div className="py-4 text-center text-sm text-muted-foreground">
+                                No upcoming salary entries.
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* New Staff Modal */}
+            {showNewStaffModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-2">
+                    <div className="bg-card rounded-xl border border-border w-full max-w-md p-4 sm:p-5">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
+                                Add New Staff
+                            </h2>
+                            <button
+                                onClick={() => setShowNewStaffModal(false)}
+                                className="text-muted-foreground hover:text-foreground"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                    Name *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={newStaff.name}
+                                    onChange={(e) =>
                                         setNewStaff({ ...newStaff, name: e.target.value })
                                     }
                                     className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
