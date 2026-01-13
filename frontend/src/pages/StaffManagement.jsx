@@ -18,10 +18,10 @@ import {
 
 const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
 
-// ✅ ENHANCED: Better token detection
+// ✅ FIXED: Check access_token FIRST (that's what your login saves!)
 const getAuthHeaders = () => {
-    // Check all possible token locations
-    const tokenKeys = ['token', 'acces_Token', 'access_token', 'authToken', 'jwt', 'bearer', 'Token'];
+    // Check access_token FIRST, then other possible locations
+    const tokenKeys = ['access_token', 'acces_Token', 'token', 'authToken', 'jwt', 'bearer', 'Token'];
     let token = null;
     let tokenKey = null;
     
@@ -65,7 +65,6 @@ const StaffManagement = () => {
     const [editingStaff, setEditingStaff] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [debugInfo, setDebugInfo] = useState(null);
 
     const [newStaff, setNewStaff] = useState({
         name: '',
@@ -94,30 +93,6 @@ const StaffManagement = () => {
 
     const getRandomColor = () => colors[Math.floor(Math.random() * colors.length)];
 
-    // 🔍 DEBUG: Check auth on mount
-    useEffect(() => {
-        console.log('🚀 Staff Management mounted');
-        
-        // Detailed localStorage check
-        const allKeys = Object.keys(localStorage);
-        console.log('📦 localStorage keys:', allKeys);
-        
-        const debug = {
-            timestamp: new Date().toISOString(),
-            localStorageKeys: allKeys,
-            tokens: {}
-        };
-        
-        ['token', 'acces_Token', 'access_token', 'authToken'].forEach(key => {
-            const value = localStorage.getItem(key);
-            debug.tokens[key] = value ? `EXISTS (${value.length} chars)` : 'NOT FOUND';
-        });
-        
-        console.log('🔍 Debug Info:', debug);
-        setDebugInfo(debug);
-        
-    }, []);
-
     // Fetch staff on component mount
     useEffect(() => {
         fetchStaff();
@@ -129,8 +104,6 @@ const StaffManagement = () => {
         try {
             setLoading(true);
             setError(null);
-            
-            console.log('📡 Starting fetchStaff...');
             
             const params = new URLSearchParams();
             
@@ -150,10 +123,9 @@ const StaffManagement = () => {
             const queryString = params.toString();
             const url = `${API_BASE_URL}/staff${queryString ? '?' + queryString : ''}`;
             
-            console.log('🌐 Fetching from:', url);
+            console.log('📡 Fetching from:', url);
             
             const headers = getAuthHeaders();
-            console.log('📤 Headers:', headers.Authorization ? 'Token included' : 'NO TOKEN!');
             
             const response = await fetch(url, {
                 method: 'GET',
@@ -169,7 +141,6 @@ const StaffManagement = () => {
                 // Handle auth errors
                 if (response.status === 401 || response.status === 403) {
                     console.error('🔒 Auth failed - Status:', response.status);
-                    console.log('Current localStorage:', Object.keys(localStorage));
                     setError(`Authentication failed (${response.status}). Please check if you're logged in.`);
                     setStaff([]);
                     setLoading(false);
@@ -512,12 +483,6 @@ const StaffManagement = () => {
                 <div className="text-center">
                     <RotateCw className="animate-spin h-12 w-12 text-primary mx-auto mb-4" />
                     <p className="text-lg text-foreground">Loading staff...</p>
-                    {debugInfo && (
-                        <div className="mt-4 p-4 bg-muted rounded text-left text-xs max-w-md mx-auto">
-                            <p className="font-bold mb-2">Debug Info:</p>
-                            <pre className="whitespace-pre-wrap">{JSON.stringify(debugInfo, null, 2)}</pre>
-                        </div>
-                    )}
                 </div>
             </div>
         );
@@ -531,14 +496,6 @@ const StaffManagement = () => {
                     <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
                     <h2 className="text-xl font-bold text-foreground mb-2">Error Loading Staff</h2>
                     <p className="text-muted-foreground mb-4">{error}</p>
-                    
-                    {debugInfo && (
-                        <div className="mb-4 p-3 bg-muted rounded text-left text-xs">
-                            <p className="font-bold mb-2">Debug Info:</p>
-                            <pre className="whitespace-pre-wrap">{JSON.stringify(debugInfo, null, 2)}</pre>
-                        </div>
-                    )}
-                    
                     <div className="flex gap-2 justify-center">
                         <button
                             onClick={() => fetchStaff()}
@@ -561,20 +518,6 @@ const StaffManagement = () => {
     return (
         <div className="min-h-screen bg-background">
             <div className="p-3 sm:p-4 lg:p-6 xl:p-8 max-w-[1400px] mx-auto">
-                {/* Debug Info Banner - REMOVE THIS AFTER DEBUGGING */}
-                {debugInfo && (
-                    <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
-                        <p className="font-bold mb-1">🔍 Debug Info (remove this after fixing):</p>
-                        <p className="mb-1">localStorage keys: {debugInfo.localStorageKeys.join(', ')}</p>
-                        <p className="font-semibold">Token checks:</p>
-                        <ul className="ml-4">
-                            {Object.entries(debugInfo.tokens).map(([key, value]) => (
-                                <li key={key}>{key}: {value}</li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
-                
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 sm:mb-6">
                     <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-foreground">Staff</h1>
