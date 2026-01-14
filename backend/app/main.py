@@ -23,18 +23,18 @@ app = FastAPI(
 )
 
 # CORS
-origins = [
-    
-    "http://localhost:3000",
-     "https://restaurant-vayu-pos.vercel.app",
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "https://restaurant-vayu-pos.vercel.app",
+        "https://restaurant-vayupos.onrender.com",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Static files
