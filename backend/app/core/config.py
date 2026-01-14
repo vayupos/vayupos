@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
     DATABASE_URL: str = "postgresql://vayupos_user:IfoCaeUPm9fhhgnJFj23f4Ks3LfqXDcq@dpg-d5e0uhvgi27c73e7dslg-a/vayupos"
-    SECRET_KEY: str = "your-secret-key-change-this-in-production"
+    SECRET_KEY: str = "UB4lQIjjJg6KvPno8UWOC9omiLQ1d6q8E2CA6V_LLuY"
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION: int = 3600  # 1 hour in seconds
     
