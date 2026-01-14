@@ -24,7 +24,7 @@ app = FastAPI(
     version=settings.app_version,
 )
 
-# CORS
+# CORS - Must be added FIRST (last in order)
 cors_origins = [
     "http://localhost:3000",
     "http://localhost:5173",
@@ -36,9 +36,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
+    max_age=3600,
 )
 
 # Static files
@@ -48,6 +49,12 @@ uploads_dir = static_dir / "uploads" / "products"
 uploads_dir.mkdir(parents=True, exist_ok=True)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# ✅ OPTIONS handler for preflight requests
+@app.options("/{full_path:path}")
+async def preflight_handler(full_path: str):
+    """Handle CORS preflight requests"""
+    return {}
 
 # ✅ FIXED STARTUP - NO AWAIT
 @app.on_event("startup")
