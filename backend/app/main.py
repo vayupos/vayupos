@@ -23,14 +23,16 @@ app = FastAPI(
 )
 
 # CORS
+cors_origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://restaurant-vayu-pos.vercel.app",
+    "https://restaurant-vayupos.onrender.com",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "https://restaurant-vayu-pos.vercel.app",
-        "https://restaurant-vayupos.onrender.com",
-    ],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
