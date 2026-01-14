@@ -39,9 +39,9 @@ class StaffResponse(BaseModel):
     phone: str
     role: str
     salary: float                           # ✅ Single field - matches DB
-    joined: str                             # ✅ Frontend formatted date
-    avatar: str
-    color: str
+    joined: datetime                        # ✅ Keep as datetime - will be formatted by frontend
+    avatar: Optional[str] = None
+    color: Optional[str] = None
     status: StaffStatus
     aadhar: Optional[str] = None
     created_at: datetime
