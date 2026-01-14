@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, date
 from enum import Enum
 
@@ -17,8 +17,8 @@ class StaffBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     phone: str = Field(..., min_length=10, max_length=15)
     role: StaffRole
-    salary: float = Field(..., gt=0)           # ✅ FIXED
-    joined: date                               # ✅ FIXED
+    salary: float = Field(..., gt=0)
+    joined: date
     aadhar: Optional[str] = Field(None, max_length=14)
 
 class StaffCreate(StaffBase):
@@ -28,20 +28,18 @@ class StaffUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=2, max_length=100)
     phone: Optional[str] = Field(None, min_length=10, max_length=15)
     role: Optional[StaffRole] = None
-    salary: Optional[float] = Field(None, gt=0)  # ✅ FIXED
+    salary: Optional[float] = Field(None, gt=0)
     aadhar: Optional[str] = Field(None, max_length=14)
     status: Optional[StaffStatus] = None
 
-# Response schemas are perfect ✅
+# ✅ FIXED - Matches model + frontend exactly
 class StaffResponse(BaseModel):
     id: int
     name: str
     phone: str
     role: str
-    salary: str
-    salaryAmount: float
-    joined: str
-    joinedDate: str
+    salary: float                           # ✅ Single field - matches DB
+    joined: str                             # ✅ Frontend formatted date
     avatar: str
     color: str
     status: StaffStatus
@@ -58,6 +56,6 @@ class SalaryEntryResponse(BaseModel):
     role: str
     avatar: str
     color: str
-    salary: dict
+    salary: dict                            # ✅ Matches service response
     dueDate: str
     category: str = "Salaries & Wages"
