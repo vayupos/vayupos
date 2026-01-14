@@ -5,6 +5,8 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from pathlib import Path
 from sqlalchemy import text  # SQLAlchemy 2.0 fix
+import subprocess
+import os
 
 from app.core.config import get_settings
 from app.core.database import init_db, get_db  # init_db() is SYNC
@@ -50,6 +52,22 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # ✅ FIXED STARTUP - NO AWAIT
 @app.on_event("startup")
 def startup_event():  # ✅ SYNC function
+    # Run migrations
+    try:
+        alembic_dir = Path(__file__).parent.parent / "alembic"
+        result = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            cwd=str(alembic_dir.parent),
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0:
+            print("✓ Database migrations completed")
+        else:
+            print(f"⚠ Migration warning: {result.stderr}")
+    except Exception as e:
+        print(f"⚠ Could not run migrations: {str(e)}")
+    
     init_db()  # ✅ SYNC call
     print("✓ Database initialized")
     print(f"✓ Static: {static_dir.absolute()}")
