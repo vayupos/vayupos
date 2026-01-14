@@ -20,7 +20,7 @@ class StaffService:
             salary=staff_data.salary,        # ✅ FIXED: salary (not salary_amount)
             joined=staff_data.joined,        # ✅ FIXED: joined (not joined_date)
             aadhar=staff_data.aadhar,
-            status="Active"
+            is_active=True
         )
         db.add(staff)
         db.commit()
@@ -38,7 +38,9 @@ class StaffService:
         if role:
             query = query.filter(Staff.role == role)
         if status:
-            query = query.filter(Staff.status == status)
+            # Convert status string to is_active boolean
+            is_active = status.lower() == "active"
+            query = query.filter(Staff.is_active == is_active)
         return query.offset(skip).limit(limit).all()
 
     @classmethod
@@ -58,6 +60,11 @@ class StaffService:
             ).first()
             if existing:
                 raise HTTPException(status_code=400, detail="Phone number already registered")
+        
+        # Convert status string to is_active boolean if provided
+        if 'status' in update_data:
+            status_value = update_data.pop('status')
+            update_data['is_active'] = status_value.lower() == "active"
         
         for field, value in update_data.items():
             setattr(staff, field, value)

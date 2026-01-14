@@ -12,7 +12,11 @@ class Staff(Base):
     salary = Column(Float, nullable=False)              # ✅ FIXED: was salary_amount
     joined = Column(DateTime, nullable=False)           # ✅ FIXED: was joined_date
     aadhar = Column(String(14))
-    status = Column(String(20), default="Active")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    @property
+    def status(self) -> str:
+        """Convert is_active boolean to status string for API responses"""
+        return "Active" if self.is_active else "Inactive"
