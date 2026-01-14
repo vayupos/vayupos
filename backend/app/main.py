@@ -54,10 +54,13 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 def startup_event():  # ✅ SYNC function
     # Run migrations
     try:
-        alembic_dir = Path(__file__).parent.parent / "alembic"
+        backend_dir = Path(__file__).parent.parent
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(backend_dir)
         result = subprocess.run(
             ["alembic", "upgrade", "head"],
-            cwd=str(alembic_dir.parent),
+            cwd=str(backend_dir),
+            env=env,
             capture_output=True,
             text=True
         )
