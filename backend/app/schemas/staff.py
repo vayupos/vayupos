@@ -54,8 +54,11 @@ class SalaryEntryResponse(BaseModel):
     id: int
     name: str
     role: str
-    avatar: str
-    color: str
+    avatar: Optional[str] = None
+    color: Optional[str] = None
     salary: dict                            # ✅ Matches service response
     dueDate: str
     category: str = "Salaries & Wages"
+    
+    class Config:
+        from_attributes = True
