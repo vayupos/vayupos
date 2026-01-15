@@ -9,7 +9,7 @@ from app.models.payment import Payment, PaymentMethod, PaymentStatus
 from app.models.inventory_log import InventoryLog, InventoryAction
 from app.models.coupon import Coupon  # ← ADD THIS
 from app.models.dish_template import DishTemplate  
-from app.models.expense import Expense  # ← ADD THIS
+#from app.models.expense import Expense  # ← ADD THIS
 
 
 __all__ = [
