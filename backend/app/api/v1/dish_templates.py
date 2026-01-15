@@ -29,6 +29,7 @@ def dish_to_dict(dish) -> dict:
 
 
 @router.get("/", response_model=List[DishTemplateOut])
+@router.get("", response_model=List[DishTemplateOut])
 def list_dish_templates(
     skip: int = 0,
     limit: int = 100,
@@ -42,6 +43,7 @@ def list_dish_templates(
 
 
 @router.post("/", response_model=DishTemplateOut)
+@router.post("", response_model=DishTemplateOut)
 def create_dish_template(
     dish_in: DishTemplateCreate,
     db: Session = Depends(get_db),
