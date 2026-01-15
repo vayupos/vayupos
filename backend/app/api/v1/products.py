@@ -9,7 +9,7 @@ from app.schemas import (
     ProductUpdate,
 )
 
-router = APIRouter(prefix="", tags=["Products"])
+router = APIRouter(prefix="/products", tags=["Products"])
 
 
 def product_to_dict(product, include_category=True):
@@ -51,7 +51,7 @@ def product_to_dict(product, include_category=True):
 
 # ============= Product Routes =============
 
-@router.post("/products")
+@router.post("")
 def create_product(
     product_create: ProductCreate,
     current_user: dict = Depends(get_current_user),
@@ -62,7 +62,7 @@ def create_product(
     return product_to_dict(product)
 
 
-@router.get("/products")
+@router.get("")
 def list_products(
     skip: int = 0,
     limit: int = 100,
@@ -82,7 +82,7 @@ def list_products(
     }
 
 
-@router.get("/products/low-stock")
+@router.get("/low-stock")
 def get_low_stock_products(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -92,7 +92,7 @@ def get_low_stock_products(
     return [product_to_dict(p, include_category=False) for p in products]
 
 
-@router.get("/products/search")
+@router.get("/search")
 def search_products(
     q: str,
     db: Session = Depends(get_db),
@@ -102,7 +102,7 @@ def search_products(
     return [product_to_dict(p, include_category=False) for p in products]
 
 
-@router.get("/products/{product_id}")
+@router.get("/{product_id}")
 def get_product(product_id: int, db: Session = Depends(get_db)):
     """Get product by ID"""
     product = ProductService.get_product_by_id(db, product_id)
@@ -111,7 +111,7 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
     return product_to_dict(product)
 
 
-@router.put("/products/{product_id}")
+@router.put("/{product_id}")
 def update_product(
     product_id: int,
     product_update: ProductUpdate,
@@ -123,7 +123,7 @@ def update_product(
     return product_to_dict(product)
 
 
-@router.delete("/products/{product_id}")
+@router.delete("/{product_id}")
 def delete_product(
     product_id: int,
     current_user: dict = Depends(get_current_user),

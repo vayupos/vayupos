@@ -24,11 +24,11 @@ from app.models.category import Category
 from app.models.order_coupon import OrderCoupon
 from app.models.coupon_category import CouponCategory
 
-router = APIRouter()
+router = APIRouter(prefix="/coupons", tags=["Coupons"])
 
 
 @router.post(
-    "/coupons",
+    "",
     response_model=CouponResponse,
     status_code=status.HTTP_201_CREATED,
 )
@@ -41,7 +41,7 @@ def create_coupon(
     return CouponService.create_coupon(db, coupon_data)
 
 
-@router.get("/coupons", response_model=List[CouponResponse])
+@router.get("", response_model=List[CouponResponse])
 def list_coupons(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
@@ -54,7 +54,7 @@ def list_coupons(
 
 
 # ✅ FIXED: Changed from Query parameter to request body
-@router.get("/coupons/available", response_model=CouponAvailableResponse)
+@router.get("/available", response_model=CouponAvailableResponse)
 def get_available_coupons(
     db: Session = Depends(get_db),
 ):
@@ -75,7 +75,7 @@ def get_available_coupons(
 
 
 # ✅ FIXED: This is the main endpoint that was causing the error
-@router.post("/coupons/validate", response_model=CouponValidateResponse)
+@router.post("/validate", response_model=CouponValidateResponse)
 def validate_coupon(
     request: CouponValidateRequest,  # ✅ Now accepts body with code + order_total
     db: Session = Depends(get_db),
@@ -119,7 +119,7 @@ def validate_coupon(
     }
 
 
-@router.get("/coupons/{coupon_id}", response_model=CouponResponse)
+@router.get("/{coupon_id}", response_model=CouponResponse)
 def get_coupon(
     coupon_id: int,
     db: Session = Depends(get_db),
@@ -135,7 +135,7 @@ def get_coupon(
     return CouponResponse.model_validate(coupon).model_dump()
 
 
-@router.put("/coupons/{coupon_id}", response_model=CouponResponse)
+@router.put("/{coupon_id}", response_model=CouponResponse)
 def update_coupon(
     coupon_id: int,
     coupon_data: CouponUpdate,
@@ -152,7 +152,7 @@ def update_coupon(
     return CouponResponse.model_validate(updated).model_dump()
 
 
-@router.delete("/coupons/{coupon_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{coupon_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_coupon(
     coupon_id: int,
     db: Session = Depends(get_db),
@@ -171,7 +171,7 @@ def delete_coupon(
 # ---- Assign coupon to order ----
 
 @router.post(
-    "/coupons/{coupon_id}/assign-order",
+    "/{coupon_id}/assign-order",
     response_model=AssignOrderResponse,
     summary="Assign coupon to order",
 )
@@ -224,7 +224,7 @@ def assign_coupon_to_order(
 # ---- Assign coupon to categories ----
 
 @router.post(
-    "/coupons/{coupon_id}/assign-categories",
+    "/{coupon_id}/assign-categories",
     response_model=AssignCategoriesResponse,
     summary="Assign coupon to menu categories",
 )
