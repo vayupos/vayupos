@@ -22,7 +22,7 @@ app = FastAPI(
     title=settings.app_name,
     description="Point of Sale System Backend API",
     version=settings.app_version,
-    redirect_slashes=False,  # ✅ Don't auto-redirect trailing slashes
+    redirect_slashes=False,  # ✅ Don't auto-redirect trailing slashes - FIXED
 )
 
 # CORS - Must be added FIRST (last in order)
