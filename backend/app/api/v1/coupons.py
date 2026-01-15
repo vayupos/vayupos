@@ -28,7 +28,7 @@ router = APIRouter(prefix="/coupons", tags=["Coupons"])
 
 
 @router.post(
-    "",
+    "/",
     response_model=CouponResponse,
     status_code=status.HTTP_201_CREATED,
 )
@@ -41,13 +41,12 @@ def create_coupon(
     return CouponService.create_coupon(db, coupon_data)
 
 
-@router.get("", response_model=List[CouponResponse])
+@router.get("/", response_model=List[CouponResponse])
 def list_coupons(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
     active_only: bool = Query(False),
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
 ):
     """Get all coupons with optional filtering"""
     return CouponService.get_all_coupons(db, skip, limit, active_only)
