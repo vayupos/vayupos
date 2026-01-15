@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.core.database import get_db  # Adjust import to your DB dependency
-from app.services.expense import ExpenseService
+from app.services import ExpenseService
 from app.schemas import expense as schemas
 
 router = APIRouter(prefix="/expenses", tags=["expenses"])
