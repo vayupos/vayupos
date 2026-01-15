@@ -52,6 +52,7 @@ def product_to_dict(product, include_category=True):
 # ============= Product Routes =============
 
 @router.post("")
+@router.post("/")
 def create_product(
     product_create: ProductCreate,
     current_user: dict = Depends(get_current_user),
@@ -63,6 +64,7 @@ def create_product(
 
 
 @router.get("")
+@router.get("/")
 def list_products(
     skip: int = 0,
     limit: int = 100,

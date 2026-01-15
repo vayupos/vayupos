@@ -23,6 +23,7 @@ def category_to_dict(category):
 # ============= Category Routes =============
 
 @router.post("/")
+@router.post("")
 def create_category(
     category_create: CategoryCreate,
     current_user: dict = Depends(get_current_user),
@@ -34,6 +35,7 @@ def create_category(
 
 
 @router.get("/")
+@router.get("")
 def list_categories(
     skip: int = 0,
     limit: int = 100,
