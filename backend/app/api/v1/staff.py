@@ -19,6 +19,7 @@ router = APIRouter(prefix="/staff", tags=["Staff"])
 # CREATE STAFF
 # =========================
 @router.post("", response_model=StaffResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=StaffResponse, status_code=status.HTTP_201_CREATED)
 def create_staff(
     staff_data: StaffCreate,
     db: Session = Depends(get_db),
@@ -31,6 +32,7 @@ def create_staff(
 # LIST STAFF (filters)
 # =========================
 @router.get("", response_model=List[StaffResponse])
+@router.get("/", response_model=List[StaffResponse])
 def list_staff(
     skip: int = 0,
     limit: int = 100,
@@ -104,6 +106,7 @@ def delete_staff(
     success = StaffService.delete_staff(db, staff_id)
     if not success:
         raise HTTPException(status_code=404, detail="Staff not found")
+    return None
 
 
 # =========================
