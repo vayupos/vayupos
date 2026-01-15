@@ -74,13 +74,19 @@ class StaffService:
         return staff
 
     @classmethod
+    @classmethod
     def delete_staff(cls, db: Session, staff_id: int) -> bool:
-        staff = db.query(Staff).filter(Staff.id == staff_id).first()
-        if not staff:
-            return False
-        staff.status = "Inactive"
-        db.commit()
-        return True
+        try:
+            staff = db.query(Staff).filter(Staff.id == staff_id).first()
+            if not staff:
+                return False
+            staff.status = "Inactive"
+            db.commit()
+            return True
+        except Exception as e:
+            db.rollback()
+            print(f"❌ Error in delete_staff: {str(e)}")
+            raise
 
     @classmethod
     def get_upcoming_salaries(cls, db: Session) -> List[dict]:

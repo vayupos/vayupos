@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
+import traceback
 
 from app.core.database import get_db
 from app.api.dependencies import get_current_user
@@ -103,10 +104,18 @@ def delete_staff(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    success = StaffService.delete_staff(db, staff_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Staff not found")
-    return None
+    try:
+        success = StaffService.delete_staff(db, staff_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Staff not found")
+        return None
+    except Exception as e:
+        print(f"❌ Error deleting staff {staff_id}: {str(e)}")
+        print(f"📋 Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error deleting staff: {str(e)}"
+        )
 
 
 # =========================
