@@ -11,6 +11,7 @@ router = APIRouter(prefix="/orders", tags=["Orders"])
 
 
 @router.post("/", response_model=OrderResponse)
+@router.post("", response_model=OrderResponse)
 def create_order(
     order_create: OrderCreate,
     current_user: dict = Depends(get_current_user),
@@ -33,6 +34,7 @@ def create_order(
 
 
 @router.get("/", response_model=dict)
+@router.get("", response_model=dict)
 def list_orders(
     skip: int = 0,
     limit: int = 100,
