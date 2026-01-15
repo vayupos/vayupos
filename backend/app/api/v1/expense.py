@@ -6,7 +6,7 @@ from app.core.database import get_db  # Adjust import to your DB dependency
 from app.services.expense_service import ExpenseService
 from app.schemas import expense as schemas
 
-router = APIRouter(prefix="/expenses", tags=["expenses"])
+router = APIRouter(prefix="/expenses", tags=["Expense"])
 
 service = ExpenseService()
 
