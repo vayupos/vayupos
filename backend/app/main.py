@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from pathlib import Path
@@ -41,6 +41,17 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=3600,
 )
+
+# ✅ Trailing slash redirect middleware
+@app.middleware("http")
+async def redirect_trailing_slash(request, call_next):
+    """Redirect /api/v1/resource/ to /api/v1/resource for API consistency"""
+    if request.url.path != "/" and request.url.path.endswith("/"):
+        # Remove trailing slash and redirect
+        new_path = request.url.path.rstrip("/")
+        new_url = request.url.replace(path=new_path)
+        return RedirectResponse(url=new_url, status_code=307)  # 307 preserves method
+    return await call_next(request)
 
 # Static files
 static_dir = Path("static")
