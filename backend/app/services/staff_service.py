@@ -80,7 +80,7 @@ class StaffService:
             staff = db.query(Staff).filter(Staff.id == staff_id).first()
             if not staff:
                 return False
-            staff.status = "Inactive"
+            staff.is_active = False  # ✅ FIXED: Set is_active, not status (which is read-only)
             db.commit()
             return True
         except Exception as e:
