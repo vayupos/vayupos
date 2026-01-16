@@ -1,15 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Plus, Filter, Eye, Edit2, Trash2, RotateCw, FileText, Flame, Droplet, Zap, Wifi, Paperclip, X } from 'lucide-react';
 
-// API Configuration
-const API_BASE_URL = 'https://your-render-url.onrender.com'; // Replace with your actual Render URL
+// API Configuration - REPLACE THIS WITH YOUR ACTUAL RENDER URL
+const API_BASE_URL = 'https://your-actual-render-url.onrender.com'; // CHANGE THIS!
 
-// API Helper Functions
+// Helper to get auth token from localStorage
+const getAuthToken = () => {
+    const token = localStorage.getItem('access_token');
+    return token;
+};
+
+// API Helper Functions with Authentication
 const api = {
     // Fetch all expenses
     async getExpenses(skip = 0, limit = 100) {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/expenses/?skip=${skip}&limit=${limit}`);
+            const token = getAuthToken();
+            const response = await fetch(`${API_BASE_URL}/api/v1/expenses/?skip=${skip}&limit=${limit}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                }
+            });
             if (!response.ok) throw new Error('Failed to fetch expenses');
             return await response.json();
         } catch (error) {
@@ -21,14 +34,19 @@ const api = {
     // Create new expense
     async createExpense(expenseData) {
         try {
+            const token = getAuthToken();
             const response = await fetch(`${API_BASE_URL}/api/v1/expenses/`, {
                 method: 'POST',
                 headers: {
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(expenseData)
             });
-            if (!response.ok) throw new Error('Failed to create expense');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to create expense');
+            }
             return await response.json();
         } catch (error) {
             console.error('Error creating expense:', error);
@@ -39,7 +57,14 @@ const api = {
     // Get single expense
     async getExpense(expenseId) {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/expenses/${expenseId}`);
+            const token = getAuthToken();
+            const response = await fetch(`${API_BASE_URL}/api/v1/expenses/${expenseId}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                }
+            });
             if (!response.ok) throw new Error('Failed to fetch expense');
             return await response.json();
         } catch (error) {
@@ -51,14 +76,19 @@ const api = {
     // Update expense
     async updateExpense(expenseId, updateData) {
         try {
+            const token = getAuthToken();
             const response = await fetch(`${API_BASE_URL}/api/v1/expenses/${expenseId}`, {
                 method: 'PUT',
                 headers: {
+                    'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(updateData)
             });
-            if (!response.ok) throw new Error('Failed to update expense');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to update expense');
+            }
             return await response.json();
         } catch (error) {
             console.error('Error updating expense:', error);
@@ -69,8 +99,13 @@ const api = {
     // Delete expense
     async deleteExpense(expenseId) {
         try {
+            const token = getAuthToken();
             const response = await fetch(`${API_BASE_URL}/api/v1/expenses/${expenseId}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                }
             });
             if (!response.ok) throw new Error('Failed to delete expense');
             return await response.json();
@@ -116,6 +151,7 @@ const Modal = ({ isOpen, onClose, title, subtitle, children, size = 'default' })
                 className={`relative w-full ${sizeClasses[size]} bg-card border border-border rounded-lg shadow-2xl animate-in zoom-in-95 duration-200 max-h-[96vh] flex flex-col`}
                 onClick={(e) => e.stopPropagation()}
             >
+                {/* Modal Header */}
                 <div className="flex items-start justify-between p-3 sm:p-4 md:p-6 border-b border-border flex-shrink-0">
                     <div className="flex-1 min-w-0 pr-2">
                         <h2 className="text-base sm:text-lg md:text-xl font-bold text-foreground truncate">{title}</h2>
@@ -128,6 +164,8 @@ const Modal = ({ isOpen, onClose, title, subtitle, children, size = 'default' })
                         <X size={18} className="sm:w-5 sm:h-5" />
                     </button>
                 </div>
+
+                {/* Modal Body - Scrollable */}
                 <div className="overflow-y-auto flex-1 p-3 sm:p-4 md:p-6">
                     {children}
                 </div>
@@ -141,6 +179,7 @@ const ExpensesManagement = () => {
     const [showFilters, setShowFilters] = useState(false);
     const [loading, setLoading] = useState(false);
     const [editingId, setEditingId] = useState(null);
+    const [error, setError] = useState(null);
     
     const [formData, setFormData] = useState({
         title: '',
@@ -191,16 +230,24 @@ const ExpensesManagement = () => {
 
     // Load expenses on component mount
     useEffect(() => {
+        // Check if user is authenticated
+        const token = getAuthToken();
+        if (!token) {
+            setError('Please login to view expenses');
+            return;
+        }
         loadExpenses();
     }, []);
 
     const loadExpenses = async () => {
         setLoading(true);
+        setError(null);
         try {
             const data = await api.getExpenses();
             setExpenses(data);
         } catch (error) {
-            alert('Failed to load expenses. Please check your connection.');
+            setError('Failed to load expenses. Please check your connection and ensure you are logged in.');
+            console.error('Load expenses error:', error);
         } finally {
             setLoading(false);
         }
@@ -233,7 +280,7 @@ const ExpensesManagement = () => {
             setEditingId(id);
             setShowAddForm(true);
         } catch (error) {
-            alert('Failed to load expense details.');
+            alert('Failed to load expense details. Please try again.');
         }
     };
 
@@ -244,7 +291,7 @@ const ExpensesManagement = () => {
                 await loadExpenses();
                 alert('Expense deleted successfully!');
             } catch (error) {
-                alert('Failed to delete expense.');
+                alert('Failed to delete expense. Please try again.');
             }
         }
     };
@@ -334,7 +381,8 @@ const ExpensesManagement = () => {
             handleReset();
             setShowAddForm(false);
         } catch (error) {
-            alert(editingId ? 'Failed to update expense.' : 'Failed to add expense.');
+            alert(editingId ? 'Failed to update expense. Please try again.' : 'Failed to add expense. Please try again.');
+            console.error('Save expense error:', error);
         } finally {
             setLoading(false);
         }
@@ -390,16 +438,29 @@ const ExpensesManagement = () => {
                     </div>
                 </div>
 
+                {/* Error Message */}
+                {error && (
+                    <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <p className="text-sm text-red-800">{error}</p>
+                        <button
+                            onClick={loadExpenses}
+                            className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+                        >
+                            Retry
+                        </button>
+                    </div>
+                )}
+
                 {/* Loading State */}
-                {loading && (
+                {loading && expenses.length === 0 && (
                     <div className="text-center py-8">
                         <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                        <p className="mt-2 text-sm text-muted-foreground">Loading...</p>
+                        <p className="mt-2 text-sm text-muted-foreground">Loading expenses...</p>
                     </div>
                 )}
 
                 {/* All Expenses Table */}
-                {!loading && (
+                {!loading || expenses.length > 0 ? (
                     <div className="rounded-lg px-3 sm:px-4 md:px-5 py-4 mb-4 sm:mb-6 bg-card border border-border">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3">
                             <h2 className="text-base sm:text-lg font-bold text-foreground">All Expenses</h2>
@@ -550,13 +611,13 @@ const ExpensesManagement = () => {
                             </table>
                         </div>
 
-                        {expenses.length === 0 && (
+                        {expenses.length === 0 && !loading && (
                             <div className="text-center py-8">
                                 <p className="text-muted-foreground">No expenses found. Add your first expense!</p>
                             </div>
                         )}
                     </div>
-                )}
+                ) : null}
 
                 {/* Auto-Added Staff Payments */}
                 <div className="rounded-lg px-3 sm:px-4 md:px-5 py-4 bg-card border border-border">
@@ -630,44 +691,44 @@ const ExpensesManagement = () => {
                                     <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Status</th>
                                     <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground hidden lg:table-cell">Category</th>
                                     <th className="text-right font-bold py-3 px-3 text-sm text-muted-foreground">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {autoAddedPayments.map((payment) => (
-                                    <tr key={payment.id} className="border-b border-border">
-                                        <td className="py-4 px-3">
-                                            <div className="flex items-center gap-2">
-                                                <div
-                                                    className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 text-white"
-                                                    style={{ backgroundColor: payment.color }}
-                                                >
-                                                    {payment.avatar}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <div className="font-bold text-sm text-foreground truncate">{payment.name}</div>
-                                                    <div className="text-xs text-muted-foreground truncate">{payment.role}</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="py-4 px-3">
-                                            <span className="text-sm font-semibold text-foreground whitespace-nowrap">{payment.amount}</span>
-                                        </td>
-                                        <td className="py-4 px-3 hidden md:table-cell">
-                                            <span className="text-sm text-foreground">{payment.cycle}</span>
-                                        </td>
-                                        <td className="py-4 px-3">
-                                            <span
-                                                className="inline-block px-3 py-1 rounded-full text-xs font-medium"
-                                                style={{
-                                                    backgroundColor: payment.status === 'Posted' ? '#00A884' : '#0EA5E9',
-                                                    color: '#FFFFFF'
-                                                }}
-                                            >
-                                                {payment.status}
-                                            </span>
-                                        </td>
-                                        <td className="py-4 px-3 hidden lg:table-cell">
-                                            <span className="text-xs text-muted-foreground">{payment.category}</span>
+</tr>
+</thead>
+<tbody>
+{autoAddedPayments.map((payment) => (
+<tr key={payment.id} className="border-b border-border">
+<td className="py-4 px-3">
+<div className="flex items-center gap-2">
+<div
+className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 text-white"
+style={{ backgroundColor: payment.color }}
+>
+{payment.avatar}
+</div>
+<div className="min-w-0">
+<div className="font-bold text-sm text-foreground truncate">{payment.name}</div>
+<div className="text-xs text-muted-foreground truncate">{payment.role}</div>
+</div>
+</div>
+</td>
+<td className="py-4 px-3">
+<span className="text-sm font-semibold text-foreground whitespace-nowrap">{payment.amount}</span>
+</td>
+<td className="py-4 px-3 hidden md:table-cell">
+<span className="text-sm text-foreground">{payment.cycle}</span>
+</td>
+<td className="py-4 px-3">
+<span
+className="inline-block px-3 py-1 rounded-full text-xs font-medium"
+style={{
+backgroundColor: payment.status === 'Posted' ? '#00A884' : '#0EA5E9',
+color: '#FFFFFF'
+}}
+>
+{payment.status}
+</span>
+</td>
+<td className="py-4 px-3 hidden lg:table-cell">
+<span className="text-xs text-muted-foreground">{payment.category}</span>
 </td>
 <td className="py-4 px-3">
 <div className="flex justify-end">
@@ -708,6 +769,7 @@ Add Now
             subtitle={editingId ? "Update expense details" : "Create a manual expense with full details"}
         >
             <div className="space-y-4">
+                {/* Single column on mobile, two columns on large screens */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {/* Expense Details */}
                     <div className="rounded-lg px-3 sm:px-4 py-4 bg-muted border border-border">

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Download, Plus, Filter, Eye, Edit2, Trash2, RotateCw, FileText, Flame, Droplet, Zap, Wifi, Paperclip, X } from 'lucide-react';
 
 // API Configuration
-const API_BASE_URL = 'https://your-render-url.onrender.com'; // Replace with your actual Render URL
+const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1'; // Replace with your actual Render URL
 
 // API Helper Functions
 const api = {
