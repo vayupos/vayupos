@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import List
-from app import models  # ← FIXED: Absolute import
-from app.schemas import expense as schemas  # ← FIXED: Absolute import
+from app import models
+from app.schemas import expense as schemas
 
 class ExpenseService:
     @staticmethod

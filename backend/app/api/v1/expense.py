@@ -1,12 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-
-from app.core.database import get_db  # Adjust import to your DB dependency
+from app.core.database import get_db
 from app.services.expense_service import ExpenseService
 from app.schemas import expense as schemas
 
-router = APIRouter(prefix="/expenses", tags=["Expense"])
+router = APIRouter(prefix="/expenses", tags=["Expense"])  # ✅ FIXED: Single tag
 
 service = ExpenseService()
 

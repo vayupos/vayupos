@@ -1,12 +1,12 @@
 from pydantic import BaseModel
-from datetime import date
-from typing import Optional
+from typing import Optional, List
+from datetime import datetime
 
 class ExpenseBase(BaseModel):
     title: str
     category: str
     amount: float
-    date: date
+    date: str
     subtitle: Optional[str] = "Manual entry"
     type: Optional[str] = "manual"
     account: Optional[str] = "Cashbook"
@@ -21,12 +21,17 @@ class ExpenseUpdate(BaseModel):
     title: Optional[str] = None
     category: Optional[str] = None
     amount: Optional[float] = None
-    date: Optional[date] = None
-    # Add other optional fields...
+    date: Optional[str] = None
+    subtitle: Optional[str] = None
+    type: Optional[str] = None
+    account: Optional[str] = None
+    tax: Optional[float] = None
+    payment_mode: Optional[str] = None
+    notes: Optional[str] = None
 
 class Expense(ExpenseBase):
     id: int
-    created_at: Optional[date] = None
-
+    created_at: Optional[datetime] = None
+    
     class Config:
         from_attributes = True

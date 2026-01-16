@@ -1,21 +1,37 @@
-from sqlalchemy import Column, Integer, String, Float, Date, Text, DateTime, func
-from sqlalchemy.ext.declarative import declarative_base
+from pydantic import BaseModel
+from typing import Optional, List
+from datetime import datetime
 
-Base = declarative_base()
+class ExpenseBase(BaseModel):
+    title: str
+    category: str
+    amount: float
+    date: str
+    subtitle: Optional[str] = "Manual entry"
+    type: Optional[str] = "manual"
+    account: Optional[str] = "Cashbook"
+    tax: Optional[float] = 0.0
+    payment_mode: Optional[str] = "Cash"
+    notes: Optional[str] = ""
 
-class Expense(Base):
-    __tablename__ = "expenses"
+class ExpenseCreate(ExpenseBase):
+    pass
+
+class ExpenseUpdate(BaseModel):
+    title: Optional[str] = None
+    category: Optional[str] = None
+    amount: Optional[float] = None
+    date: Optional[str] = None
+    subtitle: Optional[str] = None
+    type: Optional[str] = None
+    account: Optional[str] = None
+    tax: Optional[float] = None
+    payment_mode: Optional[str] = None
+    notes: Optional[str] = None
+
+class Expense(ExpenseBase):
+    id: int
+    created_at: Optional[datetime] = None
     
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(255), nullable=False)
-    subtitle = Column(String(255))
-    category = Column(String(100), nullable=False)
-    amount = Column(Float, nullable=False)
-    date = Column(Date, nullable=False)
-    type = Column(String(50), default="manual")  # 'manual' or 'auto'
-    account = Column(String(100), default="Cashbook")
-    tax = Column(Float, default=0.0)
-    payment_mode = Column(String(50), default="Cash")
-    notes = Column(Text)
-    created_at = Column(DateTime, server_default=func.now())
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    class Config:
+        from_attributes = True
