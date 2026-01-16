@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Download, Plus, Filter, Eye, Edit2, Trash2, RotateCw, FileText, Flame, Droplet, Zap, Wifi, Paperclip, X } from 'lucide-react';
 
 // API Configuration
-const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1'; // Replace with your actual Render URL
+const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
 
 // API Helper Functions
 const api = {
-    // Fetch all expenses
+    // Fetch all expenses - FIXED: Template literal syntax
     async getExpenses(skip = 0, limit = 100) {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/expenses/?skip=${skip}&limit=${limit}`);
+            const response = await fetch(`${API_BASE_URL}/expenses?skip=${skip}&limit=${limit}`);
             if (!response.ok) throw new Error('Failed to fetch expenses');
             return await response.json();
         } catch (error) {
@@ -18,10 +18,10 @@ const api = {
         }
     },
 
-    // Create new expense
+    // Create new expense - FIXED: Template literal syntax
     async createExpense(expenseData) {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/expenses/`, {
+            const response = await fetch(`${API_BASE_URL}/expenses`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -36,10 +36,10 @@ const api = {
         }
     },
 
-    // Get single expense
+    // Get single expense - FIXED: Template literal syntax
     async getExpense(expenseId) {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/expenses/${expenseId}`);
+            const response = await fetch(`${API_BASE_URL}/expenses/${expenseId}`);
             if (!response.ok) throw new Error('Failed to fetch expense');
             return await response.json();
         } catch (error) {
@@ -48,10 +48,10 @@ const api = {
         }
     },
 
-    // Update expense
+    // Update expense - FIXED: Template literal syntax
     async updateExpense(expenseId, updateData) {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/expenses/${expenseId}`, {
+            const response = await fetch(`${API_BASE_URL}/expenses/${expenseId}`, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -66,10 +66,10 @@ const api = {
         }
     },
 
-    // Delete expense
+    // Delete expense - FIXED: Template literal syntax
     async deleteExpense(expenseId) {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/expenses/${expenseId}`, {
+            const response = await fetch(`${API_BASE_URL}/expenses/${expenseId}`, {
                 method: 'DELETE'
             });
             if (!response.ok) throw new Error('Failed to delete expense');
@@ -668,236 +668,238 @@ const ExpensesManagement = () => {
                                         </td>
                                         <td className="py-4 px-3 hidden lg:table-cell">
                                             <span className="text-xs text-muted-foreground">{payment.category}</span>
-</td>
-<td className="py-4 px-3">
-<div className="flex justify-end">
-{payment.status === 'Posted' ? (
-<button
-onClick={() => handleView(payment.id)}
-className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs text-foreground border border-border hover:bg-muted"
->
-<Eye size={14} />
-View
-</button>
-) : (
-<button
-onClick={() => handleAddNow(payment.id)}
-className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90"
->
-<Plus size={14} />
-Add Now
-</button>
-)}
-</div>
-</td>
-</tr>
-))}
-</tbody>
-</table>
-</div>
-</div>
-</div>
-        {/* Add/Edit Expense Modal */}
-        <Modal
-            isOpen={showAddForm}
-            onClose={() => {
-                setShowAddForm(false);
-                handleReset();
-            }}
-            title={editingId ? "Edit Expense" : "Add Expense"}
-            subtitle={editingId ? "Update expense details" : "Create a manual expense with full details"}
-        >
-            <div className="space-y-4">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* Expense Details */}
-                    <div className="rounded-lg px-3 sm:px-4 py-4 bg-muted border border-border">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-sm font-bold text-foreground">Expense Details</h3>
-                            <button
-                                onClick={handleReset}
-                                className="flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium transition-colors text-xs text-primary border border-primary hover:bg-primary/10"
-                            >
-                                <RotateCw size={14} />
-                                Reset
-                            </button>
-                        </div>
-
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-xs mb-1.5 text-muted-foreground">Title</label>
-                                <input
-                                    type="text"
-                                    placeholder="Enter expense title"
-                                    value={formData.title}
-                                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs mb-1.5 text-muted-foreground">Date</label>
-                                <input
-                                    type="date"
-                                    value={formData.date}
-                                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs mb-1.5 text-muted-foreground">Category</label>
-                                <select
-                                    value={formData.category}
-                                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
-                                >
-                                    <option value="">Select category</option>
-                                    <option>Kitchen Supplies</option>
-                                    <option>Salaries & Wages</option>
-                                    <option>Utilities</option>
-                                    <option>Rent</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs mb-1.5 text-muted-foreground">Account</label>
-                                <input
-                                    type="text"
-                                    value={formData.account}
-                                    onChange={(e) => setFormData({ ...formData, account: e.target.value })}
-                                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-2">
-                                <div>
-                                    <label className="block text-xs mb-1.5 text-muted-foreground">Amount</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={formData.amount}
-                                        onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                        className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs mb-1.5 text-muted-foreground">Tax (%)</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={formData.tax}
-                                        onChange={(e) => setFormData({ ...formData, tax: e.target.value })}
-                                        className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs mb-1.5 text-muted-foreground">Mode</label>
-                                    <input
-                                        type="text"
-                                        value={formData.payment_mode}
-                                        onChange={(e) => setFormData({ ...formData, payment_mode: e.target.value })}
-                                        className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs mb-1.5 text-muted-foreground">Notes</label>
-                                <textarea
-                                    placeholder="Optional notes"
-                                    value={formData.notes}
-                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                    rows="3"
-                                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-                                />
-                            </div>
-
-                            <div className="flex flex-col sm:flex-row gap-2 pt-3">
-                                <button
-                                    onClick={handleSaveDraft}
-                                    className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm bg-transparent text-foreground border border-border hover:bg-muted"
-                                >
-                                    <FileText size={16} />
-                                    Save Draft
-                                </button>
-                                <button
-                                    onClick={handleAddExpense}
-                                    disabled={loading}
-                                    className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                                >
-                                    {loading ? (
-                                        <>
-                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                            Processing...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Plus size={16} />
-                                            {editingId ? 'Update Expense' : 'Add Expense'}
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Quick Add Presets */}
-                    <div className="rounded-lg px-3 sm:px-4 py-4 bg-muted border border-border">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-sm font-bold text-foreground">Quick Add Presets</h3>
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground">
-                                This Month
-                            </span>
-                        </div>
-
-                        <p className="text-xs mb-3 text-muted-foreground">Use presets for frequent expenses</p>
-
-                        <div className="grid grid-cols-2 gap-2 mb-4">
-                            {presets.map((preset) => (
-                                <button
-                                    key={preset.id}
-                                    onClick={() => handlePresetClick(preset)}
-                                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg font-medium transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                                >
-                                    <preset.icon size={16} className="flex-shrink-0" />
-                                    <div className="text-left min-w-0">
-                                        <div className="font-semibold truncate">{preset.label}</div>
-                                        <div className="text-xs opacity-90">{preset.amount}</div>
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-
-                        <div>
-                            <label className="block text-xs mb-1.5 text-muted-foreground">Attach Receipt</label>
-                            <label htmlFor="file-upload">
-                                <div
-                                    className="flex flex-col items-center justify-center gap-2 px-4 py-6 rounded-lg border-2 border-dashed cursor-pointer transition-colors border-border bg-background hover:border-primary"
-                                >
-                                    <Paperclip size={18} className="text-foreground" />
-                                    <div className="text-center">
-                                        <span className="text-sm text-foreground">Drop image/PDF</span>
-                                        <span className="text-xs ml-2 text-primary">Optional</span>
-                                    </div>
-                                </div>
-                            </label>
-                            <input
-                                id="file-upload"
-                                type="file"
-                                accept="image/*,.pdf"
-                                className="hidden"
-                                onChange={(e) => {
-                                    if (e.target.files?.[0]) {
-                                        alert(`File selected: ${e.target.files[0].name}`);
-                                    }
-                                }}
-                            />
-                        </div>
+                                        </td>
+                                        <td className="py-4 px-3">
+                                            <div className="flex justify-end">
+                                                {payment.status === 'Posted' ? (
+                                                    <button
+                                                        onClick={() => handleView(payment.id)}
+                                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs text-foreground border border-border hover:bg-muted"
+                                                    >
+                                                        <Eye size={14} />
+                                                        View
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => handleAddNow(payment.id)}
+                                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                                                    >
+                                                        <Plus size={14} />
+                                                        Add Now
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
-        </Modal>
-    </div>
-);
+
+            {/* Add/Edit Expense Modal */}
+            <Modal
+                isOpen={showAddForm}
+                onClose={() => {
+                    setShowAddForm(false);
+                    handleReset();
+                }}
+                title={editingId ? "Edit Expense" : "Add Expense"}
+                subtitle={editingId ? "Update expense details" : "Create a manual expense with full details"}
+            >
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {/* Expense Details */}
+                        <div className="rounded-lg px-3 sm:px-4 py-4 bg-muted border border-border">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-sm font-bold text-foreground">Expense Details</h3>
+                                <button
+                                    onClick={handleReset}
+                                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium transition-colors text-xs text-primary border border-primary hover:bg-primary/10"
+                                >
+                                    <RotateCw size={14} />
+                                    Reset
+                                </button>
+                            </div>
+
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="block text-xs mb-1.5 text-muted-foreground">Title</label>
+                                    <input
+                                        type="text"
+                                        placeholder="Enter expense title"
+                                        value={formData.title}
+                                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                        className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs mb-1.5 text-muted-foreground">Date</label>
+                                    <input
+                                        type="date"
+                                        value={formData.date}
+                                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                                        className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs mb-1.5 text-muted-foreground">Category</label>
+                                    <select
+                                        value={formData.category}
+                                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                        className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                                    >
+                                        <option value="">Select category</option>
+                                        <option>Kitchen Supplies</option>
+                                        <option>Salaries & Wages</option>
+                                        <option>Utilities</option>
+                                        <option>Rent</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs mb-1.5 text-muted-foreground">Account</label>
+                                    <input
+                                        type="text"
+                                        value={formData.account}
+                                        onChange={(e) => setFormData({ ...formData, account: e.target.value })}
+                                        className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div>
+                                        <label className="block text-xs mb-1.5 text-muted-foreground">Amount</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={formData.amount}
+                                            onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                                            className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs mb-1.5 text-muted-foreground">Tax (%)</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={formData.tax}
+                                            onChange={(e) => setFormData({ ...formData, tax: e.target.value })}
+                                            className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs mb-1.5 text-muted-foreground">Mode</label>
+                                        <input
+                                            type="text"
+                                            value={formData.payment_mode}
+                                            onChange={(e) => setFormData({ ...formData, payment_mode: e.target.value })}
+                                            className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs mb-1.5 text-muted-foreground">Notes</label>
+                                    <textarea
+                                        placeholder="Optional notes"
+                                        value={formData.notes}
+                                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                                        rows="3"
+                                        className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                                    />
+                                </div>
+
+                                <div className="flex flex-col sm:flex-row gap-2 pt-3">
+                                    <button
+                                        onClick={handleSaveDraft}
+                                        className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm bg-transparent text-foreground border border-border hover:bg-muted"
+                                    >
+                                        <FileText size={16} />
+                                        Save Draft
+                                    </button>
+                                    <button
+                                        onClick={handleAddExpense}
+                                        disabled={loading}
+                                        className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                                    >
+                                        {loading ? (
+                                            <>
+                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                Processing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Plus size={16} />
+                                                {editingId ? 'Update Expense' : 'Add Expense'}
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Quick Add Presets */}
+                        <div className="rounded-lg px-3 sm:px-4 py-4 bg-muted border border-border">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-sm font-bold text-foreground">Quick Add Presets</h3>
+                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground">
+                                    This Month
+                                </span>
+                            </div>
+
+                            <p className="text-xs mb-3 text-muted-foreground">Use presets for frequent expenses</p>
+
+                            <div className="grid grid-cols-2 gap-2 mb-4">
+                                {presets.map((preset) => (
+                                    <button
+                                        key={preset.id}
+                                        onClick={() => handlePresetClick(preset)}
+                                        className="flex items-center gap-2 px-3 py-2.5 rounded-lg font-medium transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                                    >
+                                        <preset.icon size={16} className="flex-shrink-0" />
+                                        <div className="text-left min-w-0">
+                                            <div className="font-semibold truncate">{preset.label}</div>
+                                            <div className="text-xs opacity-90">{preset.amount}</div>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div>
+                                <label className="block text-xs mb-1.5 text-muted-foreground">Attach Receipt</label>
+                                <label htmlFor="file-upload">
+                                    <div
+                                        className="flex flex-col items-center justify-center gap-2 px-4 py-6 rounded-lg border-2 border-dashed cursor-pointer transition-colors border-border bg-background hover:border-primary"
+                                    >
+                                        <Paperclip size={18} className="text-foreground" />
+                                        <div className="text-center">
+                                            <span className="text-sm text-foreground">Drop image/PDF</span>
+                                            <span className="text-xs ml-2 text-primary">Optional</span>
+                                        </div>
+                                    </div>
+                                </label>
+                                <input
+                                    id="file-upload"
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        if (e.target.files?.[0]) {
+                                            alert(`File selected: ${e.target.files[0].name}`);
+                                        }
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Modal>
+        </div>
+    );
 };
+
 export default ExpensesManagement;
