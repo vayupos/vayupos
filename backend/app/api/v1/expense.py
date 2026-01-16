@@ -5,18 +5,19 @@ from app.core.database import get_db
 from app.services.expense_service import ExpenseService
 from app.schemas import expense as schemas
 
-router = APIRouter(prefix="/expenses", tags=["Expense"])  # ✅ FIXED: Single tag
+router = APIRouter(prefix="/expenses", tags=["Expense"])
 
 service = ExpenseService()
 
-@router.post("/", response_model=schemas.Expense)
-def create_expense(expense: schemas.ExpenseCreate, db: Session = Depends(get_db)):
-    return service.create_expense(db=db, expense=expense)
-
+# 🚨 THIS GET ROUTE IS MISSING → 405 ERROR!
 @router.get("/", response_model=List[schemas.Expense])
 def read_expenses(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     expenses = service.get_expenses(db=db, skip=skip, limit=limit)
     return expenses
+
+@router.post("/", response_model=schemas.Expense)
+def create_expense(expense: schemas.ExpenseCreate, db: Session = Depends(get_db)):
+    return service.create_expense(db=db, expense=expense)
 
 @router.get("/{expense_id}", response_model=schemas.Expense)
 def read_expense(expense_id: int, db: Session = Depends(get_db)):
