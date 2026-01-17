@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException
 from app.models.staff import Staff
 from app.schemas.staff import StaffCreate, StaffUpdate, StaffResponse
@@ -74,7 +75,6 @@ class StaffService:
         return staff
 
     @classmethod
-    @classmethod
     def delete_staff(cls, db: Session, staff_id: int) -> bool:
         try:
             staff = db.query(Staff).filter(Staff.id == staff_id).first()
@@ -90,23 +90,43 @@ class StaffService:
 
     @classmethod
     def get_upcoming_salaries(cls, db: Session) -> List[dict]:
-        """SIMPLE VERSION - Next month for active staff"""
-        upcoming = db.query(Staff).filter(
-            Staff.status == "Active"
+        """
+        ✅ FIXED VERSION
+        Returns upcoming salary entries for all ACTIVE staff members.
+        Calculates next salary due date based on when they joined.
+        """
+        # ✅ FIX 1: Use is_active (database column) instead of status (property)
+        active_staff = db.query(Staff).filter(
+            Staff.is_active == True  # ✅ CORRECT
         ).all()
         
         salary_entries = []
-        for staff in upcoming:
-            # Simple: Next month from today
-            next_month = datetime.now() + timedelta(days=30)
-            salary_entries.append({
-                "id": staff.id,
-                "name": staff.name,
-                "role": staff.role,
-                "salary": {"amount": float(staff.salary)},  # ✅ FIXED
-                "dueDate": next_month.strftime("%d %b %Y"),  # ✅ Simple format
-                "category": "Monthly"
-            })
+        today = datetime.now().date()
+        
+        for staff in active_staff:
+            # Calculate next salary due date
+            # If they joined on Dec 15, next salary is due on Jan 15, then Feb 15, etc.
+            joined_date = staff.joined.date() if isinstance(staff.joined, datetime) else staff.joined
+            
+            # ✅ SAFE LOGIC: Keep adding months until due date is in the future
+            next_due_date = joined_date
+            while next_due_date <= today:
+                next_due_date += relativedelta(months=1)
+            
+            # Only show if due within next 7 days (can adjust to 30 if you prefer)
+            if next_due_date <= today + timedelta(days=7):
+                # ✅ FIX 2: Match frontend expected format EXACTLY
+                salary_entries.append({
+                    "id": staff.id,
+                    "staff_id": staff.id,  # Frontend expects this
+                    "name": staff.name,
+                    "role": staff.role,
+                    "salary": float(staff.salary),  # ✅ Direct number, not nested object
+                    "due_date": next_due_date.strftime("%d %b %Y"),  # ✅ "15 Jan 2026" format
+                    "dueDate": next_due_date.strftime("%d %b %Y"),  # ✅ Also include camelCase (frontend uses both)
+                })
+        
+        print(f"✅ Returning {len(salary_entries)} upcoming salary entries")
         return salary_entries
 
     @classmethod
