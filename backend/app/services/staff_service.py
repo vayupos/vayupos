@@ -111,16 +111,17 @@ class StaffService:
                     joined_date = staff.joined.date() if isinstance(staff.joined, datetime) else staff.joined
                     print(f"👤 {staff.name}: Joined on {joined_date}")
                     
-                    # Find the NEXT salary due date (could be past, today, or future)
-                    next_due_date = joined_date
-                    iterations = 0
+                    # Calculate months between joined date and today (efficient calculation)
+                    months_diff = (today.year - joined_date.year) * 12 + (today.month - joined_date.month)
                     
-                    # Keep adding months until we get to a date that's after today
-                    while next_due_date <= today:
-                        next_due_date += relativedelta(months=1)
-                        iterations += 1
+                    # Jump directly to the appropriate month
+                    next_due_date = joined_date + relativedelta(months=months_diff)
                     
-                    print(f"   → Next salary due: {next_due_date} (added {iterations} months)")
+                    # If this date is in the past or today, add one more month
+                    if next_due_date <= today:
+                        next_due_date = next_due_date + relativedelta(months=1)
+                    
+                    print(f"   → Next salary due: {next_due_date}")
                     
                     # Show if due within the threshold (next 30 days)
                     if next_due_date <= future_threshold:
