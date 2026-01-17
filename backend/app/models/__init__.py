@@ -27,5 +27,6 @@ __all__ = [
     "InventoryLog",
     "InventoryAction",
     "Coupon", 
-     "DishTemplate" # ← ADD THIS
+     "DishTemplate",
+      "Expense" # ← ADD THIS
 ]
