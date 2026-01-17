@@ -18,16 +18,15 @@ import {
 
 const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
 
-// ✅ FIXED: Check access_token FIRST (that's what your login saves!)
+// ✅ Auth headers helper
 const getAuthHeaders = () => {
-    // Check access_token FIRST, then other possible locations
     const tokenKeys = ['access_token', 'acces_Token', 'token', 'authToken', 'jwt', 'bearer', 'Token'];
     let token = null;
     let tokenKey = null;
     
     for (const key of tokenKeys) {
         const value = localStorage.getItem(key);
-        if (value && value.length > 10) { // Valid tokens are usually long
+        if (value && value.length > 10) {
             token = value;
             tokenKey = key;
             break;
@@ -93,13 +92,11 @@ const StaffManagement = () => {
 
     const getRandomColor = () => colors[Math.floor(Math.random() * colors.length)];
 
-    // Fetch staff on component mount
     useEffect(() => {
         fetchStaff();
         fetchUpcomingSalaries();
     }, []);
 
-    // ✅ FIXED: Stable fetchStaff using useCallback
     const fetchStaff = useCallback(async () => {
         try {
             setLoading(true);
@@ -138,7 +135,6 @@ const StaffManagement = () => {
                 const errorText = await response.text();
                 console.error('❌ API Error:', response.status, errorText);
                 
-                // Handle auth errors
                 if (response.status === 401 || response.status === 403) {
                     console.error('🔒 Auth failed - Status:', response.status);
                     setError(`Authentication failed (${response.status}). Please check if you're logged in.`);
@@ -153,7 +149,6 @@ const StaffManagement = () => {
             const data = await response.json();
             console.log('✅ Received staff data:', data);
             
-            // Handle both array and object responses
             const staffArray = Array.isArray(data) ? data : (data.data || []);
             
             if (!Array.isArray(staffArray)) {
@@ -162,20 +157,19 @@ const StaffManagement = () => {
                 return;
             }
             
-            // ✅ FIXED: Changed salary_amount to salary, joined_date to joined
             const transformedStaff = staffArray.map(member => ({
                 id: member.id,
                 name: member.name,
                 phone: member.phone,
                 role: member.role,
-                salary: `₹${member.salary.toLocaleString('en-IN')} / month`,  // ✅ FIXED
-                salaryAmount: member.salary,  // ✅ FIXED
-                joined: new Date(member.joined).toLocaleDateString('en-GB', {  // ✅ FIXED
+                salary: `₹${member.salary.toLocaleString('en-IN')} / month`,
+                salaryAmount: member.salary,
+                joined: new Date(member.joined).toLocaleDateString('en-GB', {
                     day: '2-digit',
                     month: 'short',
                     year: 'numeric',
                 }),
-                joinedDate: member.joined.split('T')[0],  // ✅ FIXED
+                joinedDate: member.joined.split('T')[0],
                 avatar: member.name.charAt(0).toUpperCase(),
                 color: getRandomColor(),
                 status: member.status,
@@ -193,7 +187,6 @@ const StaffManagement = () => {
         }
     }, [searchQuery, roleFilter, statusFilter]);
 
-    // ✅ FIXED: Fetch upcoming salaries with corrected field names
     const fetchUpcomingSalaries = async () => {
         try {
             console.log('📡 Fetching upcoming salaries...');
@@ -212,16 +205,17 @@ const StaffManagement = () => {
             
             const data = await response.json();
             
-            // ✅ FIXED: Changed salary_amount to salary.amount, due_date to dueDate
             const transformedSalaries = data.map(entry => ({
                 id: entry.id,
+                staffId: entry.staff_id || entry.id,
                 name: entry.name,
                 role: entry.role,
                 avatar: entry.name.charAt(0).toUpperCase(),
                 color: getRandomColor(),
-                amount: `₹${entry.salary.amount.toLocaleString('en-IN')}`,  // ✅ FIXED - nested object
-                dueDate: entry.dueDate,  // ✅ FIXED
-                category: entry.category,
+                amount: `₹${entry.salary.toLocaleString('en-IN')}`,
+                amountRaw: entry.salary,
+                dueDate: entry.due_date || entry.dueDate,
+                category: 'Salaries & Wages',
             }));
             
             setUpcomingSalaries(transformedSalaries);
@@ -284,13 +278,12 @@ const StaffManagement = () => {
             setLoading(true);
             const salaryNum = parseFloat(newStaff.salary.replace(/[^0-9]/g, '')) || 0;
             
-            // ✅ FIXED: Changed salary_amount to salary, joined_date to joined
             const requestBody = {
                 name: newStaff.name,
                 phone: newStaff.phone,
                 role: newStaff.role,
-                salary: salaryNum,  // ✅ FIXED
-                joined: new Date(newStaff.joined).toISOString(),  // ✅ FIXED
+                salary: salaryNum,
+                joined: new Date(newStaff.joined).toISOString(),
                 aadhar: newStaff.aadhar.replace(/\s/g, '') || null,
             };
 
@@ -361,12 +354,11 @@ const StaffManagement = () => {
             setLoading(true);
             const salaryNum = parseFloat(editingStaff.salary.replace(/[^0-9]/g, ''));
 
-            // ✅ FIXED: Changed salary_amount to salary
             const requestBody = {
                 name: editingStaff.name,
                 phone: editingStaff.phone,
                 role: editingStaff.role,
-                salary: salaryNum,  // ✅ FIXED
+                salary: salaryNum,
                 aadhar: editingStaff.aadhar.replace(/\s/g, '') || null,
                 status: editingStaff.status,
             };
@@ -432,11 +424,11 @@ const StaffManagement = () => {
         }
     };
 
-    const handleAddSalary = async (id) => {
+    const handleAddSalary = async (staffId) => {
         try {
             setLoading(true);
             
-            const response = await fetch(`${API_BASE_URL}/staff/salaries/${id}/add`, {
+            const response = await fetch(`${API_BASE_URL}/staff/salaries/${staffId}/add`, {
                 method: 'POST',
                 headers: getAuthHeaders(),
             });
@@ -467,7 +459,6 @@ const StaffManagement = () => {
         setTimeout(() => fetchStaff(), 0);
     };
 
-    // ✅ FIXED: Now fetchStaff is stable
     useEffect(() => {
         const timeoutId = setTimeout(() => {
             fetchStaff();
@@ -480,7 +471,6 @@ const StaffManagement = () => {
     const hasActiveFilters = searchQuery.trim() || roleFilter !== 'All' || statusFilter !== 'Active';
     const showNoResults = !loading && filteredStaff.length === 0 && !error;
 
-    // Loading state
     if (loading && staff.length === 0) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center">
@@ -492,7 +482,6 @@ const StaffManagement = () => {
         );
     }
 
-    // Error state
     if (error && staff.length === 0) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -760,305 +749,303 @@ const StaffManagement = () => {
                                     </div>
 
                                     <button
-                                        onClick={() => handleAddSalary(entry.id)}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs sm:text-sm font-medium hover:bg-teal-700 transition-colors"
-                                    >
-                                        <PlusCircle className="w-4 h-4" />
-                                        <span>Add Now</span>
-                                    </button>
-                                </div>
-                            ))}
+                                        onClick={() => handleAddSalary(entry.staffId)}
+className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs sm:text-sm font-medium hover:bg-teal-700 transition-colors"
+>
+<PlusCircle className="w-4 h-4" />
+<span>Add Now</span>
+</button>
+</div>
+))}
+                        {upcomingSalaries.length === 0 && !loading && (
+                            <div className="py-4 text-center text-sm text-muted-foreground">
+                                No upcoming salary entries.
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
 
-                            {upcomingSalaries.length === 0 && !loading && (
-                                <div className="py-4 text-center text-sm text-muted-foreground">
-                                    No upcoming salary entries.
+            {/* New Staff Modal */}
+            {showNewStaffModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-2">
+                    <div className="bg-card rounded-xl border border-border w-full max-w-md p-4 sm:p-5">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
+                                Add New Staff
+                            </h2>
+                            <button
+                                onClick={() => setShowNewStaffModal(false)}
+                                className="text-muted-foreground hover:text-foreground"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                    Name *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={newStaff.name}
+                                    onChange={(e) =>
+                                        setNewStaff({ ...newStaff, name: e.target.value })
+                                    }
+                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                    Phone *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={newStaff.phone}
+                                    onChange={(e) =>
+                                        setNewStaff({ ...newStaff, phone: e.target.value })
+                                    }
+                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                        Role
+                                    </label>
+                                    <select
+                                        value={newStaff.role}
+                                        onChange={(e) =>
+                                            setNewStaff({ ...newStaff, role: e.target.value })
+                                        }
+                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                    >
+                                        <option value="Cashier">Cashier</option>
+                                        <option value="Waiter">Waiter</option>
+                                        <option value="Chef">Chef</option>
+                                    </select>
                                 </div>
-                            )}
+
+                                <div>
+                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                        Joined On
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={newStaff.joined}
+                                        onChange={(e) =>
+                                            setNewStaff({ ...newStaff, joined: e.target.value })
+                                        }
+                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                    Salary (₹ / month) *
+                                </label>
+                                <input
+                                    type="number"
+                                    value={newStaff.salary}
+                                    onChange={(e) =>
+                                        setNewStaff({ ...newStaff, salary: e.target.value })
+                                    }
+                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                    Aadhar Number
+                                </label>
+                                <input
+                                    type="text"
+                                    value={newStaff.aadhar}
+                                    onChange={(e) =>
+                                        setNewStaff({
+                                            ...newStaff,
+                                            aadhar: formatAadhar(e.target.value),
+                                        })
+                                    }
+                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                    placeholder="1234 5678 9012"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 mt-5">
+                            <button
+                                onClick={() => setShowNewStaffModal(false)}
+                                className="px-3 py-2 rounded-lg text-xs sm:text-sm bg-muted text-foreground hover:bg-accent transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleAddStaff}
+                                disabled={loading}
+                                className="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                            >
+                                <Save className="w-4 h-4" />
+                                <span>{loading ? 'Saving...' : 'Save'}</span>
+                            </button>
                         </div>
                     </div>
                 </div>
+            )}
 
-                {/* New Staff Modal */}
-                {showNewStaffModal && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-2">
-                        <div className="bg-card rounded-xl border border-border w-full max-w-md p-4 sm:p-5">
-                            <div className="flex items-center justify-between mb-4">
-                                <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
-                                    Add New Staff
-                                </h2>
-                                <button
-                                    onClick={() => setShowNewStaffModal(false)}
-                                    className="text-muted-foreground hover:text-foreground"
-                                >
-                                    <X className="w-4 h-4" />
-                                </button>
+            {/* Edit Staff Modal */}
+            {showEditModal && editingStaff && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-2">
+                    <div className="bg-card rounded-xl border border-border w-full max-w-md p-4 sm:p-5">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
+                                Edit Staff
+                            </h2>
+                            <button
+                                onClick={() => setShowEditModal(false)}
+                                className="text-muted-foreground hover:text-foreground"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                    Name *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={editingStaff.name}
+                                    onChange={(e) =>
+                                        setEditingStaff({ ...editingStaff, name: e.target.value })
+                                    }
+                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                />
                             </div>
 
-                            <div className="space-y-3">
+                            <div>
+                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                    Phone *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={editingStaff.phone}
+                                    onChange={(e) =>
+                                        setEditingStaff({
+                                            ...editingStaff,
+                                            phone: e.target.value,
+                                        })
+                                    }
+                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <label className="block text-xs text-muted-foreground mb-1.5">
-                                        Name *
+                                        Role
                                     </label>
-                                    <input
-                                        type="text"
-                                        value={newStaff.name}
+                                    <select
+                                        value={editingStaff.role}
                                         onChange={(e) =>
-                                            setNewStaff({ ...newStaff, name: e.target.value })
-                                        }
-                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs text-muted-foreground mb-1.5">
-                                        Phone *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={newStaff.phone}
-                                        onChange={(e) =>
-                                            setNewStaff({ ...newStaff, phone: e.target.value })
-                                        }
-                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-xs text-muted-foreground mb-1.5">
-                                            Role
-                                        </label>
-                                        <select
-                                            value={newStaff.role}
-                                            onChange={(e) =>
-                                                setNewStaff({ ...newStaff, role: e.target.value })
-                                            }
-                                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                        >
-                                            <option value="Cashier">Cashier</option>
-                                            <option value="Waiter">Waiter</option>
-                                            <option value="Chef">Chef</option>
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs text-muted-foreground mb-1.5">
-                                            Joined On
-                                        </label>
-                                        <input
-                                            type="date"
-                                            value={newStaff.joined}
-                                            onChange={(e) =>
-                                                setNewStaff({ ...newStaff, joined: e.target.value })
-                                            }
-                                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs text-muted-foreground mb-1.5">
-                                        Salary (₹ / month) *
-                                    </label>
-                                    <input
-                                        type="number"
-                                        value={newStaff.salary}
-                                        onChange={(e) =>
-                                            setNewStaff({ ...newStaff, salary: e.target.value })
-                                        }
-                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs text-muted-foreground mb-1.5">
-                                        Aadhar Number
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={newStaff.aadhar}
-                                        onChange={(e) =>
-                                            setNewStaff({
-                                                ...newStaff,
-                                                aadhar: formatAadhar(e.target.value),
+                                            setEditingStaff({
+                                                ...editingStaff,
+                                                role: e.target.value,
                                             })
                                         }
                                         className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                        placeholder="1234 5678 9012"
-                                    />
+                                    >
+                                        <option value="Cashier">Cashier</option>
+                                        <option value="Waiter">Waiter</option>
+                                        <option value="Chef">Chef</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                        Status
+                                    </label>
+                                    <select
+                                        value={editingStaff.status}
+                                        onChange={(e) =>
+                                            setEditingStaff({
+                                                ...editingStaff,
+                                                status: e.target.value,
+                                            })
+                                        }
+                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                    >
+                                        <option value="Active">Active</option>
+                                        <option value="Inactive">Inactive</option>
+                                    </select>
                                 </div>
                             </div>
 
-                            <div className="flex justify-end gap-2 mt-5">
-                                <button
-                                    onClick={() => setShowNewStaffModal(false)}
-                                    className="px-3 py-2 rounded-lg text-xs sm:text-sm bg-muted text-foreground hover:bg-accent transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleAddStaff}
-                                    disabled={loading}
-                                    className="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
-                                >
-                                    <Save className="w-4 h-4" />
-                                    <span>{loading ? 'Saving...' : 'Save'}</span>
-                                </button>
+                            <div>
+                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                    Salary (₹ / month) *
+                                </label>
+                                <input
+                                    type="number"
+                                    value={editingStaff.salary}
+                                    onChange={(e) =>
+                                        setEditingStaff({
+                                            ...editingStaff,
+                                            salary: e.target.value,
+                                        })
+                                    }
+                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                    Aadhar Number
+                                </label>
+                                <input
+                                    type="text"
+                                    value={editingStaff.aadhar}
+                                    onChange={(e) =>
+                                        setEditingStaff({
+                                            ...editingStaff,
+                                            aadhar: formatAadhar(e.target.value),
+                                        })
+                                    }
+                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
+                                    placeholder="1234 5678 9012"
+                                />
                             </div>
                         </div>
-                    </div>
-                )}
 
-                {/* Edit Staff Modal */}
-                {showEditModal && editingStaff && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-2">
-                        <div className="bg-card rounded-xl border border-border w-full max-w-md p-4 sm:p-5">
-                            <div className="flex items-center justify-between mb-4">
-                                <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
-                                    Edit Staff
-                                </h2>
-                                <button
-                                    onClick={() => setShowEditModal(false)}
-                                    className="text-muted-foreground hover:text-foreground"
-                                >
-                                    <X className="w-4 h-4" />
-                                </button>
-                            </div>
-
-                            <div className="space-y-3">
-                                <div>
-                                    <label className="block text-xs text-muted-foreground mb-1.5">
-                                        Name *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={editingStaff.name}
-                                        onChange={(e) =>
-                                            setEditingStaff({ ...editingStaff, name: e.target.value })
-                                        }
-                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs text-muted-foreground mb-1.5">
-                                        Phone *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={editingStaff.phone}
-                                        onChange={(e) =>
-                                            setEditingStaff({
-                                                ...editingStaff,
-                                                phone: e.target.value,
-                                            })
-                                        }
-                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-xs text-muted-foreground mb-1.5">
-                                            Role
-                                        </label>
-                                        <select
-                                            value={editingStaff.role}
-                                            onChange={(e) =>
-                                                setEditingStaff({
-                                                    ...editingStaff,
-                                                    role: e.target.value,
-                                                })
-                                            }
-                                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                        >
-                                            <option value="Cashier">Cashier</option>
-                                            <option value="Waiter">Waiter</option>
-                                            <option value="Chef">Chef</option>
-                                        </select>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs text-muted-foreground mb-1.5">
-                                            Status
-                                        </label>
-                                        <select
-                                            value={editingStaff.status}
-                                            onChange={(e) =>
-                                                setEditingStaff({
-                                                    ...editingStaff,
-                                                    status: e.target.value,
-                                                })
-                                            }
-                                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                        >
-                                            <option value="Active">Active</option>
-                                            <option value="Inactive">Inactive</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs text-muted-foreground mb-1.5">
-                                        Salary (₹ / month) *
-                                    </label>
-                                    <input
-                                        type="number"
-                                        value={editingStaff.salary}
-                                        onChange={(e) =>
-                                            setEditingStaff({
-                                                ...editingStaff,
-                                                salary: e.target.value,
-                                            })
-                                        }
-                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs text-muted-foreground mb-1.5">
-                                        Aadhar Number
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={editingStaff.aadhar}
-                                        onChange={(e) =>
-                                            setEditingStaff({
-                                                ...editingStaff,
-                                                aadhar: formatAadhar(e.target.value),
-                                            })
-                                        }
-                                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                        placeholder="1234 5678 9012"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="flex justify-end gap-2 mt-5">
-                                <button
-                                    onClick={() => {
-                                        setShowEditModal(false);
-                                        setEditingStaff(null);
-                                    }}
-                                    className="px-3 py-2 rounded-lg text-xs sm:text-sm bg-muted text-foreground hover:bg-accent transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    onClick={handleUpdateStaff}
-                                    disabled={loading}
-                                    className="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
-                                >
-                                    <Save className="w-4 h-4" />
-                                    <span>{loading ? 'Saving...' : 'Save Changes'}</span>
-                                </button>
-                            </div>
+                        <div className="flex justify-end gap-2 mt-5">
+                            <button
+                                onClick={() => {
+                                    setShowEditModal(false);
+                                    setEditingStaff(null);
+                                }}
+                                className="px-3 py-2 rounded-lg text-xs sm:text-sm bg-muted text-foreground hover:bg-accent transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleUpdateStaff}
+                                disabled={loading}
+                                className="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                            >
+                                <Save className="w-4 h-4" />
+                                <span>{loading ? 'Saving...' : 'Save Changes'}</span>
+                            </button>
                         </div>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
         </div>
-    );
+    </div>
+);
 };
-
 export default StaffManagement;
