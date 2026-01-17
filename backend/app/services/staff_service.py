@@ -113,8 +113,8 @@ class StaffService:
             while next_due_date <= today:
                 next_due_date += relativedelta(months=1)
             
-            # Only show if due within next 7 days (can adjust to 30 if you prefer)
-            if next_due_date <= today + timedelta(days=7):
+            # Show if due within next 30 days (monthly salaries)
+            if next_due_date <= today + timedelta(days=30):
                 # ✅ FIX 2: Match frontend expected format EXACTLY
                 salary_entries.append({
                     "id": staff.id,
