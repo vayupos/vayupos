@@ -3,7 +3,6 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException
-from app.models.staff import Staff
 from app.schemas.staff import StaffCreate, StaffUpdate, StaffResponse
 
 class StaffService:
