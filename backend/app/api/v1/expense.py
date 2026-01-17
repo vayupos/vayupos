@@ -9,12 +9,14 @@ router = APIRouter(prefix="/expenses", tags=["Expense"])
 
 service = ExpenseService()
 
-# 🚨 THIS GET ROUTE IS MISSING → 405 ERROR!
+# ✅ FIXED: Add double decorators like staff routes
+@router.get("", response_model=List[schemas.Expense])
 @router.get("/", response_model=List[schemas.Expense])
 def read_expenses(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     expenses = service.get_expenses(db=db, skip=skip, limit=limit)
     return expenses
 
+@router.post("", response_model=schemas.Expense)
 @router.post("/", response_model=schemas.Expense)
 def create_expense(expense: schemas.ExpenseCreate, db: Session = Depends(get_db)):
     return service.create_expense(db=db, expense=expense)
