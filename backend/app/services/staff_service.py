@@ -96,7 +96,7 @@ class StaffService:
             
             salary_entries = []
             today = datetime.now().date()
-            future_threshold = today + timedelta(days=30)  # Show salaries due within next 30 days
+            future_threshold = today + timedelta(days=30)
             
             print(f"📊 Checking {len(active_staff)} active staff members")
             print(f"📅 Today: {today}, Showing salaries due by: {future_threshold}")
@@ -111,15 +111,21 @@ class StaffService:
                     joined_date = staff.joined.date() if isinstance(staff.joined, datetime) else staff.joined
                     print(f"👤 {staff.name}: Joined on {joined_date}")
                     
-                    # Calculate months between joined date and today (efficient calculation)
-                    months_diff = (today.year - joined_date.year) * 12 + (today.month - joined_date.month)
+                    # Calculate the next salary date efficiently
+                    # Find how many complete months have passed
+                    months_passed = (today.year - joined_date.year) * 12 + (today.month - joined_date.month)
                     
-                    # Jump directly to the appropriate month
-                    next_due_date = joined_date + relativedelta(months=months_diff)
+                    # Add those months to get a candidate date
+                    candidate_date = joined_date + relativedelta(months=months_passed)
                     
-                    # If this date is in the past or today, add one more month
-                    if next_due_date <= today:
-                        next_due_date = next_due_date + relativedelta(months=1)
+                    # If candidate is in the past, add one more month
+                    if candidate_date < today:
+                        next_due_date = candidate_date + relativedelta(months=1)
+                    elif candidate_date == today:
+                        # If today is the exact due date, next payment is in 1 month
+                        next_due_date = candidate_date + relativedelta(months=1)
+                    else:
+                        next_due_date = candidate_date
                     
                     print(f"   → Next salary due: {next_due_date}")
                     
