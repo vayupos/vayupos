@@ -149,7 +149,6 @@ class StaffService:
                             "name": staff.name,
                             "role": staff.role,
                             "salary": float(staff.salary) if staff.salary else 0.0,
-                            "due_date": next_due_date.strftime("%d %b %Y"),
                             "dueDate": next_due_date.strftime("%d %b %Y"),
                             "days_until": days_until,
                             "days_overdue": abs(days_until) if days_until < 0 else 0,
@@ -170,7 +169,7 @@ class StaffService:
             
             print(f"✅ Returning {len(salary_entries)} upcoming salary entries")
             for entry in salary_entries:
-                print(f"   - {entry['name']}: {entry['status']} ({entry['due_date']})")
+                print(f"   - {entry['name']}: {entry['status']} ({entry['dueDate']})")  # ✅ FIXED: Changed from due_date to dueDate
             
             return salary_entries
         

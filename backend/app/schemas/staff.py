@@ -50,15 +50,17 @@ class StaffResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# ✅ CORRECTED - Matches staff_service.get_upcoming_salaries() exactly
 class SalaryEntryResponse(BaseModel):
     id: int
+    staff_id: int              # ✅ Added - service returns this
     name: str
     role: str
-    avatar: Optional[str] = None
-    color: Optional[str] = None
-    salary: dict                            # ✅ Matches service response
-    dueDate: str
-    category: str = "Salaries & Wages"
+    salary: float              # ✅ FIXED - Changed from dict to float
+    dueDate: str               # ✅ Formatted as "DD MMM YYYY"
+    days_until: int            # ✅ Added - can be negative for overdue
+    days_overdue: int          # ✅ Added - absolute value for overdue days
+    status: str                # ✅ Added - "overdue", "due_today", or "upcoming"
     
     class Config:
         from_attributes = True
