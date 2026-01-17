@@ -7,8 +7,6 @@ import {
     Trash2,
     RotateCw,
     Filter,
-    Calendar,
-    Play,
     Save,
     PlusCircle,
     X,
@@ -18,7 +16,6 @@ import {
 
 const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
 
-// ✅ Auth headers helper
 const getAuthHeaders = () => {
     const tokenKeys = ['access_token', 'acces_Token', 'token', 'authToken', 'jwt', 'bearer', 'Token'];
     let token = null;
@@ -204,6 +201,7 @@ const StaffManagement = () => {
             }
             
             const data = await response.json();
+            console.log('✅ Upcoming salaries data:', data);
             
             const transformedSalaries = data.map(entry => ({
                 id: entry.id,
@@ -278,6 +276,7 @@ const StaffManagement = () => {
             setLoading(true);
             const salaryNum = parseFloat(newStaff.salary.replace(/[^0-9]/g, '')) || 0;
             
+            // EXACT format from your old working code
             const requestBody = {
                 name: newStaff.name,
                 phone: newStaff.phone,
@@ -296,16 +295,25 @@ const StaffManagement = () => {
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
+                const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+                console.error('❌ Server response:', errorData);
                 
                 if (response.status === 401 || response.status === 403) {
                     throw new Error('Authentication failed. Please login again.');
+                }
+                
+                if (response.status === 422) {
+                    const errorMsg = typeof errorData.detail === 'string' 
+                        ? errorData.detail 
+                        : JSON.stringify(errorData.detail);
+                    throw new Error(`Validation error: ${errorMsg}`);
                 }
                 
                 throw new Error(errorData.detail || 'Failed to add staff');
             }
 
             const data = await response.json();
+            console.log('✅ Staff added:', data);
             
             setNewStaff({
                 name: '',
@@ -354,6 +362,7 @@ const StaffManagement = () => {
             setLoading(true);
             const salaryNum = parseFloat(editingStaff.salary.replace(/[^0-9]/g, ''));
 
+            // EXACT format from your old working code
             const requestBody = {
                 name: editingStaff.name,
                 phone: editingStaff.phone,
@@ -372,10 +381,17 @@ const StaffManagement = () => {
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
+                const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
                 
                 if (response.status === 401 || response.status === 403) {
                     throw new Error('Authentication failed. Please login again.');
+                }
+                
+                if (response.status === 422) {
+                    const errorMsg = typeof errorData.detail === 'string' 
+                        ? errorData.detail 
+                        : JSON.stringify(errorData.detail);
+                    throw new Error(`Validation error: ${errorMsg}`);
                 }
                 
                 throw new Error(errorData.detail || 'Failed to update staff');
@@ -750,18 +766,20 @@ const StaffManagement = () => {
 
                                     <button
                                         onClick={() => handleAddSalary(entry.staffId)}
-className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs sm:text-sm font-medium hover:bg-teal-700 transition-colors"
->
-<PlusCircle className="w-4 h-4" />
-<span>Add Now</span>
-</button>
-</div>
-))}
-                        {upcomingSalaries.length === 0 && !loading && (
-                            <div className="py-4 text-center text-sm text-muted-foreground">
-                                No upcoming salary entries.
-                            </div>
-                        )}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs sm:text-sm font-medium hover:bg-teal-700 transition-colors"
+                                    >
+                                        <PlusCircle className="w-4 h-4" />
+                                        <span>Add Now</span>
+                                    </button>
+                                </div>
+                            ))}
+
+                            {upcomingSalaries.length === 0 && !loading && (
+                                <div className="py-4 text-center text-sm text-muted-foreground">
+                                    No upcoming salary entries.
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1045,7 +1063,7 @@ className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 t
                 </div>
             )}
         </div>
-    </div>
-);
+    );
 };
+
 export default StaffManagement;
