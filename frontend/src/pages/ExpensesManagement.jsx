@@ -382,14 +382,17 @@ const ExpensesManagement = () => {
         }
     };
 
-    // ✅ Handle adding salary from upcoming payments - FIXED VERSION
+    // ✅ FIXED: Handle adding salary from upcoming payments with immediate UI update
     const handleAddNow = async (staffId) => {
         const payment = autoAddedPayments.find(p => p.staffId === staffId);
         if (!payment) return;
 
+        // ✅ IMMEDIATELY remove from UI (optimistic update)
+        setAutoAddedPayments(prevPayments => 
+            prevPayments.filter(p => p.staffId !== staffId)
+        );
+
         try {
-            setLoading(true);
-            
             // Create expense from salary
             const expenseData = {
                 title: `Salary: ${payment.name}`,
@@ -430,20 +433,15 @@ const ExpensesManagement = () => {
 
             alert('Salary entry added successfully!');
             
-            // IMMEDIATELY remove from UI
-            setAutoAddedPayments(prevPayments => 
-                prevPayments.filter(payment => payment.staffId !== staffId)
-            );
-            
-            // Then refresh both lists from server
+            // Refresh both lists from server
             await loadExpenses();
             await loadUpcomingStaffSalaries();
             
         } catch (error) {
+            // ✅ If error, restore the item back to the list
+            setAutoAddedPayments(prevPayments => [...prevPayments, payment]);
             alert('Failed to add salary entry.');
             console.error('Error:', error);
-        } finally {
-            setLoading(false);
         }
     };
 
@@ -713,107 +711,241 @@ const ExpensesManagement = () => {
                                         <span>{formatDate(expense.date)}</span>
                                     </div>
                                     <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
-                                        {expense.type=== 'auto' ? (
-<>
-<span className="px-2 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground">Auto</span>
-<button
-onClick={() => handleView(expense.id)}
-className="flex items-center gap-1 px-2 py-1 rounded-lg transition-colors text-xs text-foreground border border-border hover:bg-muted"
->
-<Eye size={12} />
-View
-</button>
-</>
-) : (
-<>
-<button
-onClick={() => handleEdit(expense.id)}
-className="p-1.5 rounded transition-colors text-primary hover:bg-primary/10"
->
-<Edit2 size={14} />
-</button>
-<button
-onClick={() => handleDelete(expense.id)}
-className="p-1.5 rounded transition-colors text-red-500 hover:bg-red-500/10"
->
-<Trash2 size={14} />
-</button>
-</>
-)}
-</div>
-</div>
-))}
-</div>{/* Desktop Table View */}
+                                        {expense.type === 'auto' ? (
+                                            <>
+                                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground">Auto</span>
+                                                <button
+                                                    onClick={() => handleView(expense.id)}
+                                                    className="flex items-center gap-1 px-2 py-1 rounded-lg transition-colors text-xs text-foreground border border-border hover:bg-muted"
+                                                >
+                                                    <Eye size={12} />
+                                                    View
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <button
+                                                    onClick={() => handleEdit(expense.id)}
+                                                    className="p-1.5 rounded transition-colors text-primary hover:bg-primary/10"
+                                                >
+                                                    <Edit2 size={14} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(expense.id)}
+                                                    className="p-1.5 rounded transition-colors text-red-500 hover:bg-red-500/10"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Desktop Table View */}
+                        <div className="hidden sm:block overflow-x-auto">
+                            <table className="w-full">
+                                <thead>
+                                    <tr className="bg-primary/10 border-b border-border">
+                                        <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">#</th>
+                                        <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Title</th>
+                                        <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Category</th>
+                                        <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Amount</th>
+                                        <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground hidden md:table-cell">Date</th>
+                                        <th className="text-right font-bold py-3 px-3 text-sm text-muted-foreground">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredExpenses.map((expense, index) => (
+                                        <tr key={expense.id} className="border-b border-border">
+                                            <td className="py-4 px-3">
+                                                <span className="text-sm text-foreground">{index + 1}</span>
+                                            </td>
+                                            <td className="py-4 px-3">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="min-w-0">
+                                                        <div className="font-bold text-sm text-foreground">{expense.title}</div>
+                                                        <div className="text-xs text-muted-foreground">{expense.subtitle}</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="py-4 px-3">
+                                                <span className="text-sm text-foreground">{expense.category}</span>
+                                            </td>
+                                            <td className="py-4 px-3">
+                                                <span className="text-sm font-semibold text-foreground whitespace-nowrap">
+                                                    {formatAmount(expense.amount)}
+                                                </span>
+                                            </td>
+                                            <td className="py-4 px-3 hidden md:table-cell">
+                                                <span className="text-sm text-foreground whitespace-nowrap">
+                                                    {formatDate(expense.date)}
+                                                </span>
+                                            </td>
+                                            <td className="py-4 px-3">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    {expense.type === 'auto' ? (
+                                                        <>
+                                                            <span className="px-3 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground">
+                                                                Auto
+                                                            </span>
+                                                            <button
+                                                                onClick={() => handleView(expense.id)}
+                                                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors text-xs text-foreground border border-border hover:bg-muted"
+                                                            >
+                                                                <Eye size={14} />
+                                                                View
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <button
+                                                                onClick={() => handleEdit(expense.id)}
+                                                                className="p-2 rounded transition-colors text-primary hover:bg-primary/10"
+                                                            >
+                                                                <Edit2 size={16} />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDelete(expense.id)}
+                                                                className="p-2 rounded transition-colors text-red-500 hover:bg-red-500/10"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {filteredExpenses.length === 0 && (
+                            <div className="text-center py-8">
+                                <Search className="w-12 h-12 mx-auto mb-3 opacity-30 text-muted-foreground" />
+                                <p className="text-sm font-medium text-foreground mb-1">No expenses found</p>
+                                <p className="text-xs text-muted-foreground mb-4">
+                                    {hasActiveFilters 
+                                        ? 'Try adjusting your filters or search criteria'
+                                        : 'Add your first expense to get started'
+                                    }
+                                </p>
+                                {hasActiveFilters && (
+                                    <button
+                                        onClick={handleResetFilters}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                                    >
+                                        <RotateCw className="w-3 h-3" />
+                                        <span>Clear filters</span>
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                ) : null}
+
+                {/* Auto-Added Staff Payments */}
+                <div className="rounded-lg px-3 sm:px-4 md:px-5 py-4 bg-card border border-border">
+                    <div className="flex flex-col gap-2 mb-4">
+                        <h2 className="text-base sm:text-lg font-bold text-foreground">Auto-Added Staff Payments</h2>
+                        <span className="text-xs text-muted-foreground">Entries generated from staff joining-date cycles</span>
+                    </div>
+
+                    {/* Mobile Card View */}
+                    <div className="block sm:hidden space-y-3">
+                        {autoAddedPayments.map((payment) => (
+                            <div key={payment.id} className="bg-muted rounded-lg p-3 border border-border">
+                                <div className="flex items-start justify-between mb-2">
+                                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        <div
+                                            className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 text-white"
+                                            style={{ backgroundColor: payment.color }}
+                                        >
+                                            {payment.avatar}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="font-bold text-sm text-foreground truncate">{payment.name}</div>
+                                            <div className="text-xs text-muted-foreground truncate">{payment.role}</div>
+                                        </div>
+                                    </div>
+                                    <span className="text-sm font-semibold text-foreground whitespace-nowrap ml-2">{payment.amount}</span>
+                                </div>
+                                <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
+                                    <span>{payment.cycle}</span>
+                                    <span
+                                        className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500 text-white"
+                                    >
+                                        {payment.status}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+                                    <button
+                                        onClick={() => handleAddNow(payment.staffId)}
+                                        className="flex items-center gap-1 px-2 py-1 rounded-lg transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                                    >
+                                        <Plus size={12} />
+                                        Add Now
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Desktop Table View */}
                     <div className="hidden sm:block overflow-x-auto">
                         <table className="w-full">
                             <thead>
                                 <tr className="bg-primary/10 border-b border-border">
-                                    <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">#</th>
-                                    <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Title</th>
-                                    <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Category</th>
+                                    <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Staff</th>
                                     <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Amount</th>
-                                    <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground hidden md:table-cell">Date</th>
-                                    <th className="text-right font-bold py-3 px-3 text-sm text-muted-foreground">Actions</th>
+                                    <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground hidden md:table-cell">Cycle</th>
+                                    <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Status</th>
+                                    <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground hidden lg:table-cell">Category</th>
+                                    <th className="text-right font-bold py-3 px-3 text-sm text-muted-foreground">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {filteredExpenses.map((expense, index) => (
-                                    <tr key={expense.id} className="border-b border-border">
-                                        <td className="py-4 px-3">
-                                            <span className="text-sm text-foreground">{index + 1}</span>
-                                        </td>
+                                {autoAddedPayments.map((payment) => (
+                                    <tr key={payment.id} className="border-b border-border">
                                         <td className="py-4 px-3">
                                             <div className="flex items-center gap-2">
+                                                <div
+                                                    className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 text-white"
+                                                    style={{ backgroundColor: payment.color }}
+                                                >
+                                                    {payment.avatar}
+                                                </div>
                                                 <div className="min-w-0">
-                                                    <div className="font-bold text-sm text-foreground">{expense.title}</div>
-                                                    <div className="text-xs text-muted-foreground">{expense.subtitle}</div>
+                                                    <div className="font-bold text-sm text-foreground truncate">{payment.name}</div>
+                                                    <div className="text-xs text-muted-foreground truncate">{payment.role}</div>
                                                 </div>
                                             </div>
                                         </td>
                                         <td className="py-4 px-3">
-                                            <span className="text-sm text-foreground">{expense.category}</span>
-                                        </td>
-                                        <td className="py-4 px-3">
-                                            <span className="text-sm font-semibold text-foreground whitespace-nowrap">
-                                                {formatAmount(expense.amount)}
-                                            </span>
+                                            <span className="text-sm font-semibold text-foreground whitespace-nowrap">{payment.amount}</span>
                                         </td>
                                         <td className="py-4 px-3 hidden md:table-cell">
-                                            <span className="text-sm text-foreground whitespace-nowrap">
-                                                {formatDate(expense.date)}
-                                            </span>
+                                            <span className="text-sm text-foreground">{payment.cycle}</span>
                                         </td>
                                         <td className="py-4 px-3">
-                                            <div className="flex items-center justify-end gap-2">
-                                                {expense.type === 'auto' ? (
-                                                    <>
-                                                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground">
-                                                            Auto
-                                                        </span>
-                                                        <button
-                                                            onClick={() => handleView(expense.id)}
-                                                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors text-xs text-foreground border border-border hover:bg-muted"
-                                                        >
-                                                            <Eye size={14} />
-                                                            View
-                                                        </button>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <button
-                                                            onClick={() => handleEdit(expense.id)}
-                                                            className="p-2 rounded transition-colors text-primary hover:bg-primary/10"
-                                                        >
-                                                            <Edit2 size={16} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDelete(expense.id)}
-                                                            className="p-2 rounded transition-colors text-red-500 hover:bg-red-500/10"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                    </>
-                                                )}
+                                            <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-blue-500 text-white">
+                                                {payment.status}
+                                            </span>
+                                        </td>
+                                        <td className="py-4 px-3 hidden lg:table-cell">
+                                            <span className="text-xs text-muted-foreground">{payment.category}</span>
+                                        </td>
+                                        <td className="py-4 px-3">
+                                            <div className="flex justify-end">
+                                                <button
+                                                    onClick={() => handleAddNow(payment.staffId)}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                                                >
+                                                    <Plus size={14} />
+                                                    Add Now
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -822,346 +954,216 @@ className="p-1.5 rounded transition-colors text-red-500 hover:bg-red-500/10"
                         </table>
                     </div>
 
-                    {filteredExpenses.length === 0 && (
+                    {autoAddedPayments.length === 0 && (
                         <div className="text-center py-8">
-                            <Search className="w-12 h-12 mx-auto mb-3 opacity-30 text-muted-foreground" />
-                            <p className="text-sm font-medium text-foreground mb-1">No expenses found</p>
-                            <p className="text-xs text-muted-foreground mb-4">
-                                {hasActiveFilters 
-                                    ? 'Try adjusting your filters or search criteria'
-                                    : 'Add your first expense to get started'
-                                }
-                            </p>
-                            {hasActiveFilters && (
-                                <button
-                                    onClick={handleResetFilters}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                                >
-                                    <RotateCw className="w-3 h-3" />
-                                    <span>Clear filters</span>
-                                </button>
-                            )}
+                            <p className="text-sm text-muted-foreground">No upcoming staff payments.</p>
                         </div>
                     )}
                 </div>
-            ) : null}
+            </div>
 
-            {/* Auto-Added Staff Payments */}
-            <div className="rounded-lg px-3 sm:px-4 md:px-5 py-4 bg-card border border-border">
-                <div className="flex flex-col gap-2 mb-4">
-                    <h2 className="text-base sm:text-lg font-bold text-foreground">Auto-Added Staff Payments</h2>
-                    <span className="text-xs text-muted-foreground">Entries generated from staff joining-date cycles</span>
-                </div>
-
-                {/* Mobile Card View */}
-                <div className="block sm:hidden space-y-3">
-                    {autoAddedPayments.map((payment) => (
-                        <div key={payment.id} className="bg-muted rounded-lg p-3 border border-border">
-                            <div className="flex items-start justify-between mb-2">
-                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                    <div
-                                        className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 text-white"
-                                        style={{ backgroundColor: payment.color }}
-                                    >
-                                        {payment.avatar}
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <div className="font-bold text-sm text-foreground truncate">{payment.name}</div>
-                                        <div className="text-xs text-muted-foreground truncate">{payment.role}</div>
-                                    </div>
-                                </div>
-                                <span className="text-sm font-semibold text-foreground whitespace-nowrap ml-2">{payment.amount}</span>
-                            </div>
-                            <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
-                                <span>{payment.cycle}</span>
-                                <span
-                                    className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500 text-white"
-                                >
-                                    {payment.status}
-                                </span>
-                            </div>
-                            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+            {/* Add/Edit Expense Modal */}
+            <Modal
+                isOpen={showAddForm}
+                onClose={() => {
+                    setShowAddForm(false);
+                    handleReset();
+                }}
+                title={editingId ? "Edit Expense" : "Add Expense"}
+                subtitle={editingId ? "Update expense details" : "Create a manual expense with full details"}
+            >
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        {/* Expense Details */}
+                        <div className="rounded-lg px-3 sm:px-4 py-4 bg-muted border border-border">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-sm font-bold text-foreground">Expense Details</h3>
                                 <button
-                                    onClick={() => handleAddNow(payment.staffId)}
-                                    className="flex items-center gap-1 px-2 py-1 rounded-lg transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                                    onClick={handleReset}
+                                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium transition-colors text-xs text-primary border border-primary hover:bg-primary/10"
                                 >
-                                    <Plus size={12} />
-                                    Add Now
+                                    <RotateCw size={14} />
+                                    Reset
                                 </button>
                             </div>
-                        </div>
-                    ))}
-                </div>
 
-                {/* Desktop Table View */}
-                <div className="hidden sm:block overflow-x-auto">
-                    <table className="w-full">
-                        <thead>
-                            <tr className="bg-primary/10 border-b border-border">
-                                <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Staff</th>
-                                <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Amount</th>
-                                <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground hidden md:table-cell">Cycle</th>
-                                <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Status</th>
-                                <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground hidden lg:table-cell">Category</th>
-                                <th className="text-right font-bold py-3 px-3 text-sm text-muted-foreground">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {autoAddedPayments.map((payment) => (
-                                <tr key={payment.id} className="border-b border-border">
-                                    <td className="py-4 px-3">
-                                        <div className="flex items-center gap-2">
-                                            <div
-                                                className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 text-white"
-                                                style={{ backgroundColor: payment.color }}
-                                            >
-                                                {payment.avatar}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <div className="font-bold text-sm text-foreground truncate">{payment.name}</div>
-                                                <div className="text-xs text-muted-foreground truncate">{payment.role}</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="py-4 px-3">
-                                        <span className="text-sm font-semibold text-foreground whitespace-nowrap">{payment.amount}</span>
-                                    </td>
-                                    <td className="py-4 px-3 hidden md:table-cell">
-                                        <span className="text-sm text-foreground">{payment.cycle}</span>
-                                    </td>
-                                    <td className="py-4 px-3">
-                                        <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-blue-500 text-white">
-                                            {payment.status}
-                                        </span>
-                                    </td>
-                                    <td className="py-4 px-3 hidden lg:table-cell">
-                                        <span className="text-xs text-muted-foreground">{payment.category}</span>
-                                    </td>
-                                    <td className="py-4 px-3">
-                                        <div className="flex justify-end">
-                                            <button
-                                                onClick={() => handleAddNow(payment.staffId)}
-                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                                            >
-                                                <Plus size={14} />
-                                                Add Now
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-
-                {autoAddedPayments.length === 0 && (
-                    <div className="text-center py-8">
-                        <p className="text-sm text-muted-foreground">No upcoming staff payments.</p>
-                    </div>
-                )}
-            </div>
-        </div>
-
-        {/* Add/Edit Expense Modal */}
-        <Modal
-            isOpen={showAddForm}
-            onClose={() => {
-                setShowAddForm(false);
-                handleReset();
-            }}
-            title={editingId ? "Edit Expense" : "Add Expense"}
-            subtitle={editingId ? "Update expense details" : "Create a manual expense with full details"}
-        >
-            <div className="space-y-4">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* Expense Details */}
-                    <div className="rounded-lg px-3 sm:px-4 py-4 bg-muted border border-border">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-sm font-bold text-foreground">Expense Details</h3>
-                            <button
-                                onClick={handleReset}
-                                className="flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium transition-colors text-xs text-primary border border-primary hover:bg-primary/10"
-                            >
-                                <RotateCw size={14} />
-                                Reset
-                            </button>
-                        </div>
-
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-xs mb-1.5 text-muted-foreground">Title</label>
-                                <input
-                                    type="text"
-                                    placeholder="Enter expense title"
-                                    value={formData.title}
-                                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs mb-1.5 text-muted-foreground">Date</label>
-                                <input
-                                    type="date"
-                                    value={formData.date}
-                                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs mb-1.5 text-muted-foreground">Category</label>
-                                <select
-                                    value={formData.category}
-                                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
-                                >
-                                    <option value="">Select category</option>
-                                    <option>Kitchen Supplies</option>
-                                    <option>Salaries & Wages</option>
-                                    <option>Utilities</option>
-                                    <option>Rent</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs mb-1.5 text-muted-foreground">Account</label>
-                                <input
-                                    type="text"
-                                    value={formData.account}
-                                    onChange={(e) => setFormData({ ...formData, account: e.target.value })}
-                                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className="space-y-3">
                                 <div>
-                                    <label className="block text-xs mb-1.5 text-muted-foreground">Amount</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={formData.amount}
-                                        onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                        className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs mb-1.5 text-muted-foreground">Tax (%)</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={formData.tax}
-                                        onChange={(e) => setFormData({ ...formData, tax: e.target.value })}
-                                        className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs mb-1.5 text-muted-foreground">Mode</label>
+                                    <label className="block text-xs mb-1.5 text-muted-foreground">Title</label>
                                     <input
                                         type="text"
-                                        value={formData.payment_mode}
-                                        onChange={(e) => setFormData({ ...formData, payment_mode: e.target.value })}
+                                        placeholder="Enter expense title"
+                                        value={formData.title}
+                                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                        className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs mb-1.5 text-muted-foreground">Date</label>
+                                    <input
+                                        type="date"
+                                        value={formData.date}
+                                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                                         className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                                     />
                                 </div>
+
+                                <div>
+                                    <label className="block text-xs mb-1.5 text-muted-foreground">Category</label>
+                                    <select
+                                        value={formData.category}
+                                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                        className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
+                                    >
+                                        <option value="">Select category</option>
+                                        <option>Kitchen Supplies</option>
+                                        <option>Salaries & Wages</option>
+                                        <option>Utilities</option>
+                                        <option>Rent</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs mb-1.5 text-muted-foreground">Account</label>
+                                    <input
+                                        type="text"
+                                        value={formData.account}
+                                        onChange={(e) => setFormData({ ...formData, account: e.target.value })}
+                                        className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div>
+                                        <label className="block text-xs mb-1.5 text-muted-foreground">Amount</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={formData.amount}
+                                            onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                                            className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs mb-1.5 text-muted-foreground">Tax (%)</label>
+                                        <input
+                                            type="number"
+                                            step="0.01"
+                                            value={formData.tax}
+                                            onChange={(e) => setFormData({ ...formData, tax: e.target.value })}
+                                            className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs mb-1.5 text-muted-foreground">Mode</label>
+                                        <input
+                                            type="text"
+                                            value={formData.payment_mode}
+                                            onChange={(e) => setFormData({ ...formData, payment_mode: e.target.value })}
+                                            className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs mb-1.5 text-muted-foreground">Notes</label>
+                                    <textarea
+                                        placeholder="Optional notes"
+                                        value={formData.notes}
+                                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                                        rows="3"
+                                        className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                                    />
+                                </div>
+
+                                <div className="flex flex-col sm:flex-row gap-2 pt-3">
+                                    <button
+                                        onClick={handleSaveDraft}
+                                        className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm bg-transparent text-foreground border border-border hover:bg-muted"
+                                    >
+                                        <FileText size={16} />
+                                        Save Draft
+                                    </button>
+                                    <button
+                                        onClick={handleAddExpense}
+                                        disabled={loading}
+                                        className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                                    >
+                                        {loading ? (
+                                            <>
+                                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                                Processing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Plus size={16} />
+                                                {editingId ? 'Update Expense' : 'Add Expense'}
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Quick Add Presets */}
+                        <div className="rounded-lg px-3 sm:px-4 py-4 bg-muted border border-border">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-sm font-bold text-foreground">Quick Add Presets</h3>
+                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground">
+                                    This Month
+                                </span>
+                            </div>
+
+                            <p className="text-xs mb-3 text-muted-foreground">Use presets for frequent expenses</p>
+
+                            <div className="grid grid-cols-2 gap-2 mb-4">
+                                {presets.map((preset) => (
+                                    <button
+                                        key={preset.id}
+                                        onClick={() => handlePresetClick(preset)}
+                                        className="flex items-center gap-2 px-3 py-2.5 rounded-lg font-medium transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                                    >
+                                        <preset.icon size={16} className="flex-shrink-0" />
+                                        <div className="text-left min-w-0">
+                                            <div className="font-semibold truncate">{preset.label}</div>
+                                            <div className="text-xs opacity-90">{preset.amount}</div>
+                                        </div>
+                                    </button>
+                                ))}
                             </div>
 
                             <div>
-                                <label className="block text-xs mb-1.5 text-muted-foreground">Notes</label>
-                                <textarea
-                                    placeholder="Optional notes"
-                                    value={formData.notes}
-                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                    rows="3"
-                                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                                <label className="block text-xs mb-1.5 text-muted-foreground">Attach Receipt</label>
+                                <label htmlFor="file-upload">
+                                    <div
+                                        className="flex flex-col items-center justify-center gap-2 px-4 py-6 rounded-lg border-2 border-dashed cursor-pointer transition-colors border-border bg-background hover:border-primary"
+                                    >
+                                        <Paperclip size={18} className="text-foreground" />
+                                        <div className="text-center">
+                                            <span className="text-sm text-foreground">Drop image/PDF</span>
+                                            <span className="text-xs ml-2 text-primary">Optional</span>
+                                        </div>
+                                    </div>
+                                </label>
+                                <input
+                                    id="file-upload"
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                        if (e.target.files?.[0]) {
+                                            alert(`File selected: ${e.target.files[0].name}`);
+                                        }
+                                    }}
                                 />
                             </div>
-
-                            <div className="flex flex-col sm:flex-row gap-2 pt-3">
-                                <button
-                                    onClick={handleSaveDraft}
-                                    className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm bg-transparent text-foreground border border-border hover:bg-muted"
-                                >
-                                    <FileText size={16} />
-                                    Save Draft
-                                </button>
-                                <button
-                                    onClick={handleAddExpense}
-                                    disabled={loading}
-                                    className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                                >
-                                    {loading ? (
-                                        <>
-                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                            Processing...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Plus size={16} />
-                                            {editingId ? 'Update Expense' : 'Add Expense'}
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Quick Add Presets */}
-                    <div className="rounded-lg px-3 sm:px-4 py-4 bg-muted border border-border">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-sm font-bold text-foreground">Quick Add Presets</h3>
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground">
-                                This Month
-                            </span>
-                        </div>
-
-                        <p className="text-xs mb-3 text-muted-foreground">Use presets for frequent expenses</p>
-
-                        <div className="grid grid-cols-2 gap-2 mb-4">
-                            {presets.map((preset) => (
-                                <button
-                                    key={preset.id}
-                                    onClick={() => handlePresetClick(preset)}
-                                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg font-medium transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                                >
-                                    <preset.icon size={16} className="flex-shrink-0" />
-                                    <div className="text-left min-w-0">
-                                        <div className="font-semibold truncate">{preset.label}</div>
-                                        <div className="text-xs opacity-90">{preset.amount}</div>
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-
-                        <div>
-                            <label className="block text-xs mb-1.5 text-muted-foreground">Attach Receipt</label>
-                            <label htmlFor="file-upload">
-                                <div
-                                    className="flex flex-col items-center justify-center gap-2 px-4 py-6 rounded-lg border-2 border-dashed cursor-pointer transition-colors border-border bg-background hover:border-primary"
-                                >
-                                    <Paperclip size={18} className="text-foreground" />
-                                    <div className="text-center">
-                                        <span className="text-sm text-foreground">Drop image/PDF</span>
-                                        <span className="text-xs ml-2 text-primary">Optional</span>
-                                    </div>
-                                </div>
-                            </label>
-                            <input
-                                id="file-upload"
-                                type="file"
-                                accept="image/*,.pdf"
-                                className="hidden"
-                                onChange={(e) => {
-                                    if (e.target.files?.[0]) {
-                                        alert(`File selected: ${e.target.files[0].name}`);
-                                    }
-                                }}
-                            />
                         </div>
                     </div>
                 </div>
-            </div>
-        </Modal>
-    </div>
-);};
+            </Modal>
+        </div>
+    );
+};
+
 export default ExpensesManagement;
