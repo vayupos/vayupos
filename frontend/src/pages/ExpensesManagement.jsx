@@ -382,7 +382,7 @@ const ExpensesManagement = () => {
         }
     };
 
-    // ✅ Handle adding salary from upcoming payments
+    // ✅ Handle adding salary from upcoming payments - FIXED VERSION
     const handleAddNow = async (staffId) => {
         const payment = autoAddedPayments.find(p => p.staffId === staffId);
         if (!payment) return;
@@ -429,8 +429,16 @@ const ExpensesManagement = () => {
             }
 
             alert('Salary entry added successfully!');
+            
+            // IMMEDIATELY remove from UI
+            setAutoAddedPayments(prevPayments => 
+                prevPayments.filter(payment => payment.staffId !== staffId)
+            );
+            
+            // Then refresh both lists from server
             await loadExpenses();
             await loadUpcomingStaffSalaries();
+            
         } catch (error) {
             alert('Failed to add salary entry.');
             console.error('Error:', error);
@@ -705,40 +713,37 @@ const ExpensesManagement = () => {
                                         <span>{formatDate(expense.date)}</span>
                                     </div>
                                     <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
-                                        {expense.type === 'auto' ? (
-                                            <>
-                                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground">Auto
-                                            </span>
-                                            <button
-                                                onClick={() => handleView(expense.id)}
-                                                className="flex items-center gap-1 px-2 py-1 rounded-lg transition-colors text-xs text-foreground border border-border hover:bg-muted"
-                                            >
-                                                <Eye size={12} />
-                                                View
-                                            </button>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <button
-                                                onClick={() => handleEdit(expense.id)}
-                                                className="p-1.5 rounded transition-colors text-primary hover:bg-primary/10"
-                                            >
-                                                <Edit2 size={14} />
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(expense.id)}
-                                                className="p-1.5 rounded transition-colors text-red-500 hover:bg-red-500/10"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Desktop Table View */}
+                                        {expense.type=== 'auto' ? (
+<>
+<span className="px-2 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground">Auto</span>
+<button
+onClick={() => handleView(expense.id)}
+className="flex items-center gap-1 px-2 py-1 rounded-lg transition-colors text-xs text-foreground border border-border hover:bg-muted"
+>
+<Eye size={12} />
+View
+</button>
+</>
+) : (
+<>
+<button
+onClick={() => handleEdit(expense.id)}
+className="p-1.5 rounded transition-colors text-primary hover:bg-primary/10"
+>
+<Edit2 size={14} />
+</button>
+<button
+onClick={() => handleDelete(expense.id)}
+className="p-1.5 rounded transition-colors text-red-500 hover:bg-red-500/10"
+>
+<Trash2 size={14} />
+</button>
+</>
+)}
+</div>
+</div>
+))}
+</div>{/* Desktop Table View */}
                     <div className="hidden sm:block overflow-x-auto">
                         <table className="w-full">
                             <thead>
@@ -957,7 +962,7 @@ const ExpensesManagement = () => {
             </div>
         </div>
 
-        {/* Add/Edit Expense Modal - Continue in next message due to length */}
+        {/* Add/Edit Expense Modal */}
         <Modal
             isOpen={showAddForm}
             onClose={() => {
