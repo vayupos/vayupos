@@ -1,1201 +1,726 @@
-import React, { useState, useEffect, useMemo } from "react";
-import {
-  ArrowLeft,
-  Save,
-  Download,
-  Edit,
-  Copy,
-  IndianRupee,
-  Clock,
-  ShoppingBag,
-  Trash2,
-  PlusCircle,
-  Search,
-} from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import api from "../api/axios";
+import React, { useState, useEffect } from 'react';
+import { Search, Calendar, RefreshCw, Printer, Download, Eye, X, AlertCircle } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-function Customers() {
-  const navigate = useNavigate();
+// API Configuration
+const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
+
+const PastOrders = () => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
+  const [paymentFilter, setPaymentFilter] = useState('All');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showBillModal, setShowBillModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
   
-  // State management
-  const [view, setView] = useState("list");
-  const [isEditing, setIsEditing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [dateRange, setDateRange] = useState("Last 30 days");
-  const [statusFilter, setStatusFilter] = useState("All / Paid / Pending");
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showOfferModal, setShowOfferModal] = useState(false);
-  const [customerSearchQuery, setCustomerSearchQuery] = useState("");
-  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
-
-  // Customers from backend
-  const [customers, setCustomers] = useState([]);
-  const [customerData, setCustomerData] = useState(null);
-  const [editData, setEditData] = useState(null);
-
-  // Orders from backend for selected customer
+  // API States
   const [orders, setOrders] = useState([]);
-
-  // Coupons for offer modal
-  const [availableCoupons, setAvailableCoupons] = useState([]);
-  const [selectedCoupon, setSelectedCoupon] = useState("");
-
-  // Helpers ------------------------------------------------------
-
-  const getDisplayName = (c) =>
-    `${c.first_name || ""} ${c.last_name || ""}`.trim() || "Customer";
-
-  const getInitials = (c) =>
-    getDisplayName(c)
-      .split(" ")
-      .filter(Boolean)
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase() || "CU";
-
-  const mapCustomerToUi = (c) => {
-    const totalSpentNum = (() => {
-      if (!c.total_spent) return 0;
-      try {
-        const n = Number(c.total_spent);
-        return Number.isFinite(n) ? n : 0;
-      } catch {
-        return 0;
-      }
-    })();
-
-    return {
-      id: c.id,
-      name: getDisplayName(c),
-      memberSince: new Date(c.created_at).toLocaleDateString("en-GB", {
-        month: "short",
-        year: "numeric",
-      }),
-      loyaltyPoints: c.loyalty_points ?? 0,
-      phone: c.phone || "",
-      email: c.email || "",
-      address: c.address || "",
-      notes: "",
-      totalOrders: 0,
-      lifetimeSpend: totalSpentNum,
-      avgOrder: 0,
-      lastVisit: "—",
-    };
-  };
-
-  const mapCustomerToEdit = (c) => ({
-    id: c.id,
-    first_name: c.first_name || "",
-    last_name: c.last_name || "",
-    email: c.email || "",
-    phone: c.phone || "",
-    address: c.address || "",
-    city: c.city || "",
-    state: c.state || "",
-    zip_code: c.zip_code || "",
-    country: c.country || "",
-    is_active: c.is_active ?? true,
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [weeklyRevenueData, setWeeklyRevenueData] = useState([]);
+  const [statistics, setStatistics] = useState({
+    todayOrders: 0,
+    revenue: 0,
+    avgTicketSize: 0,
+    weeklyTotal: 0
   });
 
-  const mapUiToCustomerHeader = (edit) => ({
-    first_name: edit.first_name,
-    last_name: edit.last_name,
-    email: edit.email,
-    phone: edit.phone,
-    address: edit.address,
-    city: edit.city,
-    state: edit.state,
-    zip_code: edit.zip_code,
-    country: edit.country,
-    is_active: edit.is_active,
-  });
+  // Fetch orders with filters (removed statusFilter)
+  const fetchOrders = async (showLoader = true) => {
+    if (showLoader) setLoading(true);
+    setError(null);
 
-  const loadCustomerOrders = async (customerId) => {
     try {
-      const res = await api.get(`/orders/customer/${customerId}`, {
-        params: { limit: 50 },
+      const params = new URLSearchParams({
+        skip: '0',
+        limit: '100'
       });
-      const data = res.data || [];
-      setOrders(Array.isArray(data) ? data : []);
+
+      // Add filters to API call (no status filter)
+      if (paymentFilter !== 'All') {
+        params.append('payment_method', paymentFilter.toLowerCase());
+      }
+      if (selectedDate) {
+        params.append('date', selectedDate);
+      }
+      if (searchQuery) {
+        params.append('search', searchQuery);
+      }
+
+      console.log('Fetching with params:', params.toString());
+
+      const response = await fetch(`${API_BASE_URL}/orders?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API Error:', response.status, errorText);
+        throw new Error(`API failed (${response.status}): ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('Fetched orders:', data);
+
+      const ordersArray = data.data || [];
+      const transformedOrders = transformOrdersData(ordersArray);
+      setOrders(transformedOrders);
+      calculateStatistics(transformedOrders);
+
     } catch (err) {
-      console.error("LOAD CUSTOMER ORDERS ERROR:", err?.response?.data || err);
-      setOrders([]);
+      console.error('Fetch error:', err);
+      setError(err.message || 'Failed to load orders');
+    } finally {
+      if (showLoader) setLoading(false);
     }
   };
 
-  const loadAvailableCoupons = async () => {
+  // Fetch single order details
+  const fetchOrderDetails = async (orderId) => {
     try {
-      const res = await api.get("/coupons/available");
-      const data = res.data || {};
-      const eligible = data.eligible || [];
-      setAvailableCoupons(eligible);
-      if (eligible.length > 0) {
-        setSelectedCoupon(eligible[0].code);
+      const response = await fetch(`${API_BASE_URL}/orders/${orderId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch order details: ${response.status}`);
       }
+
+      const data = await response.json();
+      return data;
     } catch (err) {
-      console.error("LOAD COUPONS ERROR:", err?.response?.data || err);
-      setAvailableCoupons([]);
+      console.error('Error fetching order details:', err);
+      return null;
     }
   };
 
-  // Initial load of customers - REMOVED AUTO-SELECTION
-  useEffect(() => {
-    const loadCustomers = async () => {
-      try {
-        const res = await api.get("/customers/", {
-          params: { skip: 0, limit: 100 },
-        });
-        const list = res.data.data || res.data || [];
-        setCustomers(list);
-        // REMOVED: Auto-selection of first customer
-        // Now stays on list view until user clicks
-      } catch (err) {
-        console.error("LOAD CUSTOMERS ERROR:", err?.response?.data || err);
-        alert("Failed to load customers");
-      }
-    };
+  const transformOrdersData = (apiData) => {
+    if (!Array.isArray(apiData)) return [];
 
-    loadCustomers();
-  }, []);
+    return apiData.map(order => {
+      // Extract customer info
+      const customer = order.customer || {};
+      const customerName = customer.first_name 
+        ? `${customer.first_name} ${customer.last_name || ''}`.trim()
+        : 'Walk-in';
+      
+      const avatar = customerName.charAt(0).toUpperCase();
+      const colors = ['#F59E0B', '#3B82F6', '#8B5CF6', '#10B981', '#EF4444', '#6B7280'];
+      const colorIndex = customerName.length % colors.length;
 
-  // Filters ------------------------------------------------------
+      // Parse order details
+      const subtotal = parseFloat(order.subtotal || 0);
+      const tax = parseFloat(order.tax || 0);
+      const discount = parseFloat(order.discount || 0);
+      const total = parseFloat(order.total || 0);
 
-  const filteredCustomers = useMemo(() => {
-    if (!customerSearchQuery.trim()) {
-      return customers.map(mapCustomerToUi);
-    }
-    const q = customerSearchQuery.toLowerCase();
-    return customers
-      .map(mapCustomerToUi)
-      .filter(
-        (customer) =>
-          customer.name.toLowerCase().includes(q) ||
-          customer.phone.includes(customerSearchQuery) ||
-          customer.email.toLowerCase().includes(customerSearchQuery)
-      );
-  }, [customers, customerSearchQuery]);
+      const orderType = order.order_type || 'Dine-in';
+      const orderTime = order.created_at 
+        ? new Date(order.created_at).toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit' 
+          })
+        : '--:--';
 
-  const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
-      const matchesSearch =
-        searchQuery === "" ||
-        (order.order_number || "")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase()) ||
-        (order.notes || "")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase());
+      // Normalize status and payment
+      let normalizedStatus = (order.status || 'completed').toLowerCase().trim();
+      if (normalizedStatus === 'complete') normalizedStatus = 'completed';
+      if (normalizedStatus === 'refund') normalizedStatus = 'refunded';
 
-      let statusText = (order.status || "").toLowerCase();
-      let displayStatus = "Pending";
-      if (statusText === "completed" || statusText === "paid") {
-        displayStatus = "Paid";
-      }
+      let normalizedPayment = (order.payment_method || order.payment || 'Cash').trim();
+      normalizedPayment = normalizedPayment.charAt(0).toUpperCase() + normalizedPayment.slice(1).toLowerCase();
 
-      const matchesStatus =
-        statusFilter === "All / Paid / Pending" ||
-        displayStatus.toLowerCase() === statusFilter.toLowerCase();
-
-      return matchesSearch && matchesStatus;
+      return {
+        id: order.order_number || `#${order.id}`,
+        orderId: order.id,
+        type: orderType,
+        time: orderTime,
+        customer: {
+          name: customerName,
+          avatar: avatar,
+          color: colors[colorIndex]
+        },
+        items: order.order_items?.length || 0,
+        subtotal: subtotal,
+        gst: tax,
+        discount: discount > 0 ? discount : null,
+        total: total,
+        payment: normalizedPayment,
+        status: normalizedStatus,
+        createdAt: order.created_at
+      };
     });
-  }, [orders, searchQuery, statusFilter]);
-
-  // Event handlers -----------------------------------------------
-
-  const handleSelectCustomer = async (customerUi) => {
-    const backend = customers.find((c) => c.id === customerUi.id);
-    if (!backend) return;
-
-    setSelectedCustomerId(backend.id);
-    setCustomerData(mapCustomerToUi(backend));
-    setEditData(mapCustomerToEdit(backend));
-    setIsEditing(false);
-    setView("detail");
-    await loadCustomerOrders(backend.id);
   };
 
-  const handleEdit = async () => {
-    if (!customerData || !editData) return;
+  const calculateStatistics = (ordersData) => {
+    const today = new Date().toISOString().split('T')[0];
+    
+    const todaysOrders = ordersData.filter(order => {
+      const orderDate = order.createdAt?.split('T')[0];
+      return orderDate === today;
+    });
 
-    if (isEditing) {
-      try {
-        const body = mapUiToCustomerHeader(editData);
-        const res = await api.put(`/customers/${customerData.id}`, body);
-        const updated = res.data;
+    const todayOrderCount = todaysOrders.length;
+    const todayRevenue = todaysOrders.reduce((sum, order) => sum + order.total, 0);
+    const avgTicket = todayOrderCount > 0 ? todayRevenue / todayOrderCount : 0;
 
-        setCustomers((prev) =>
-          prev.map((c) => (c.id === updated.id ? updated : c))
-        );
-        setCustomerData(mapCustomerToUi(updated));
-        setEditData(mapCustomerToEdit(updated));
+    const weeklyData = calculateWeeklyRevenue(ordersData);
+    const weeklyTotal = weeklyData.reduce((sum, day) => sum + day.revenue, 0);
 
-        alert("Customer details saved successfully!");
-      } catch (err) {
-        console.error("UPDATE CUSTOMER ERROR:", err?.response?.data || err);
-        alert("Failed to update customer");
-        return;
+    setStatistics({
+      todayOrders: todayOrderCount,
+      revenue: todayRevenue,
+      avgTicketSize: avgTicket,
+      weeklyTotal: weeklyTotal
+    });
+
+    setWeeklyRevenueData(weeklyData);
+  };
+
+  const calculateWeeklyRevenue = (ordersData) => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const weekData = Array(7).fill(null).map((_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - i));
+      return {
+        day: days[date.getDay()],
+        date: date.toISOString().split('T')[0],
+        revenue: 0,
+        orders: 0
+      };
+    });
+
+    ordersData.forEach(order => {
+      const orderDate = order.createdAt?.split('T')[0];
+      const dayData = weekData.find(d => d.date === orderDate);
+      if (dayData) {
+        dayData.revenue += order.total;
+        dayData.orders += 1;
+      }
+    });
+
+    return weekData;
+  };
+
+  // useEffect without statusFilter dependency
+  useEffect(() => {
+    fetchOrders();
+  }, [paymentFilter, selectedDate, searchQuery]);
+
+  // Client-side filtering without status filter
+  const filteredOrders = orders.filter(order => {
+    const matchesSearch = order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         order.customer.name.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesPayment = paymentFilter === 'All' || 
+                           order.payment.toLowerCase() === paymentFilter.toLowerCase();
+    
+    const matchesDate = !selectedDate || order.createdAt?.split('T')[0] === selectedDate;
+
+    return matchesSearch && matchesPayment && matchesDate;
+  });
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchOrders(false);
+    setIsRefreshing(false);
+  };
+
+  const handlePrintBill = async (order) => {
+    if (order.orderId) {
+      const fullOrderDetails = await fetchOrderDetails(order.orderId);
+      if (fullOrderDetails) {
+        setSelectedOrder({ ...order, ...fullOrderDetails });
+      } else {
+        setSelectedOrder(order);
       }
     } else {
-      const backend = customers.find((c) => c.id === customerData.id);
-      if (backend) setEditData(mapCustomerToEdit(backend));
+      setSelectedOrder(order);
     }
-
-    setIsEditing(!isEditing);
+    setShowBillModal(true);
   };
 
-  const handleStartPOS = () => {
-    if (!customerData) return;
+  const handleActualPrint = () => {
+    window.print();
+  };
+
+  const handleDownloadBill = (order) => {
+    const billContent = `Restaurant Bill
+
+Order ID: ${order.id}
+Type: ${order.type}
+Date: ${order.createdAt?.split('T')[0] || selectedDate}
+Time: ${order.time}
+
+Customer: ${order.customer.name}
+
+Items: ${order.items}
+
+Subtotal:     ₹ ${order.subtotal.toFixed(2)}
+GST:          ₹ ${order.gst.toFixed(2)}
+${order.discount ? `Discount:     - ₹ ${order.discount.toFixed(2)}\n` : ''}
+TOTAL:        ₹ ${order.total.toFixed(2)}
+
+Payment Method: ${order.payment}
+
+Thank you for your visit!`;
     
-    // Navigate to POS page with customer data
-    navigate('/pos', { 
-      state: { 
-        customer: {
-          id: customerData.id,
-          name: customerData.name,
-          phone: customerData.phone,
-          email: customerData.email
-        }
-      } 
-    });
+    const blob = new Blob([billContent], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Bill_${order.id}_${order.createdAt?.split('T')[0] || selectedDate}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
   };
 
-  const handleApplyOffer = async () => {
-    await loadAvailableCoupons();
-    setShowOfferModal(true);
+  const handleViewBill = async (order) => {
+    await handlePrintBill(order);
   };
 
-  const confirmApplyOffer = async () => {
-    if (!customerData || !selectedCoupon) return;
-    
-    try {
-      // Validate the coupon first (optional, but good practice)
-      const validateRes = await api.post("/coupons/validate", {
-        coupon_code: selectedCoupon,
-        subtotal: customerData.lifetimeSpend || 0,
-        customer_id: customerData.id.toString()
-      });
-
-      if (validateRes.data.valid && validateRes.data.eligible) {
-        alert(
-          `✅ Offer "${selectedCoupon}" applied to ${customerData.name}'s account!\n\nDiscount: ${validateRes.data.coupon.discount_type === 'percentage' ? validateRes.data.coupon.discount_value + '%' : '₹' + validateRes.data.coupon.discount_value}\n\nThey can use this coupon on their next order.`
-        );
-        setShowOfferModal(false);
-      } else {
-        alert(`❌ Coupon validation failed: ${validateRes.data.message || 'Not eligible'}`);
-      }
-    } catch (err) {
-      console.error("APPLY OFFER ERROR:", err?.response?.data || err);
-      alert("Failed to apply offer. Please try again.");
-    }
-  };
-
-  const handleDeleteCustomer = () => {
-    setShowDeleteModal(true);
-  };
-
-  const confirmDelete = async () => {
-    if (!customerData) return;
-    
-    try {
-      await api.delete(`/customers/${customerData.id}`);
-      
-      // Remove from local state
-      setCustomers((prev) =>
-        prev.filter((c) => c.id !== customerData.id)
-      );
-      
-      alert(
-        `✅ Customer ${customerData.name} has been deactivated successfully.`
-      );
-      
-      setShowDeleteModal(false);
-      setView("list");
-      setCustomerData(null);
-      setEditData(null);
-      setSelectedCustomerId(null);
-      setOrders([]);
-    } catch (err) {
-      console.error("DELETE CUSTOMER ERROR:", err?.response?.data || err);
-      alert("Failed to delete customer. Please try again.");
-    }
-  };
-
-  // Open popup in NEW TAB
-  const handleViewOrder = (order) => {
-    const statusText = (order.status || "").toLowerCase() === "completed" ? "Paid" : "Pending";
-    
-    // Create HTML content for the popup
-    const popupContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Order Details - ${order.order_number}</title>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
-          }
-          .modal {
-            background: #1e293b;
-            border-radius: 16px;
-            padding: 32px;
-            max-width: 450px;
-            width: 100%;
-            color: #f1f5f9;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-          }
-          .modal h3 {
-            margin: 0 0 24px 0;
-            font-size: 24px;
-            font-weight: 600;
-            color: #f1f5f9;
-          }
-          .detail-row {
-            margin-bottom: 20px;
-          }
-          .label {
-            font-size: 13px;
-            color: #94a3b8;
-            margin-bottom: 6px;
-            font-weight: 500;
-          }
-          .value {
-            font-size: 15px;
-            color: #f1f5f9;
-            font-weight: 500;
-          }
-          .total {
-            font-size: 20px;
-            font-weight: 700;
-            color: #0d9488;
-          }
-          .badge {
-            display: inline-block;
-            padding: 6px 14px;
-            border-radius: 16px;
-            font-size: 13px;
-            font-weight: 500;
-            background: ${statusText === "Paid" ? "#0d9488" : "#ca8a04"};
-            color: white;
-          }
-          .btn-ok {
-            width: 100%;
-            padding: 14px;
-            margin-top: 28px;
-            background: #0d9488;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-          }
-          .btn-ok:hover {
-            background: #0f766e;
-            transform: translateY(-1px);
-          }
-          .btn-ok:active {
-            transform: translateY(0);
-          }
-          .divider {
-            height: 1px;
-            background: #334155;
-            margin: 20px 0;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="modal">
-          <h3>Order Details</h3>
-          
-          <div class="detail-row">
-            <div class="label">Order ID:</div>
-            <div class="value">#${order.order_number}</div>
-          </div>
-          
-          <div class="detail-row">
-            <div class="label">Date:</div>
-            <div class="value">${order.created_at}</div>
-          </div>
-          
-          <div class="divider"></div>
-          
-          <div class="detail-row">
-            <div class="label">Items:</div>
-            <div class="value">${order.notes || "Masala Dosa, Coffee"}</div>
-          </div>
-          
-          <div class="detail-row">
-            <div class="label">Total:</div>
-            <div class="value total">₹${order.total}</div>
-          </div>
-          
-          <div class="divider"></div>
-          
-          <div class="detail-row">
-            <div class="label">Payment:</div>
-            <span class="badge">${statusText}, UPI</span>
-          </div>
-          
-          <button class="btn-ok" onclick="window.close()">OK</button>
+  const CustomTooltip = ({ active, payload }) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-card border border-border rounded-lg px-3 py-2 shadow-lg">
+          <p className="text-sm font-semibold text-foreground">{payload[0].payload.day}</p>
+          <p className="text-sm text-muted-foreground">Revenue: ₹ {payload[0].value.toLocaleString()}</p>
+          <p className="text-sm text-muted-foreground">Orders: {payload[0].payload.orders}</p>
         </div>
-        
-        <script>
-          window.focus();
-        </script>
-      </body>
-      </html>
-    `;
-    
-    const newTab = window.open('', '_blank');
-    newTab.document.write(popupContent);
-    newTab.document.close();
+      );
+    }
+    return null;
   };
 
-  const handleReorder = (order) => {
-    if (!customerData) return;
-    alert(
-      `Reordering items from Order ${order.order_number}\n\nAdded to POS cart for ${customerData.name}`
-    );
-  };
-
-  const handleExport = () => {
-    alert(
-      "Exporting order history...\n\nFormat: CSV\nIncluding: All orders, payments, and customer details"
-    );
-  };
-
-  // Derived stats for detail view
-  const computedTotalOrders = orders.length;
-  const computedLifetimeSpend = customerData?.lifetimeSpend ?? 0;
-  const computedAvgOrder =
-    computedTotalOrders > 0
-      ? Math.round(computedLifetimeSpend / computedTotalOrders)
-      : 0;
-
-  // DETAIL VIEW --------------------------------------------------
-  if (view === "detail" && customerData && editData) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-background text-foreground p-3 sm:p-4 md:p-6 lg:p-8">
-        {/* Delete Modal */}
-        {showDeleteModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-card rounded-xl p-5 sm:p-6 max-w-md w-full mx-4">
-              <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-3 sm:mb-4">
-                Delete Customer
-              </h3>
-              <p className="text-sm sm:text-base text-muted-foreground mb-5 sm:mb-6">
-                Are you sure you want to delete {customerData.name}? This will
-                deactivate their profile and all order history. This action cannot
-                be undone.
-              </p>
-              <div className="flex gap-2 sm:gap-3">
-                <button
-                  onClick={confirmDelete}
-                  className="flex-1 py-2 sm:py-2.5 text-sm sm:text-base bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
-                >
-                  Delete
-                </button>
-                <button
-                  onClick={() => setShowDeleteModal(false)}
-                  className="flex-1 py-2 sm:py-2.5 text-sm sm:text-base bg-muted text-foreground rounded-lg hover:bg-secondary font-medium"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Offer Modal */}
-        {showOfferModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-card rounded-xl p-5 sm:p-6 max-w-md w-full mx-4">
-              <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-3 sm:mb-4">
-                Apply Offer
-              </h3>
-              <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4">
-                Select an offer to apply to {customerData.name}'s next order:
-              </p>
-              <select 
-                value={selectedCoupon}
-                onChange={(e) => setSelectedCoupon(e.target.value)}
-                className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-5 sm:mb-6"
-              >
-                {availableCoupons.length > 0 ? (
-                  availableCoupons.map((coupon) => (
-                    <option key={coupon.id} value={coupon.code}>
-                      {coupon.code} - {coupon.description || 
-                        (coupon.discount_type === 'percentage' 
-                          ? `${coupon.discount_value}% off` 
-                          : `₹${coupon.discount_value} off`)}
-                    </option>
-                  ))
-                ) : (
-                  <option value="">No coupons available</option>
-                )}
-              </select>
-              <div className="flex gap-2 sm:gap-3">
-                <button
-                  onClick={confirmApplyOffer}
-                  disabled={!selectedCoupon || availableCoupons.length === 0}
-                  className="flex-1 py-2 sm:py-2.5 text-sm sm:text-base bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Apply Offer
-                </button>
-                <button
-                  onClick={() => setShowOfferModal(false)}
-                  className="flex-1 py-2 sm:py-2.5 text-sm sm:text-base bg-muted text-foreground rounded-lg hover:bg-secondary font-medium"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 lg:mb-8 gap-3 sm:gap-4">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <button
-              onClick={() => {
-                setView("list");
-                setIsEditing(false);
-              }}
-              className="text-teal-400 hover:text-teal-300 p-1"
-            >
-              <ArrowLeft size={20} className="sm:w-6 sm:h-6" />
-            </button>
-            <h2 className="text-xl sm:text-2xl font-semibold text-foreground">
-              Customer Details
-            </h2>
-          </div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="animate-spin h-12 w-12 text-primary mx-auto mb-4" />
+          <p className="text-lg text-foreground">Loading orders...</p>
         </div>
+      </div>
+    );
+  }
 
-        <div className="mx-auto space-y-4 sm:space-y-5 lg:space-y-6">
-          {/* Basic Details Card */}
-          <div className="bg-card border border-border rounded-xl p-4 sm:p-5 lg:p-6">
-            <div className="flex items-center justify-end mb-4 sm:mb-5 lg:mb-6">
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-card border border-border rounded-lg p-6 text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-foreground mb-2">Error Loading Orders</h2>
+          <p className="text-muted-foreground mb-4">{error}</p>
+          <button
+            onClick={() => fetchOrders()}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      {showBillModal && selectedOrder && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white dark:bg-card border-b border-border px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-foreground">Bill Preview</h3>
               <button
-                onClick={handleEdit}
-                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-xs sm:text-sm font-medium"
+                onClick={() => setShowBillModal(false)}
+                className="p-1 hover:bg-muted rounded transition-colors"
               >
-                {isEditing ? (
-                  <>
-                    <Save size={14} className="sm:w-4 sm:h-4" /> Save
-                  </>
-                ) : (
-                  <>
-                    <Edit size={14} className="sm:w-4 sm:h-4" /> Edit
-                  </>
-                )}
+                <X size={20} className="text-muted-foreground" />
               </button>
             </div>
 
-            <div className="flex items-start gap-3 sm:gap-4 mb-4 sm:mb-5 lg:mb-6">
-              <div className="bg-muted text-foreground w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center text-xl sm:text-2xl font-bold flex-shrink-0">
-                {getInitials(customerData)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="text-base sm:text-lg lg:text-xl font-semibold text-card-foreground mb-1">
-                  {customerData.name}
-                </h4>
-                <p className="text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-3">
-                  Customer since {customerData.memberSince}
-                </p>
-                <span className="inline-block px-2.5 sm:px-3 py-1 bg-teal-600 text-white text-xs sm:text-sm rounded-full font-medium">
-                  Loyalty: {customerData.loyaltyPoints} pts
-                </span>
+            <div className="p-6" id="bill-content">
+              <div className="font-mono">
+                <h2 className="text-center text-xl font-bold border-b-2 border-foreground pb-3 mb-4 text-foreground">
+                  VAYUPOS RESTAURANT
+                </h2>
+                
+                <div className="space-y-2 mb-4">
+                  <p className="text-foreground"><strong>Order ID:</strong> {selectedOrder.id}</p>
+                  <p className="text-foreground"><strong>Type:</strong> {selectedOrder.type}</p>
+                  <p className="text-foreground"><strong>Date:</strong> {selectedOrder.createdAt?.split('T')[0] || selectedDate}</p>
+                  <p className="text-foreground"><strong>Time:</strong> {selectedOrder.time}</p>
+                </div>
+                
+                <p className="mb-4 text-foreground"><strong>Customer:</strong> {selectedOrder.customer.name}</p>
+                
+                <hr className="border-dashed border-foreground my-4" />
+                
+                <p className="mb-4 text-foreground"><strong>Items:</strong> {selectedOrder.items}</p>
+                
+                <div className="space-y-2 mb-4">
+                  <div className="flex justify-between text-foreground">
+                    <span>Subtotal:</span>
+                    <span>₹ {selectedOrder.subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-foreground">
+                    <span>GST:</span>
+                    <span>₹ {selectedOrder.gst.toFixed(2)}</span>
+                  </div>
+                  {selectedOrder.discount && (
+                    <div className="flex justify-between text-foreground">
+                      <span>Discount:</span>
+                      <span>- ₹ {selectedOrder.discount.toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+                
+                <hr className="border-2 border-foreground my-4" />
+                
+                <div className="flex justify-between text-lg font-bold mb-4 text-foreground">
+                  <span>TOTAL:</span>
+                  <span>₹ {selectedOrder.total.toFixed(2)}</span>
+                </div>
+                
+                <hr className="border-2 border-foreground my-4" />
+                
+                <p className="mb-4 text-foreground"><strong>Payment Method:</strong> {selectedOrder.payment}</p>
+                
+                <p className="text-center mt-6 text-foreground">Thank you for your visit!</p>
               </div>
             </div>
 
-            <div className="space-y-3 sm:space-y-4">
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Phone
-                </label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={editData.phone}
-                    onChange={(e) =>
-                      setEditData({ ...editData, phone: e.target.value })
-                    }
-                    className="w-full bg-muted text-foreground rounded-lg border border-border px-3 py-2 text-sm sm:text-base outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                  />
-                ) : (
-                  <div className="bg-muted text-foreground rounded-lg px-3 py-2 text-sm sm:text-base">
-                    {customerData.phone}
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Email
-                </label>
-                {isEditing ? (
-                  <input
-                    type="email"
-                    value={editData.email}
-                    onChange={(e) =>
-                      setEditData({ ...editData, email: e.target.value })
-                    }
-                    className="w-full bg-muted text-foreground rounded-lg border border-border px-3 py-2 text-sm sm:text-base outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                  />
-                ) : (
-                  <div className="bg-muted text-foreground rounded-lg px-3 py-2 text-sm sm:text-base break-all">
-                    {customerData.email}
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Address
-                </label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={editData.address}
-                    onChange={(e) =>
-                      setEditData({ ...editData, address: e.target.value })
-                    }
-                    className="w-full bg-muted text-foreground rounded-lg border border-border px-3 py-2 text-sm sm:text-base outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                  />
-                ) : (
-                  <div className="bg-muted text-foreground rounded-lg px-3 py-2 text-sm sm:text-base">
-                    {customerData.address}
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Notes
-                </label>
-                {isEditing ? (
-                  <textarea
-                    value={customerData.notes}
-                    onChange={(e) =>
-                      setCustomerData({
-                        ...customerData,
-                        notes: e.target.value,
-                      })
-                    }
-                    className="w-full bg-muted text-foreground rounded-lg border border-border px-3 py-2 text-sm sm:text-base outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 min-h-[80px]"
-                  />
-                ) : (
-                  <div className="bg-muted text-foreground rounded-lg px-3 py-2 text-sm sm:text-base">
-                    {customerData.notes}
-                  </div>
-                )}
-              </div>
+            <div className="sticky bottom-0 bg-white dark:bg-card border-t border-border px-6 py-4 flex gap-3">
+              <button
+                onClick={handleActualPrint}
+                className="flex-1 flex items-center justify-center gap-2 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                <Printer size={16} />
+                <span>Print</span>
+              </button>
+              <button
+                onClick={() => handleDownloadBill(selectedOrder)}
+                className="flex-1 flex items-center justify-center gap-2 py-2 bg-muted text-foreground rounded-lg hover:bg-secondary transition-colors"
+              >
+                <Download size={16} />
+                <span>Download</span>
+              </button>
+              <button
+                onClick={() => setShowBillModal(false)}
+                className="flex-1 py-2 bg-muted text-foreground rounded-lg hover:bg-secondary transition-colors"
+              >
+                Close
+              </button>
             </div>
+          </div>
+        </div>
+      )}
 
-            {/* Stats */}
-            <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:gap-4 mt-4 sm:mt-5 lg:mt-6">
-              <div className="bg-muted rounded-lg p-3 sm:p-4">
-                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                  <Copy
-                    size={14}
-                    className="sm:w-4 sm:h-4 text-muted-foreground"
-                  />
-                  <span className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground font-medium">
-                    Total Orders
-                  </span>
-                </div>
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-card-foreground">
-                  {computedTotalOrders}
-                </p>
-              </div>
-              <div className="bg-muted rounded-lg p-3 sm:p-4">
-                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                  <IndianRupee
-                    size={14}
-                    className="sm:w-4 sm:h-4 text-muted-foreground"
-                  />
-                  <span className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground font-medium">
-                    Lifetime Spend
-                  </span>
-                </div>
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-card-foreground">
-                  ₹{computedLifetimeSpend.toLocaleString()}
-                </p>
-              </div>
-              <div className="bg-muted rounded-lg p-3 sm:p-4">
-                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                  <ShoppingBag
-                    size={14}
-                    className="sm:w-4 sm:h-4 text-muted-foreground"
-                  />
-                  <span className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground font-medium">
-                    Avg Order
-                  </span>
-                </div>
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-card-foreground">
-                  ₹{computedAvgOrder}
-                </p>
-              </div>
-              <div className="bg-muted rounded-lg p-3 sm:p-4">
-                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                  <Clock
-                    size={14}
-                    className="sm:w-4 sm:h-4 text-muted-foreground"
-/>
-<span className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground font-medium">
-Last Visit
-</span>
-</div>
-<p className="text-xl sm:text-2xl lg:text-3xl font-bold text-card-foreground">
-{customerData.lastVisit}
-</p>
-</div>
-</div>
-</div>
-      {/* Past Orders */}
-      <div className="bg-card border border-border rounded-xl p-4 sm:p-5 lg:p-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-5 lg:mb-6 gap-3">
-          <h3 className="text-base sm:text-lg font-semibold text-card-foreground">
-            Past Orders
-          </h3>
+      <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3 sm:gap-4">
+          <h1 className="text-xl sm:text-2xl lg:text-[26px] font-bold text-foreground">Past Orders</h1>
           <button
-            onClick={handleExport}
-            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-xs sm:text-sm font-medium"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Download size={14} className="sm:w-[18px] sm:h-[18px]" />
-            Export
+            <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+            <span className="text-sm sm:text-[14px]">{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
           </button>
         </div>
 
-        {/* Filters */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-5 lg:mb-6">
-          <div>
-            <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-              Search orders
-            </label>
-            <input
-              type="text"
-              placeholder="Order ID, items..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-xs sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-            />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5 mb-4 sm:mb-6">
+          <div className="rounded-lg px-4 sm:px-6 py-4 sm:py-5 border border-border bg-card">
+            <div className="text-xs sm:text-[13px] mb-2 font-medium text-muted-foreground">Today Orders</div>
+            <div className="text-2xl sm:text-[32px] font-bold text-foreground">{statistics.todayOrders}</div>
           </div>
-          <div>
-            <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-              Date range
-            </label>
-            <select
-              value={dateRange}
-              onChange={(e) => setDateRange(e.target.value)}
-              className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-xs sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-            >
-              <option>Last 30 days</option>
-              <option>Last 7 days</option>
-              <option>Last 90 days</option>
-              <option>All time</option>
-            </select>
+          <div className="rounded-lg px-4 sm:px-6 py-4 sm:py-5 border border-border bg-card">
+            <div className="text-xs sm:text-[13px] mb-2 font-medium text-muted-foreground">Revenue</div>
+            <div className="text-2xl sm:text-[32px] font-bold text-foreground">₹ {statistics.revenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
           </div>
-          <div>
-            <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-              Status
-            </label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-xs sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-            >
-              <option>All / Paid / Pending</option>
-              <option>Paid</option>
-              <option>Pending</option>
-            </select>
+          <div className="rounded-lg px-4 sm:px-6 py-4 sm:py-5 border border-border bg-card sm:col-span-2 lg:col-span-1">
+            <div className="text-xs sm:text-[13px] mb-2 font-medium text-muted-foreground">Avg. Ticket Size</div>
+            <div className="text-2xl sm:text-[32px] font-bold text-foreground">₹ {statistics.avgTicketSize.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
           </div>
         </div>
 
-        {/* Orders Table - Desktop */}
-        <div className="hidden md:block overflow-x-auto">
+        <div className="rounded-lg shadow-md border border-border bg-card px-4 sm:px-6 py-4 sm:py-6 mb-4 sm:mb-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-2">
+            <div>
+              <h2 className="text-lg sm:text-xl lg:text-[22px] font-bold text-foreground">Week Analytics</h2>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">Revenue trend for the past 7 days</p>
+            </div>
+            <div className="text-right">
+              <div className="text-xs sm:text-sm text-muted-foreground">Weekly Total</div>
+              <div className="text-xl sm:text-2xl font-bold text-foreground">₹ {statistics.weeklyTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+            </div>
+          </div>
+
+          <div className="w-full" style={{ height: '300px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart 
+                data={weeklyRevenueData}
+                margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis 
+                  dataKey="day" 
+                  stroke="hsl(var(--muted-foreground))"
+                  style={{ fontSize: '12px' }}
+                />
+                <YAxis 
+                  stroke="hsl(var(--muted-foreground))"
+                  style={{ fontSize: '12px' }}
+                  tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
+                />
+                <Tooltip content={<CustomTooltip />} />
+                <Line 
+                  type="monotone" 
+                  dataKey="revenue" 
+                  stroke="hsl(var(--primary))" 
+                  strokeWidth={3}
+                  dot={{ fill: 'hsl(var(--primary))', strokeWidth: 2, r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="rounded-lg shadow-md border border-border bg-card px-4 sm:px-6 py-4 sm:py-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3 sm:gap-4">
+            <h2 className="text-lg sm:text-xl lg:text-[22px] font-bold text-foreground">Order History</h2>
+            <div className="text-sm text-muted-foreground">
+              {filteredOrders.length} order{filteredOrders.length !== 1 ? 's' : ''} found
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4 sm:mb-6">
+            <div className="md:col-span-6">
+              <div className="relative">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={17} />
+                <input
+                  type="text"
+                  placeholder="Order ID, customer name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full text-sm sm:text-[15px] pl-11 pr-4 py-2.5 rounded-md border border-border bg-muted text-foreground placeholder-muted-foreground focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="md:col-span-3">
+              <div className="relative">
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-full text-sm sm:text-[15px] px-3.5 py-2.5 rounded-md border border-border bg-muted text-foreground focus:outline-none"
+                />
+                <Calendar className="absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={17} />
+              </div>
+            </div>
+
+            <div className="md:col-span-3">
+              <select
+                value={paymentFilter}
+                onChange={(e) => setPaymentFilter(e.target.value)}
+                className="w-full text-sm sm:text-[15px] px-3.5 py-2.5 rounded-md border border-border bg-muted text-foreground focus:outline-none appearance-none cursor-pointer"
+              >
+                <option value="All">All Payments</option>
+                <option value="Cash">Cash</option>
+                <option value="UPI">UPI</option>
+                <option value="Card">Card</option>
+              </select>
+            </div>
+          </div>
+
+          {filteredOrders.length === 0 && (
+            <div className="text-center py-12">
+              <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-lg font-semibold text-foreground mb-2">No orders found</p>
+              <p className="text-muted-foreground">Try adjusting your filters or search query</p>
+            </div>
+          )}
+
+          {/* Mobile Card View */}
+          {filteredOrders.length > 0 && (
+            <div className="block lg:hidden space-y-3 sm:space-y-4">
+              {filteredOrders.map((order) => (
+                <div key={order.id} className="bg-muted rounded-lg p-3 sm:p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="font-semibold text-sm sm:text-base text-foreground">{order.id}</div>
+                      <div className="text-xs sm:text-sm text-muted-foreground mt-0.5">{order.type} • {order.time}</div>
+                    </div>
+                    <span className="inline-block px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-md text-xs sm:text-[13px] font-medium bg-primary text-primary-foreground">
+                      {order.payment}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 sm:gap-2.5 mb-3 pb-3 border-b border-border">
+                    <div
+                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-semibold text-xs sm:text-[13px] flex-shrink-0 text-white"
+                      style={{ backgroundColor: order.customer.color }}
+                    >
+                      {order.customer.avatar}
+                    </div>
+                    <span className="text-sm sm:text-[15px] text-foreground">{order.customer.name}</span>
+                  </div>
+
+                  <div className="space-y-1.5 sm:space-y-2 mb-3 pb-3 border-b border-border">
+                    <div className="flex justify-between text-xs sm:text-sm">
+                      <span className="text-muted-foreground">Items</span>
+                      <span className="text-foreground font-medium">{order.items}</span>
+                    </div>
+                    <div className="flex justify-between text-xs sm:text-sm">
+                      <span className="text-muted-foreground">Subtotal</span>
+                      <span className="text-foreground">₹ {order.subtotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs sm:text-sm">
+                      <span className="text-muted-foreground">GST</span>
+                      <span className="text-foreground">₹ {order.gst.toFixed(2)}</span>
+                    </div>
+                    {order.discount && (
+                      <div className="flex justify-between text-xs sm:text-sm">
+                        <span className="text-muted-foreground">Discount</span>
+                        <span className="text-foreground">- ₹ {order.discount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm sm:text-base font-semibold pt-1">
+                      <span className="text-foreground">Total</span>
+                      <span className="text-foreground">₹ {order.total.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => handlePrintBill(order)}
+                      className="flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-[13px] font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90"
+                    >
+                      <Printer size={14} className="sm:w-4 sm:h-4" />
+                      <span>Print Bill</span>
+                    </button>
+                    <button
+                      onClick={() => handleDownloadBill(order)}
+                      className="flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded transition-colors text-foreground hover:bg-secondary border border-border text-xs sm:text-[13px]"
+                    >
+                      <Download size={14} className="sm:w-4 sm:h-4" />
+                      <span>Download</span>
+                    </button>
+                    <button
+                      onClick={() => handleViewBill(order)}
+                      className="flex items-center justify-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded transition-colors text-foreground hover:bg-secondary border border-border text-xs sm:text-[13px]"
+                    >
+                      <Eye size={14} className="sm:w-4 sm:h-4" />
+                      <span>View</span>
+                    </button>
+                  </div>
+                </div>
+              ))}</div>
+      )}
+
+      {/* Desktop Table View */}
+      {filteredOrders.length > 0 && (
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                  Order ID
-                </th>
-                <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                  Date
-                </th>
-                <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                  Items
-                </th>
-                <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                  Total
-                </th>
-                <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                  Payment
-                </th>
-                <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                  Actions
-                </th>
+                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Order</th>
+                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Date & Time</th>
+                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Customer</th>
+                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Items</th>
+                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Subtotal</th>
+                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">GST</th>
+                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Discount</th>
+                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Total</th>
+                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Payment</th>
+                <th className="text-right font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.map((order, index) => {
-                const statusText =
-                  (order.status || "").toLowerCase() === "completed"
-                    ? "Paid"
-                    : "Pending";
-                const payments = [statusText];
-                return (
-                  <tr
-                    key={index}
-                    className="border-b border-border hover:bg-muted transition"
-                  >
-                    <td className="py-3 px-2 text-xs lg:text-sm text-foreground font-medium">
-                      {order.order_number}
-                    </td>
-                    <td className="py-3 px-2 text-xs lg:text-sm text-foreground whitespace-nowrap">
-                      {order.created_at}
-                    </td>
-                    <td className="py-3 px-2 text-xs lg:text-sm text-foreground">
-                      {order.notes || "—"}
-                    </td>
-                    <td className="py-3 px-2 text-xs lg:text-sm text-foreground font-semibold">
-                      ₹{order.total}
-                    </td>
-                    <td className="py-3 px-2">
-                      <div className="flex gap-1.5 flex-wrap">
-                        {payments.map((method, i) => (
-                          <span
-                            key={i}
-                            className={`px-2 py-0.5 text-[10px] lg:text-xs rounded-full font-medium ${
-                              method === "Pending"
-                                ? "bg-yellow-600"
-                                : "bg-teal-600"
-                            } text-white`}
-                          >
-                            {method}
-                          </span>
-                        ))}
+              {filteredOrders.map((order) => (
+                <tr key={order.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+                  <td className="py-4 px-3">
+                    <div className="font-semibold text-[15px] text-foreground">{order.id}</div>
+                    <div className="text-[13px] mt-0.5 text-muted-foreground">{order.type}</div>
+                  </td>
+                  <td className="py-4 px-3">
+                    <div className="text-[15px] font-medium text-foreground">{order.time}</div>
+                  </td>
+                  <td className="py-4 px-3">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-[13px] flex-shrink-0 text-white"
+                        style={{ backgroundColor: order.customer.color }}
+                      >
+                        {order.customer.avatar}
                       </div>
-                    </td>
-                    <td className="py-3 px-2">
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={() => handleViewOrder(order)}
-                          className="px-2.5 py-1 bg-teal-600 text-white rounded text-[10px] lg:text-xs hover:bg-teal-700 font-medium"
-                        >
-                          View
-                        </button>
-                        <button
-                          onClick={() => handleReorder(order)}
-                          className="px-2.5 py-1 bg-teal-600 text-white rounded text-[10px] lg:text-xs hover:bg-teal-700 font-medium"
-                        >
-                          Reorder
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                      <span className="text-[15px] text-foreground">{order.customer.name}</span>
+                    </div>
+                  </td>
+                  <td className="py-4 px-3">
+                    <span className="text-[15px] text-foreground">{order.items}</span>
+                  </td>
+                  <td className="py-4 px-3">
+                    <span className="text-[15px] text-foreground">₹ {order.subtotal.toFixed(2)}</span>
+                  </td>
+                  <td className="py-4 px-3">
+                    <span className="text-[15px] text-foreground">₹ {order.gst.toFixed(2)}</span>
+                  </td>
+                  <td className="py-4 px-3">
+                    <span className="text-[15px] text-foreground">
+                      {order.discount ? `- ₹ ${order.discount.toFixed(2)}` : '-'}
+                    </span>
+                  </td>
+                  <td className="py-4 px-3">
+                    <div className="text-[15px] font-semibold text-foreground">
+                      ₹ {order.total.toFixed(2)}
+                    </div>
+                  </td>
+                  <td className="py-4 px-3">
+                    <span className="inline-block px-3.5 py-1.5 rounded-md text-[13px] font-medium bg-primary text-primary-foreground">
+                      {order.payment}
+                    </span>
+                  </td>
+                  <td className="py-4 px-3">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => handlePrintBill(order)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90"
+                        title="Print Bill"
+                      >
+                        <Printer size={16} />
+                        <span>Print Bill</span>
+                      </button>
+                      <button
+                        onClick={() => handleDownloadBill(order)}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-foreground hover:bg-muted"
+                        title="Download Bill"
+                      >
+                        <Download size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleViewBill(order)}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-foreground hover:bg-muted"
+                        title="View Bill"
+                      >
+                        <Eye size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
-        </div>
-
-        {/* Orders Cards - Mobile */}
-        <div className="md:hidden space-y-3">
-          {filteredOrders.map((order, index) => {
-            const statusText =
-              (order.status || "").toLowerCase() === "completed"
-                ? "Paid"
-                : "Pending";
-            const payments = [statusText];
-            return (
-              <div
-                key={index}
-                className="bg-muted rounded-lg p-3 sm:p-4"
-              >
-                <div className="flex justify-between items-start mb-2 sm:mb-3 gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-foreground text-xs sm:text-sm truncate">
-                      {order.order_number}
-                    </p>
-                    <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">
-                      {order.created_at}
-                    </p>
-                  </div>
-                  <div className="flex gap-1.5 flex-shrink-0">
-                    {payments.map((method, i) => (
-                      <span
-                        key={i}
-                        className={`px-2 py-0.5 text-[10px] rounded-full font-medium whitespace-nowrap ${
-                          method === "Pending"
-                            ? "bg-yellow-600"
-                            : "bg-teal-600"
-                        } text-white`}
-                      >
-                        {method}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <p className="text-xs sm:text-sm text-foreground mb-2 sm:mb-3 line-clamp-2">
-                  {order.notes || "—"}
-                </p>
-                <div className="flex justify-between items-center gap-2">
-                  <p className="text-base sm:text-lg font-bold text-foreground">
-                    ₹{order.total}
-                  </p>
-                  <div className="flex gap-1.5 sm:gap-2">
-                    <button
-                      onClick={() => handleViewOrder(order)}
-                      className="px-2.5 sm:px-3 py-1 bg-teal-600 text-white rounded text-[10px] sm:text-xs hover:bg-teal-700 font-medium"
-                    >
-                      View
-                    </button>
-                    <button
-                      onClick={() => handleReorder(order)}
-                      className="px-2.5 sm:px-3 py-1 bg-teal-600 text-white rounded text-[10px] sm:text-xs hover:bg-teal-700 font-medium"
-                    >
-                      Reorder
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {filteredOrders.length === 0 && (
-          <div className="text-center py-10 sm:py-12">
-            <p className="text-muted-foreground text-xs sm:text-sm">
-              No orders found matching your filters
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Quick Actions */}
-      <div className="bg-card border border-border rounded-xl p-4 sm:p-5 lg:p-6">
-        <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-3 sm:mb-4">
-          Quick Actions
-        </h3>
-        <div className="space-y-2.5 sm:space-y-3">
-          <div className="flex items-center justify-between p-3 sm:p-4 bg-muted rounded-lg hover:bg-secondary transition gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-xs sm:text-sm lg:text-base text-foreground mb-0.5 sm:mb-1">
-                Create New Order
-              </p>
-              <p className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground">
-                Start POS with {customerData.name.split(" ")[0]}'s details
-              </p>
-            </div>
-            <button
-              onClick={handleStartPOS}
-              className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 whitespace-nowrap text-xs sm:text-sm font-medium flex-shrink-0"
-            >
-              <PlusCircle
-                size={14}
-                className="sm:w-[18px] sm:h-[18px]"
-              />
-              Start
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between p-3 sm:p-4 bg-muted rounded-lg hover:bg-secondary transition gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-xs sm:text-sm lg:text-base text-foreground mb-0.5 sm:mb-1">
-                Send Offer
-              </p>
-              <p className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground">
-                Apply coupon to next order
-              </p>
-            </div>
-            <button
-              onClick={handleApplyOffer}
-              className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 whitespace-nowrap text-xs sm:text-sm font-medium flex-shrink-0"
-            >
-              <Copy size={14} className="sm:w-[18px] sm:h-[18px]" />
-              Apply
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between p-3 sm:p-4 bg-muted rounded-lg hover:bg-secondary transition gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-xs sm:text-sm lg:text-base text-foreground mb-0.5 sm:mb-1">
-                Delete Customer
-              </p>
-              <p className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground">
-                Remove profile and history
-              </p>
-            </div>
-            <button
-              onClick={handleDeleteCustomer}
-              className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 whitespace-nowrap text-xs sm:text-sm font-medium flex-shrink-0"
-            >
-              <Trash2 size={14} className="sm:w-[18px] sm:h-[18px]" />
-              Delete
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-);
-}
-// LIST VIEW ----------------------------------------------------
-return (
-<div className="min-h-screen bg-background text-foreground p-3 sm:p-4 md:p-6 lg:p-8">
-{/* Header */}
-<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 lg:mb-8 gap-3 sm:gap-4">
-<h2 className="text-xl sm:text-2xl font-semibold text-foreground">
-Customer List
-</h2>
-</div>
-  <div className="mx-auto space-y-4 sm:space-y-5 lg:space-y-6">
-    {/* Customer List Card */}
-    <div className="bg-card border border-border rounded-xl p-4 sm:p-5 lg:p-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-5 gap-3">
-        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">
-          Customers
-        </h3>
-        <div className="relative w-full sm:w-64">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-            size={16}
-          />
-          <input
-            type="text"
-            placeholder="Search customers..."
-            value={customerSearchQuery}
-            onChange={(e) => setCustomerSearchQuery(e.target.value)}
-            className="w-full bg-muted text-foreground border border-border rounded-lg pl-10 pr-3 py-2 text-xs sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-          />
-        </div>
-      </div>
-
-      {/* Customer List - Desktop */}
-      <div className="hidden md:block overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                Name
-              </th>
-              <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                Phone
-              </th>
-              <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                Email
-              </th>
-              <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                Orders
-              </th>
-              <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                Loyalty
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredCustomers.map((customer) => (
-              <tr
-                key={customer.id}
-                onClick={() => handleSelectCustomer(customer)}
-                className="border-b border-border cursor-pointer transition hover:bg-muted"
-              >
-                <td className="py-3 px-2">
-                  <div className="flex items-center gap-2">
-                    <div className="bg-muted text-foreground w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      {customer.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </div>
-                    <span className="text-xs lg:text-sm text-foreground font-medium">
-                      {customer.name}
-                    </span>
-                  </div>
-                </td>
-                <td className="py-3 px-2 text-xs lg:text-sm text-foreground">
-                  {customer.phone}
-                </td>
-                <td className="py-3 px-2 text-xs lg:text-sm text-foreground">
-                  {customer.email}
-                </td>
-                <td className="py-3 px-2 text-xs lg:text-sm text-foreground font-semibold">
-                  0
-                </td>
-                <td className="py-3 px-2">
-                  <span className="inline-block px-2 py-0.5 bg-teal-600 text-white text-xs rounded-full font-medium">
-                    {customer.loyaltyPoints} pts
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Customer List - Mobile */}
-      <div className="md:hidden space-y-3">
-        {filteredCustomers.map((customer) => (
-          <div
-            key={customer.id}
-            onClick={() => handleSelectCustomer(customer)}
-            className="p-3 sm:p-4 rounded-lg cursor-pointer transition bg-muted hover:bg-secondary"
-          >
-            <div className="flex items-start gap-3 mb-2">
-              <div className="bg-background text-foreground w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
-                {customer.name
-                  .split(" ")
-                  .map((n) => n[0])
-                  .join("")}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-foreground text-sm truncate">
-                  {customer.name}
-                </p>
-                <p className="text-xs text-muted-foreground truncate">
-                  {customer.email}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {customer.phone}
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-between items-center mt-2 pt-2 border-t border-border">
-              <span className="text-xs text-muted-foreground">
-                Orders:{" "}
-                <span className="font-semibold text-foreground">0</span>
-              </span>
-              <span className="inline-block px-2 py-0.5 bg-teal-600 text-white text-xs rounded-full font-medium">
-                {customer.loyaltyPoints} pts
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {filteredCustomers.length === 0 && (
-        <div className="text-center py-8">
-          <p className="text-muted-foreground text-xs sm:text-sm">
-            No customers found
-          </p>
         </div>
       )}
     </div>
   </div>
-</div>
-);
-}
-export default Customers;
+</div>);
+};
+export default PastOrders;

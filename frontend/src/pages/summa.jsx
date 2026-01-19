@@ -1,1138 +1,847 @@
-import React, { useState, useEffect, useMemo } from "react";
-import {
-  ArrowLeft,
-  Save,
-  Download,
-  Edit,
-  Copy,
-  IndianRupee,
-  Clock,
-  ShoppingBag,
-  Trash2,
-  PlusCircle,
-  Search,
-} from "lucide-react";
-import api from "../api/axios";
+import React, { useState, useEffect } from 'react';
+import { Download, Printer, Calendar, Filter, RotateCw, ChevronDown, AlertCircle } from 'lucide-react';
+import { LineChart, Line, PieChart, Pie, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 
-function Customers() {
-  // State management
-  const [view, setView] = useState("list");
-  const [isEditing, setIsEditing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [dateRange, setDateRange] = useState("Last 30 days");
-  const [statusFilter, setStatusFilter] = useState("All / Paid / Pending");
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showOfferModal, setShowOfferModal] = useState(false);
-  const [customerSearchQuery, setCustomerSearchQuery] = useState("");
-  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
-
-  // Customers from backend
-  const [customers, setCustomers] = useState([]);
-  const [customerData, setCustomerData] = useState(null);
-  const [editData, setEditData] = useState(null);
-
-  // Orders from backend for selected customer
-  const [orders, setOrders] = useState([]);
-
-  // Helpers ------------------------------------------------------
-
-  const getDisplayName = (c) =>
-    `${c.first_name || ""} ${c.last_name || ""}`.trim() || "Customer";
-
-  const getInitials = (c) =>
-    getDisplayName(c)
-      .split(" ")
-      .filter(Boolean)
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase() || "CU";
-
-  const mapCustomerToUi = (c) => {
-    const totalSpentNum = (() => {
-      if (!c.total_spent) return 0;
-      try {
-        const n = Number(c.total_spent);
-        return Number.isFinite(n) ? n : 0;
-      } catch {
-        return 0;
-      }
-    })();
-
-    return {
-      id: c.id,
-      name: getDisplayName(c),
-      memberSince: new Date(c.created_at).toLocaleDateString("en-GB", {
-        month: "short",
-        year: "numeric",
-      }),
-      loyaltyPoints: c.loyalty_points ?? 0,
-      phone: c.phone || "",
-      email: c.email || "",
-      address: c.address || "",
-      notes: "",
-      totalOrders: 0,
-      lifetimeSpend: totalSpentNum,
-      avgOrder: 0,
-      lastVisit: "—",
-    };
-  };
-
-  const mapCustomerToEdit = (c) => ({
-    id: c.id,
-    first_name: c.first_name || "",
-    last_name: c.last_name || "",
-    email: c.email || "",
-    phone: c.phone || "",
-    address: c.address || "",
-    city: c.city || "",
-    state: c.state || "",
-    zip_code: c.zip_code || "",
-    country: c.country || "",
-    is_active: c.is_active ?? true,
+const ReportsPage = () => {
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [filters, setFilters] = useState({
+    reportType: 'Sales',
+    view: 'day',
+    outlet: 'All',
+    paymentMode: 'All',
+    sort: 'Total Desc',
+    days: 30,
+    dateRange: { start: '2025-01', end: '2025-12' }
   });
 
-  const mapUiToCustomerHeader = (edit) => ({
-    first_name: edit.first_name,
-    last_name: edit.last_name,
-    email: edit.email,
-    phone: edit.phone,
-    address: edit.address,
-    city: edit.city,
-    state: edit.state,
-    zip_code: edit.zip_code,
-    country: edit.country,
-    is_active: edit.is_active,
+  const [keyMetrics, setKeyMetrics] = useState({
+    totalSales: '₹0',
+    totalOrders: '0',
+    totalExpenses: '₹0',
+    avgOrderValue: '₹0',
+    grossMargin: '0%',
+    topCategory: '-'
   });
 
-  const loadCustomerOrders = async (customerId) => {
+  const [salesData, setSalesData] = useState([]);
+  const [salesChartData, setSalesChartData] = useState([]);
+  const [ordersData, setOrdersData] = useState({
+    bySource: [],
+    byPayment: []
+  });
+  const [orderDistributionData, setOrderDistributionData] = useState([]);
+  const [expensesData, setExpensesData] = useState([]);
+  const [expensesChartData, setExpensesChartData] = useState([]);
+  const [productSalesData, setProductSalesData] = useState([]);
+
+  const COLORS = ['#14b8a6', '#0d9488', '#0f766e'];
+  const API_BASE_URL = 'https://your-backend-url.com/api/v1'; // Replace with your actual backend URL
+
+  // Fetch Sales Report
+  const fetchSalesReport = async () => {
     try {
-      const res = await api.get(`/orders/customer/${customerId}`, {
-        params: { limit: 50 },
-      });
-      const data = res.data || [];
-      setOrders(Array.isArray(data) ? data : []);
+      setLoading(true);
+      setError(null);
+      
+      const response = await fetch(
+        `${API_BASE_URL}/reports/sales?days=${filters.days}&group_by=${filters.view}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) throw new Error('Failed to fetch sales report');
+      
+      const data = await response.json();
+      
+      // Transform the API response to match your UI structure
+      if (data && Array.isArray(data)) {
+        const transformedData = data.map(item => ({
+          period: item.date || item.period,
+          orders: item.order_count || item.orders || 0,
+          grossSales: `₹${(item.gross_sales || item.total_sales || 0).toLocaleString('en-IN')}`,
+          discounts: `₹${(item.discounts || 0).toLocaleString('en-IN')}`,
+          net: `₹${(item.net_sales || (item.total_sales - item.discounts) || 0).toLocaleString('en-IN')}`
+        }));
+        
+        setSalesData(transformedData);
+        
+        // Prepare chart data
+        const chartData = data.map(item => ({
+          month: item.date || item.period,
+          sales: item.gross_sales || item.total_sales || 0,
+          net: item.net_sales || (item.total_sales - item.discounts) || 0
+        }));
+        setSalesChartData(chartData);
+
+        // Calculate key metrics
+        const totalSales = data.reduce((sum, item) => sum + (item.gross_sales || item.total_sales || 0), 0);
+        const totalOrders = data.reduce((sum, item) => sum + (item.order_count || item.orders || 0), 0);
+        const totalDiscounts = data.reduce((sum, item) => sum + (item.discounts || 0), 0);
+        
+        setKeyMetrics(prev => ({
+          ...prev,
+          totalSales: `₹${totalSales.toLocaleString('en-IN')}`,
+          totalOrders: totalOrders.toString(),
+          avgOrderValue: `₹${totalOrders > 0 ? Math.round(totalSales / totalOrders).toLocaleString('en-IN') : '0'}`
+        }));
+      }
     } catch (err) {
-      console.error("LOAD CUSTOMER ORDERS ERROR:", err?.response?.data || err);
-      setOrders([]);
+      setError(err.message);
+      console.error('Error fetching sales report:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Initial load of customers
-  useEffect(() => {
-    const loadCustomers = async () => {
-      try {
-        const res = await api.get("/customers/", {
-          params: { skip: 0, limit: 100 },
-        });
-        const list = res.data.data || res.data || [];
-        setCustomers(list);
-
-        if (list.length > 0) {
-          const first = list[0];
-          setSelectedCustomerId(first.id);
-          setCustomerData(mapCustomerToUi(first));
-          setEditData(mapCustomerToEdit(first));
-          await loadCustomerOrders(first.id);
-          setView("detail");
+  // Fetch Payment Methods Report
+  const fetchPaymentMethodsReport = async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/reports/payment-methods?days=${filters.days}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
         }
-      } catch (err) {
-        console.error("LOAD CUSTOMERS ERROR:", err?.response?.data || err);
-        alert("Failed to load customers");
-      }
-    };
+      );
 
-    loadCustomers();
+      if (!response.ok) throw new Error('Failed to fetch payment methods report');
+      
+      const data = await response.json();
+      
+      if (data && Array.isArray(data)) {
+        const totalAmount = data.reduce((sum, item) => sum + (item.total_amount || 0), 0);
+        const totalCount = data.reduce((sum, item) => sum + (item.count || 0), 0);
+        
+        const transformedData = data.map((item, index) => ({
+          mode: item.payment_method || item.mode,
+          count: item.count || 0,
+          share: `${totalCount > 0 ? ((item.count / totalCount) * 100).toFixed(1) : 0}%`,
+          amount: `₹${(item.total_amount || 0).toLocaleString('en-IN')}`,
+          rank: index + 1
+        }));
+        
+        setOrdersData(prev => ({
+          ...prev,
+          byPayment: transformedData
+        }));
+      }
+    } catch (err) {
+      console.error('Error fetching payment methods report:', err);
+    }
+  };
+
+  // Fetch Product Sales Report
+  const fetchProductSalesReport = async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/reports/products-sales?days=${filters.days}&limit=50`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) throw new Error('Failed to fetch product sales report');
+      
+      const data = await response.json();
+      
+      if (data && Array.isArray(data)) {
+        setProductSalesData(data);
+        
+        // Get top category if available
+        if (data.length > 0 && data[0].category) {
+          setKeyMetrics(prev => ({
+            ...prev,
+            topCategory: data[0].category
+          }));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching product sales report:', err);
+    }
+  };
+
+  // Fetch Daily Summary (for expenses estimation)
+  const fetchDailySummary = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const response = await fetch(
+        `${API_BASE_URL}/reports/daily-summary?date=${today}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) throw new Error('Failed to fetch daily summary');
+      
+      const data = await response.json();
+      
+      if (data) {
+        setKeyMetrics(prev => ({
+          ...prev,
+          totalExpenses: `₹${(data.total_expenses || 0).toLocaleString('en-IN')}`,
+          grossMargin: data.gross_margin ? `${data.gross_margin}%` : prev.grossMargin
+        }));
+      }
+    } catch (err) {
+      console.error('Error fetching daily summary:', err);
+    }
+  };
+
+  // Fetch Inventory Report (for expenses data)
+  const fetchInventoryReport = async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/reports/inventory`,
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) throw new Error('Failed to fetch inventory report');
+      
+      const data = await response.json();
+      
+      // This can be used to estimate expenses or show inventory-related costs
+      console.log('Inventory data:', data);
+    } catch (err) {
+      console.error('Error fetching inventory report:', err);
+    }
+  };
+
+  // Fetch all reports
+  const fetchAllReports = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      await Promise.all([
+        fetchSalesReport(),
+        fetchPaymentMethodsReport(),
+        fetchProductSalesReport(),
+        fetchDailySummary()
+      ]);
+    } catch (err) {
+      setError('Failed to load reports. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial load
+  useEffect(() => {
+    fetchAllReports();
   }, []);
 
-  // Filters ------------------------------------------------------
+  // Mock data for order sources (since API doesn't provide this)
+  useEffect(() => {
+    // This would need to come from your backend if available
+    const mockOrderSources = [
+      { source: 'Dine-in', orders: 640, share: '49.8%', revenue: '₹2,38,400', rank: 1 },
+      { source: 'Takeaway', orders: 420, share: '32.7%', revenue: '₹1,28,100', rank: 2 },
+      { source: 'Delivery', orders: 224, share: '17.5%', revenue: '₹1,15,850', rank: 3 }
+    ];
+    
+    setOrdersData(prev => ({
+      ...prev,
+      bySource: mockOrderSources
+    }));
+    
+    setOrderDistributionData([
+      { name: 'Dine-in', value: 640 },
+      { name: 'Takeaway', value: 420 },
+      { name: 'Delivery', value: 224 }
+    ]);
+  }, []);
 
-  const filteredCustomers = useMemo(() => {
-    if (!customerSearchQuery.trim()) {
-      return customers.map(mapCustomerToUi);
-    }
-    const q = customerSearchQuery.toLowerCase();
-    return customers
-      .map(mapCustomerToUi)
-      .filter(
-        (customer) =>
-          customer.name.toLowerCase().includes(q) ||
-          customer.phone.includes(customerSearchQuery) ||
-          customer.email.toLowerCase().includes(customerSearchQuery)
-      );
-  }, [customers, customerSearchQuery]);
+  // Mock expenses data (you'll need to add an expenses endpoint to your backend)
+  useEffect(() => {
+    const mockExpenses = [
+      { category: 'Salaries & Wages', transactions: 6, amount: '₹55,500', share: '49.5%', rank: 1 },
+      { category: 'Kitchen Supplies', transactions: 14, amount: '₹24,300', share: '21.7%', rank: 2 },
+      { category: 'Utilities', transactions: 10, amount: '₹12,350', share: '11.0%', rank: 3 },
+      { category: 'Rent', transactions: 1, amount: '₹18,000', share: '16.1%', rank: 4 }
+    ];
+    
+    setExpensesData(mockExpenses);
+    
+    setExpensesChartData([
+      { category: 'Salaries', amount: 55500 },
+      { category: 'Kitchen', amount: 24300 },
+      { category: 'Rent', amount: 18000 },
+      { category: 'Utilities', amount: 12350 }
+    ]);
+  }, []);
 
-  const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
-      const matchesSearch =
-        searchQuery === "" ||
-        (order.order_number || "")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase()) ||
-        (order.notes || "")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase());
+  const handleExportCSV = () => {
+    const csv = salesData.map(row => 
+      `${row.period},${row.orders},${row.grossSales},${row.discounts},${row.net}`
+    ).join('\n');
+    const blob = new Blob([`Period,Orders,Gross Sales,Discounts,Net\n${csv}`], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sales_report_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
 
-      let statusText = (order.status || "").toLowerCase();
-      let displayStatus = "Pending";
-      if (statusText === "completed" || statusText === "paid") {
-        displayStatus = "Paid";
-      }
+  const handlePrint = () => {
+    window.print();
+  };
 
-      const matchesStatus =
-        statusFilter === "All / Paid / Pending" ||
-        displayStatus.toLowerCase() === statusFilter.toLowerCase();
-
-      return matchesSearch && matchesStatus;
+  const handleReset = () => {
+    setFilters({
+      reportType: 'Sales',
+      view: 'day',
+      outlet: 'All',
+      paymentMode: 'All',
+      sort: 'Total Desc',
+      days: 30,
+      dateRange: { start: '2025-01', end: '2025-12' }
     });
-  }, [orders, searchQuery, statusFilter]);
-
-  // Event handlers -----------------------------------------------
-
-  const handleSelectCustomer = async (customerUi) => {
-    const backend = customers.find((c) => c.id === customerUi.id);
-    if (!backend) return;
-
-    setSelectedCustomerId(backend.id);
-    setCustomerData(mapCustomerToUi(backend));
-    setEditData(mapCustomerToEdit(backend));
-    setIsEditing(false);
-    setView("detail");
-    await loadCustomerOrders(backend.id);
   };
 
-  const handleEdit = async () => {
-    if (!customerData || !editData) return;
-
-    if (isEditing) {
-      try {
-        const body = mapUiToCustomerHeader(editData);
-        const res = await api.put(`/customers/${customerData.id}`, body);
-        const updated = res.data;
-
-        setCustomers((prev) =>
-          prev.map((c) => (c.id === updated.id ? updated : c))
-        );
-        setCustomerData(mapCustomerToUi(updated));
-        setEditData(mapCustomerToEdit(updated));
-
-        alert("Customer details saved successfully!");
-      } catch (err) {
-        console.error("UPDATE CUSTOMER ERROR:", err?.response?.data || err);
-        alert("Failed to update customer");
-        return;
-      }
-    } else {
-      const backend = customers.find((c) => c.id === customerData.id);
-      if (backend) setEditData(mapCustomerToEdit(backend));
-    }
-
-    setIsEditing(!isEditing);
+  const handleApply = () => {
+    fetchAllReports();
   };
 
-  const handleStartPOS = () => {
-    if (!customerData) return;
-    alert(
-      `Starting POS with customer: ${customerData.name}\nPhone: ${customerData.phone}`
-    );
+  const formatDateRange = (dateStr) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   };
 
-  const handleApplyOffer = () => {
-    setShowOfferModal(true);
-  };
-
-  const confirmApplyOffer = () => {
-    if (!customerData) return;
-    alert(
-      `Offer applied to ${customerData.name}'s account!\nThey will receive a notification.`
-    );
-    setShowOfferModal(false);
-  };
-
-  const handleDeleteCustomer = () => {
-    setShowDeleteModal(true);
-  };
-
-  const confirmDelete = async () => {
-    if (!customerData) return;
-    try {
-      await api.delete(`/customers/${customerData.id}`);
-      setCustomers((prev) =>
-        prev.filter((c) => c.id !== customerData.id)
-      );
-      alert(
-        `Customer ${customerData.name} has been deleted along with all order history.`
-      );
-      setShowDeleteModal(false);
-      setView("list");
-      setCustomerData(null);
-      setEditData(null);
-      setSelectedCustomerId(null);
-      setOrders([]);
-    } catch (err) {
-      console.error("DELETE CUSTOMER ERROR:", err?.response?.data || err);
-      alert("Failed to delete customer");
-    }
-  };
-
-  // Open popup in NEW TAB
-  const handleViewOrder = (order) => {
-    const statusText = (order.status || "").toLowerCase() === "completed" ? "Paid" : "Pending";
+  // Calculate days from date range
+  useEffect(() => {
+    const startDate = new Date(filters.dateRange.start);
+    const endDate = new Date(filters.dateRange.end);
+    const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
     
-    // Create HTML content for the popup
-    const popupContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Order Details - ${order.order_number}</title>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
-          }
-          .modal {
-            background: #1e293b;
-            border-radius: 16px;
-            padding: 32px;
-            max-width: 450px;
-            width: 100%;
-            color: #f1f5f9;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-          }
-          .modal h3 {
-            margin: 0 0 24px 0;
-            font-size: 24px;
-            font-weight: 600;
-            color: #f1f5f9;
-          }
-          .detail-row {
-            margin-bottom: 20px;
-          }
-          .label {
-            font-size: 13px;
-            color: #94a3b8;
-            margin-bottom: 6px;
-            font-weight: 500;
-          }
-          .value {
-            font-size: 15px;
-            color: #f1f5f9;
-            font-weight: 500;
-          }
-          .total {
-            font-size: 20px;
-            font-weight: 700;
-            color: #0d9488;
-          }
-          .badge {
-            display: inline-block;
-            padding: 6px 14px;
-            border-radius: 16px;
-            font-size: 13px;
-            font-weight: 500;
-            background: ${statusText === "Paid" ? "#0d9488" : "#ca8a04"};
-            color: white;
-          }
-          .btn-ok {
-            width: 100%;
-            padding: 14px;
-            margin-top: 28px;
-            background: #0d9488;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-          }
-          .btn-ok:hover {
-            background: #0f766e;
-            transform: translateY(-1px);
-          }
-          .btn-ok:active {
-            transform: translateY(0);
-          }
-          .divider {
-            height: 1px;
-            background: #334155;
-            margin: 20px 0;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="modal">
-          <h3>Order Details</h3>
-          
-          <div class="detail-row">
-            <div class="label">Order ID:</div>
-            <div class="value">#${order.order_number}</div>
-          </div>
-          
-          <div class="detail-row">
-            <div class="label">Date:</div>
-            <div class="value">${order.created_at}</div>
-          </div>
-          
-          <div class="divider"></div>
-          
-          <div class="detail-row">
-            <div class="label">Items:</div>
-            <div class="value">${order.notes || "Masala Dosa, Coffee"}</div>
-          </div>
-          
-          <div class="detail-row">
-            <div class="label">Total:</div>
-            <div class="value total">₹${order.total}</div>
-          </div>
-          
-          <div class="divider"></div>
-          
-          <div class="detail-row">
-            <div class="label">Payment:</div>
-            <span class="badge">${statusText}, UPI</span>
-          </div>
-          
-          <button class="btn-ok" onclick="window.close()">OK</button>
-        </div>
-        
-        <script>
-          // Focus the window when it opens
-          window.focus();
-        </script>
-      </body>
-      </html>
-    `;
-    
-    // Open in NEW TAB
-    const newTab = window.open('', '_blank');
-    newTab.document.write(popupContent);
-    newTab.document.close();
-  };
+    if (daysDiff > 0 && daysDiff !== filters.days) {
+      setFilters(prev => ({ ...prev, days: daysDiff }));
+    }
+  }, [filters.dateRange]);
 
-  const handleReorder = (order) => {
-    if (!customerData) return;
-    alert(
-      `Reordering items from Order ${order.order_number}\n\nAdded to POS cart for ${customerData.name}`
-    );
-  };
-
-  const handleExport = () => {
-    alert(
-      "Exporting order history...\n\nFormat: CSV\nIncluding: All orders, payments, and customer details"
-    );
-  };
-
-  // Derived stats for detail view
-  const computedTotalOrders = orders.length;
-  const computedLifetimeSpend = customerData?.lifetimeSpend ?? 0;
-  const computedAvgOrder =
-    computedTotalOrders > 0
-      ? Math.round(computedLifetimeSpend / computedTotalOrders)
-      : 0;
-
-  // DETAIL VIEW --------------------------------------------------
-  if (view === "detail" && customerData && editData) {
-    return (
-      <div className="min-h-screen bg-background text-foreground p-3 sm:p-4 md:p-6 lg:p-8">
-        {/* Delete Modal */}
-        {showDeleteModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-card rounded-xl p-5 sm:p-6 max-w-md w-full mx-4">
-              <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-3 sm:mb-4">
-                Delete Customer
-              </h3>
-              <p className="text-sm sm:text-base text-muted-foreground mb-5 sm:mb-6">
-                Are you sure you want to delete {customerData.name}? This will
-                remove their profile and all order history. This action cannot
-                be undone.
-              </p>
-              <div className="flex gap-2 sm:gap-3">
-                <button
-                  onClick={confirmDelete}
-                  className="flex-1 py-2 sm:py-2.5 text-sm sm:text-base bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
-                >
-                  Delete
-                </button>
-                <button
-                  onClick={() => setShowDeleteModal(false)}
-                  className="flex-1 py-2 sm:py-2.5 text-sm sm:text-base bg-muted text-foreground rounded-lg hover:bg-secondary font-medium"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Offer Modal */}
-        {showOfferModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-card rounded-xl p-5 sm:p-6 max-w-md w-full mx-4">
-              <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-3 sm:mb-4">
-                Apply Offer
-              </h3>
-              <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4">
-                Select an offer to apply to {customerData.name}'s next order:
-              </p>
-              <select className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-5 sm:mb-6">
-                <option>TEA5 - ₹5 off on Beverages</option>
-                <option>SAVE10 - 10% off on total bill</option>
-                <option>COMBO20 - 20% off on combo meals</option>
-              </select>
-              <div className="flex gap-2 sm:gap-3">
-                <button
-                  onClick={confirmApplyOffer}
-                  className="flex-1 py-2 sm:py-2.5 text-sm sm:text-base bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium"
-                >
-                  Apply Offer
-                </button>
-                <button
-                  onClick={() => setShowOfferModal(false)}
-                  className="flex-1 py-2 sm:py-2.5 text-sm sm:text-base bg-muted text-foreground rounded-lg hover:bg-secondary font-medium"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
+  return (
+    <div className="min-h-screen bg-background overflow-x-hidden">
+      <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 lg:mb-8 gap-3 sm:gap-4">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <button
-              onClick={() => {
-                setView("list");
-                setIsEditing(false);
-              }}
-              className="text-teal-400 hover:text-teal-300 p-1"
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 lg:mb-8 gap-3">
+          <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Reports</h1>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button 
+              onClick={handleExportCSV}
+              disabled={loading || salesData.length === 0}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <ArrowLeft size={20} className="sm:w-6 sm:h-6" />
+              <Download size={16} />
+              <span>Export</span>
             </button>
-            <h2 className="text-xl sm:text-2xl font-semibold text-foreground">
-              Customer Details
-            </h2>
+            <button 
+              onClick={handlePrint}
+              disabled={loading}
+              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Printer size={16} />
+              <span>Print</span>
+            </button>
           </div>
         </div>
 
-        <div className="mx-auto space-y-4 sm:space-y-5 lg:space-y-6">
-          {/* Basic Details Card */}
-          <div className="bg-card border border-border rounded-xl p-4 sm:p-5 lg:p-6">
-            <div className="flex items-center justify-end mb-4 sm:mb-5 lg:mb-6">
-              <button
-                onClick={handleEdit}
-                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-xs sm:text-sm font-medium"
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-200 flex items-start gap-3">
+            <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-red-800 mb-1">Error Loading Reports</h3>
+              <p className="text-sm text-red-600">{error}</p>
+              <button 
+                onClick={fetchAllReports}
+                className="mt-2 text-sm text-red-700 underline hover:text-red-800"
               >
-                {isEditing ? (
-                  <>
-                    <Save size={14} className="sm:w-4 sm:h-4" /> Save
-                  </>
-                ) : (
-                  <>
-                    <Edit size={14} className="sm:w-4 sm:h-4" /> Edit
-                  </>
-                )}
+                Try Again
               </button>
             </div>
+          </div>
+        )}
 
-            <div className="flex items-start gap-3 sm:gap-4 mb-4 sm:mb-5 lg:mb-6">
-              <div className="bg-muted text-foreground w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center text-xl sm:text-2xl font-bold flex-shrink-0">
-                {getInitials(customerData)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="text-base sm:text-lg lg:text-xl font-semibold text-card-foreground mb-1">
-                  {customerData.name}
-                </h4>
-                <p className="text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-3">
-                  Customer since {customerData.memberSince}
-                </p>
-                <span className="inline-block px-2.5 sm:px-3 py-1 bg-teal-600 text-white text-xs sm:text-sm rounded-full font-medium">
-                  Loyalty: {customerData.loyaltyPoints} pts
-                </span>
-              </div>
+        {/* Loading Indicator */}
+        {loading && (
+          <div className="mb-4 p-4 rounded-lg bg-blue-50 border border-blue-200">
+            <p className="text-sm text-blue-800">Loading reports...</p>
+          </div>
+        )}
+
+        {/* Filters and Key Metrics */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-6 lg:mb-8">
+          {/* Filters */}
+          <div className="lg:col-span-2 rounded-xl px-3 sm:px-4 py-4 bg-card border border-border">
+            <div className="flex flex-col xs:flex-row items-start xs:items-center justify-between mb-3 sm:mb-4 gap-2">
+              <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Filters</h2>
+              <span className="px-2 py-0.5 sm:py-1 rounded-full text-xs font-medium bg-teal-600 text-white whitespace-nowrap">
+                API Connected
+              </span>
             </div>
 
-            <div className="space-y-3 sm:space-y-4">
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Phone
-                </label>
-                {isEditing ? (
+            <div className="space-y-3">
+              {/* Row 1 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+                <div>
+                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Report Type</label>
+                  <div className="relative">
+                    <select
+                      value={filters.reportType}
+                      onChange={(e) => setFilters({...filters, reportType: e.target.value})}
+                      className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
+                    >
+                      <option>Sales</option>
+                      <option>Orders</option>
+                      <option>Expenses</option>
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs mb-1 text-muted-foreground font-medium">View</label>
+                  <div className="relative">
+                    <select
+                      value={filters.view}
+                      onChange={(e) => setFilters({...filters, view: e.target.value})}
+                      className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
+                    >
+                      <option value="day">By Day</option>
+                      <option value="week">By Week</option>
+                      <option value="month">By Month</option>
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
+                  </div>
+                </div>
+                <div className="sm:col-span-2 lg:col-span-1">
+                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Days</label>
                   <input
-                    type="text"
-                    value={editData.phone}
-                    onChange={(e) =>
-                      setEditData({ ...editData, phone: e.target.value })
-                    }
-                    className="w-full bg-muted text-foreground rounded-lg border border-border px-3 py-2 text-sm sm:text-base outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                    type="number"
+                    value={filters.days}
+                    onChange={(e) => setFilters({...filters, days: parseInt(e.target.value) || 30})}
+                    className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    min="1"
+                    max="365"
                   />
-                ) : (
-                  <div className="bg-muted text-foreground rounded-lg px-3 py-2 text-sm sm:text-base">
-                    {customerData.phone}
-                  </div>
-                )}
+                </div>
               </div>
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Email
-                </label>
-                {isEditing ? (
-                  <input
-                    type="email"
-                    value={editData.email}
-                    onChange={(e) =>
-                      setEditData({ ...editData, email: e.target.value })
-                    }
-                    className="w-full bg-muted text-foreground rounded-lg border border-border px-3 py-2 text-sm sm:text-base outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                  />
-                ) : (
-                  <div className="bg-muted text-foreground rounded-lg px-3 py-2 text-sm sm:text-base break-all">
-                    {customerData.email}
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Address
-                </label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={editData.address}
-                    onChange={(e) =>
-                      setEditData({ ...editData, address: e.target.value })
-                    }
-                    className="w-full bg-muted text-foreground rounded-lg border border-border px-3 py-2 text-sm sm:text-base outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                  />
-                ) : (
-                  <div className="bg-muted text-foreground rounded-lg px-3 py-2 text-sm sm:text-base">
-                    {customerData.address}
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Notes
-                </label>
-                {isEditing ? (
-                  <textarea
-                    value={customerData.notes}
-                    onChange={(e) =>
-                      setCustomerData({
-                        ...customerData,
-                        notes: e.target.value,
-                      })
-                    }
-                    className="w-full bg-muted text-foreground rounded-lg border border-border px-3 py-2 text-sm sm:text-base outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 min-h-[80px]"
-                  />
-                ) : (
-                  <div className="bg-muted text-foreground rounded-lg px-3 py-2 text-sm sm:text-base">
-                    {customerData.notes}
-                  </div>
-                )}
-              </div>
-            </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:gap-4 mt-4 sm:mt-5 lg:mt-6">
-              <div className="bg-muted rounded-lg p-3 sm:p-4">
-                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                  <Copy
-                    size={14}
-                    className="sm:w-4 sm:h-4 text-muted-foreground"
-                  />
-                  <span className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground font-medium">
-                    Total Orders
-                  </span>
+              {/* Row 2 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+                <div>
+                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Outlet</label>
+                  <div className="relative">
+                    <select
+                      value={filters.outlet}
+                      onChange={(e) => setFilters({...filters, outlet: e.target.value})}
+                      className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
+                    >
+                      <option>All</option>
+                      <option>Main Branch</option>
+                      <option>Downtown</option>
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
+                  </div>
                 </div>
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-card-foreground">
-                  {computedTotalOrders}
-                </p>
+                <div>
+                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Payment Mode</label>
+                  <div className="relative">
+                    <select
+                      value={filters.paymentMode}
+                      onChange={(e) => setFilters({...filters, paymentMode: e.target.value})}
+                      className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
+                    >
+                      <option>All</option>
+                      <option>UPI</option>
+                      <option>Cash</option>
+                      <option>Card</option>
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
+                  </div>
+                </div>
+                <div className="sm:col-span-2 lg:col-span-1">
+                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Sort</label>
+                  <div className="relative">
+                    <select
+                      value={filters.sort}
+                      onChange={(e) => setFilters({...filters, sort: e.target.value})}
+                      className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
+                    >
+                      <option>Total Desc</option>
+                      <option>Total Asc</option>
+                      <option>Date Desc</option>
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
+                  </div>
+                </div>
               </div>
-              <div className="bg-muted rounded-lg p-3 sm:p-4">
-                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                  <IndianRupee
-                    size={14}
-                    className="sm:w-4 sm:h-4 text-muted-foreground"
-                  />
-                  <span className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground font-medium">
-                    Lifetime Spend
-                  </span>
-                </div>
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-card-foreground">
-                  ₹{computedLifetimeSpend.toLocaleString()}
-                </p>
-              </div>
-              <div className="bg-muted rounded-lg p-3 sm:p-4">
-                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                  <ShoppingBag
-                    size={14}
-                    className="sm:w-4 sm:h-4 text-muted-foreground"
-                  />
-                  <span className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground font-medium">
-                    Avg Order
-                  </span>
-                </div>
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-card-foreground">
-                  ₹{computedAvgOrder}
-                </p>
-              </div>
-              <div className="bg-muted rounded-lg p-3 sm:p-4">
-                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                  <Clock
-                    size={14}
-                    className="sm:w-4 sm:h-4 text-muted-foreground"
-                  />
-                  <span className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground font-medium">
-                    Last Visit
-                  </span>
-                </div>
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-card-foreground">
-                  {customerData.lastVisit}
-                </p>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col xs:flex-row justify-end gap-2 pt-1">
+                <button
+                  onClick={handleReset}
+                  disabled={loading}
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-colors text-sm text-teal-600 border border-teal-600 hover:bg-teal-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RotateCw size={14} />
+                  Reset
+                </button>
+                <button
+                  onClick={handleApply}
+                  disabled={loading}
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-colors text-sm bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Filter size={14} />
+                  Apply
+                </button>
               </div>
             </div>
           </div>
 
-          {/* Past Orders */}
-          <div className="bg-card border border-border rounded-xl p-4 sm:p-5 lg:p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-5 lg:mb-6 gap-3">
-              <h3 className="text-base sm:text-lg font-semibold text-card-foreground">
-                Past Orders
-              </h3>
-              <button
-                onClick={handleExport}
-                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-xs sm:text-sm font-medium"
-              >
-                <Download size={14} className="sm:w-[18px] sm:h-[18px]" />
-                Export
-              </button>
-            </div>
-
-            {/* Filters */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-5 lg:mb-6">
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Search orders
-                </label>
-                <input
-                  type="text"
-                  placeholder="Order ID, items..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-xs sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                />
+          {/* Key Metrics */}
+          <div className="rounded-xl px-3 sm:px-4 py-4 bg-card border border-border">
+            <h2 className="text-sm sm:text-base font-semibold mb-3 text-card-foreground">Key Metrics</h2>
+            
+            <div className="space-y-2.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="text-center p-2 rounded-lg bg-muted">
+                  <div className="text-xs text-muted-foreground mb-0.5">Sales</div>
+                  <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalSales}</div>
+                </div>
+                <div className="text-center p-2 rounded-lg bg-muted">
+                  <div className="text-xs text-muted-foreground mb-0.5">Orders</div>
+                  <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalOrders}</div>
+                </div>
+                <div className="text-center p-2 rounded-lg bg-muted col-span-2 sm:col-span-1">
+                  <div className="text-xs text-muted-foreground mb-0.5">Expenses</div>
+                  <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalExpenses}</div>
+                </div>
               </div>
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Date range
-                </label>
-                <select
-                  value={dateRange}
-                  onChange={(e) => setDateRange(e.target.value)}
-                  className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-xs sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
->
-<option>Last 30 days</option>
-<option>Last 7 days</option>
-<option>Last 90 days</option>
-<option>All time</option>
-</select>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="text-center p-2 rounded-lg bg-muted">
+                  <div className="text-xs text-muted-foreground mb-0.5">Avg</div>
+                  <div className="text-xs sm:text-sm font-bold text-foreground">{keyMetrics.avgOrderValue}</div>
+                </div>
+                <div className="text-center p-2 rounded-lg bg-muted">
+                  <div className="text-xs text-muted-foreground mb-0.5">Margin</div>
+                  <div className="text-xs sm:text-sm font-bold text-foreground">{keyMetrics.grossMargin}</div>
+                </div>
+                <div className="text-center p-2 rounded-lg bg-muted">
+                  <div className="text-xs text-muted-foreground mb-0.5">Top</div>
+                  <div className="text-xs font-bold text-foreground">{keyMetrics.topCategory}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Sales Report with Line Chart */}
+        <div className="rounded-xl px-3 sm:px-4 py-4 mb-4 sm:mb-6 lg:mb-8 bg-card border border-border overflow-hidden">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
+            <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Sales Report</h2>
+            <span className="text-xs text-muted-foreground">By selected view</span>
+          </div>
+
+          {/* Line Chart */}
+          {salesChartData.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Sales Trend</h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={salesChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#6b7280" />
+                  <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      fontSize: '12px'
+                    }} 
+                  />
+                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <Line type="monotone" dataKey="sales" stroke="#14b8a6" strokeWidth={2} name="Gross Sales" />
+                  <Line type="monotone" dataKey="net" stroke="#0d9488" strokeWidth={2} name="Net Sales" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          <div className="overflow-x-auto -mx-3 sm:-mx-4">
+            <div className="inline-block min-w-full align-middle">
+              <table className="min-w-full">
+                <thead>
+                  <tr className="bg-muted border-b border-border">
+                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Period</th>
+                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
+                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Gross</th>
+                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Discount</th>
+                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Net</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {salesData.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="py-8 text-center text-sm text-muted-foreground">
+                        No sales data available
+                      </td>
+                    </tr>
+                  ) : (
+                    salesData.map((row, index) => (
+                      <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
+                        <td className="py-2.5 px-2 sm:px-3">
+                          <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.period}</span>
+                        </td>
+                        <td className="py-2.5 px-2 sm:px-3">
+<span className="text-xs text-foreground">{row.orders}</span>
+</td>
+<td className="py-2.5 px-2 sm:px-3">
+<span className="text-xs text-foreground whitespace-nowrap">{row.grossSales}</span>
+</td>
+<td className="py-2.5 px-2 sm:px-3">
+<span className="text-xs text-foreground whitespace-nowrap">{row.discounts}</span>
+</td>
+<td className="py-2.5 px-2 sm:px-3">
+<span className="text-xs font-semibold text-foreground whitespace-nowrap">{row.net}</span>
+</td>
+</tr>
+))
+)}
+</tbody>
+</table>
 </div>
-<div>
-<label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-Status
-</label>
-<select
-value={statusFilter}
-onChange={(e) => setStatusFilter(e.target.value)}
-className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-xs sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
->
-<option>All / Paid / Pending</option>
-<option>Paid</option>
-<option>Pending</option>
-</select>
 </div>
-</div>{/* Orders Table - Desktop */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full">
+</div>
+    {/* Orders Report with Pie Chart */}
+    <div className="rounded-xl px-3 sm:px-4 py-4 mb-4 sm:mb-6 lg:mb-8 bg-card border border-border overflow-hidden">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
+        <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Orders Report</h2>
+        <span className="text-xs text-muted-foreground">Mix & payments</span>
+      </div>
+
+      {/* Pie Chart */}
+      {orderDistributionData.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Order Distribution by Source</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={orderDistributionData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                outerRadius={80}
+                fill="#8884d8"
+                dataKey="value"
+              >
+                {orderDistributionData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: 'hsl(var(--card))', 
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '8px',
+                  fontSize: '12px'
+                }} 
+              />
+              <Legend wrapperStyle={{ fontSize: '12px' }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Orders by Source */}
+        <div className="overflow-hidden">
+          <div className="flex items-center justify-between mb-2.5">
+            <h3 className="text-xs sm:text-sm font-semibold text-card-foreground">By Source</h3>
+            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Desc</span>
+          </div>
+          <div className="overflow-x-auto -mx-3 sm:-mx-4 lg:mx-0">
+            <div className="inline-block min-w-full align-middle">
+              <table className="min-w-full">
+                <thead>
+                  <tr className="bg-muted border-b border-border">
+                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Source</th>
+                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
+                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Share</th>
+                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Revenue</th>
+                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ordersData.bySource.map((row, index) => (
+                    <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
+                      <td className="py-2 px-2">
+                        <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.source}</span>
+                      </td>
+                      <td className="py-2 px-2">
+                        <span className="text-xs text-foreground">{row.orders}</span>
+                      </td>
+                      <td className="py-2 px-2">
+                        <span className="text-xs text-foreground">{row.share}</span>
+                      </td>
+                      <td className="py-2 px-2">
+                        <span className="text-xs text-foreground whitespace-nowrap">{row.revenue}</span>
+                      </td>
+                      <td className="py-2 px-2">
+                        <span className="text-xs text-foreground">{row.rank}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Payments by Mode */}
+        <div className="overflow-hidden">
+          <div className="flex items-center justify-between mb-2.5">
+            <h3 className="text-xs sm:text-sm font-semibold text-card-foreground">By Payment</h3>
+            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Desc</span>
+          </div>
+          <div className="overflow-x-auto -mx-3 sm:-mx-4 lg:mx-0">
+            <div className="inline-block min-w-full align-middle">
+              <table className="min-w-full">
+                <thead>
+                  <tr className="bg-muted border-b border-border">
+                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Mode</th>
+                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Count</th>
+                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Share</th>
+                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Amount</th>
+                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ordersData.byPayment.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="py-4 text-center text-sm text-muted-foreground">
+                        No payment data available
+                      </td>
+                    </tr>
+                  ) : (
+                    ordersData.byPayment.map((row, index) => (
+                      <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
+                        <td className="py-2 px-2">
+                          <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.mode}</span>
+                        </td>
+                        <td className="py-2 px-2">
+                          <span className="text-xs text-foreground">{row.count}</span>
+                        </td>
+                        <td className="py-2 px-2">
+                          <span className="text-xs text-foreground">{row.share}</span>
+                        </td>
+                        <td className="py-2 px-2">
+                          <span className="text-xs text-foreground whitespace-nowrap">{row.amount}</span>
+                        </td>
+                        <td className="py-2 px-2">
+                          <span className="text-xs text-foreground">{row.rank}</span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Expenses Report with Bar Chart */}
+    <div className="rounded-xl px-3 sm:px-4 py-4 bg-card border border-border overflow-hidden">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
+        <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Expenses Report</h2>
+        <span className="text-xs text-muted-foreground">By category</span>
+      </div>
+
+      {/* Bar Chart */}
+      {expensesChartData.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Expenses by Category</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={expensesChartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis dataKey="category" tick={{ fontSize: 12 }} stroke="#6b7280" />
+              <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: 'hsl(var(--card))', 
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '8px',
+                  fontSize: '12px'
+                }} 
+              />
+              <Legend wrapperStyle={{ fontSize: '12px' }} />
+              <Bar dataKey="amount" fill="#14b8a6" name="Amount (₹)" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      <div className="overflow-x-auto -mx-3 sm:-mx-4">
+        <div className="inline-block min-w-full align-middle">
+          <table className="min-w-full">
             <thead>
-              <tr className="border-b border-border">
-                <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                  Order ID
-                </th>
-                <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                  Date
-                </th>
-                <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                  Items
-                </th>
-                <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                  Total
-                </th>
-                <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                  Payment
-                </th>
-                <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                  Actions
-                </th>
+              <tr className="bg-muted border-b border-border">
+                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Category</th>
+                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Trans.</th>
+                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Amount</th>
+                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Share</th>
+                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.map((order, index) => {
-                const statusText =
-                  (order.status || "").toLowerCase() === "completed"
-                    ? "Paid"
-                    : "Pending";
-                const payments = [statusText];
-                return (
-                  <tr
-                    key={index}
-                    className="border-b border-border hover:bg-muted transition"
-                  >
-                    <td className="py-3 px-2 text-xs lg:text-sm text-foreground font-medium">
-                      {order.order_number}
-                    </td>
-                    <td className="py-3 px-2 text-xs lg:text-sm text-foreground whitespace-nowrap">
-                      {order.created_at}
-                    </td>
-                    <td className="py-3 px-2 text-xs lg:text-sm text-foreground">
-                      {order.notes || "—"}
-                    </td>
-                    <td className="py-3 px-2 text-xs lg:text-sm text-foreground font-semibold">
-                      ₹{order.total}
-                    </td>
-                    <td className="py-3 px-2">
-                      <div className="flex gap-1.5 flex-wrap">
-                        {payments.map((method, i) => (
-                          <span
-                            key={i}
-                            className={`px-2 py-0.5 text-[10px] lg:text-xs rounded-full font-medium ${
-                              method === "Pending"
-                                ? "bg-yellow-600"
-                                : "bg-teal-600"
-                            } text-white`}
-                          >
-                            {method}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="py-3 px-2">
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={() => handleViewOrder(order)}
-                          className="px-2.5 py-1 bg-teal-600 text-white rounded text-[10px] lg:text-xs hover:bg-teal-700 font-medium"
-                        >
-                          View
-                        </button>
-                        <button
-                          onClick={() => handleReorder(order)}
-                          className="px-2.5 py-1 bg-teal-600 text-white rounded text-[10px] lg:text-xs hover:bg-teal-700 font-medium"
-                        >
-                          Reorder
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+              {expensesData.map((row, index) => (
+                <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
+                  <td className="py-2.5 px-2 sm:px-3">
+                    <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.category}</span>
+                  </td>
+                  <td className="py-2.5 px-2 sm:px-3">
+                    <span className="text-xs text-foreground">{row.transactions}</span>
+                  </td>
+                  <td className="py-2.5 px-2 sm:px-3">
+                    <span className="text-xs text-foreground whitespace-nowrap">{row.amount}</span>
+                  </td>
+                  <td className="py-2.5 px-2 sm:px-3">
+                    <span className="text-xs text-foreground">{row.share}</span>
+                  </td>
+                  <td className="py-2.5 px-2 sm:px-3">
+                    <span className="text-xs text-foreground">{row.rank}</span>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
-
-        {/* Orders Cards - Mobile */}
-        <div className="md:hidden space-y-3">
-          {filteredOrders.map((order, index) => {
-            const statusText =
-              (order.status || "").toLowerCase() === "completed"
-                ? "Paid"
-                : "Pending";
-            const payments = [statusText];
-            return (
-              <div
-                key={index}
-                className="bg-muted rounded-lg p-3 sm:p-4"
-              >
-                <div className="flex justify-between items-start mb-2 sm:mb-3 gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-foreground text-xs sm:text-sm truncate">
-                      {order.order_number}
-                    </p>
-                    <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">
-                      {order.created_at}
-                    </p>
-                  </div>
-                  <div className="flex gap-1.5 flex-shrink-0">
-                    {payments.map((method, i) => (
-                      <span
-                        key={i}
-                        className={`px-2 py-0.5 text-[10px] rounded-full font-medium whitespace-nowrap ${
-                          method === "Pending"
-                            ? "bg-yellow-600"
-                            : "bg-teal-600"
-                        } text-white`}
-                      >
-                        {method}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <p className="text-xs sm:text-sm text-foreground mb-2 sm:mb-3 line-clamp-2">
-                  {order.notes || "—"}
-                </p>
-                <div className="flex justify-between items-center gap-2">
-                  <p className="text-base sm:text-lg font-bold text-foreground">
-                    ₹{order.total}
-                  </p>
-                  <div className="flex gap-1.5 sm:gap-2">
-                    <button
-                      onClick={() => handleViewOrder(order)}
-                      className="px-2.5 sm:px-3 py-1 bg-teal-600 text-white rounded text-[10px] sm:text-xs hover:bg-teal-700 font-medium"
-                    >
-                      View
-                    </button>
-                    <button
-                      onClick={() => handleReorder(order)}
-                      className="px-2.5 sm:px-3 py-1 bg-teal-600 text-white rounded text-[10px] sm:text-xs hover:bg-teal-700 font-medium"
-                    >
-                      Reorder
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {filteredOrders.length === 0 && (
-          <div className="text-center py-10 sm:py-12">
-            <p className="text-muted-foreground text-xs sm:text-sm">
-              No orders found matching your filters
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Quick Actions */}
-      <div className="bg-card border border-border rounded-xl p-4 sm:p-5 lg:p-6">
-        <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-3 sm:mb-4">
-          Quick Actions
-        </h3>
-        <div className="space-y-2.5 sm:space-y-3">
-          <div className="flex items-center justify-between p-3 sm:p-4 bg-muted rounded-lg hover:bg-secondary transition gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-xs sm:text-sm lg:text-base text-foreground mb-0.5 sm:mb-1">
-                Create New Order
-              </p>
-              <p className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground">
-                Start POS with {customerData.name.split(" ")[0]}'s details
-              </p>
-            </div>
-            <button
-              onClick={handleStartPOS}
-              className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 whitespace-nowrap text-xs sm:text-sm font-medium flex-shrink-0"
-            >
-              <PlusCircle
-                size={14}
-                className="sm:w-[18px] sm:h-[18px]"
-              />
-              Start
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between p-3 sm:p-4 bg-muted rounded-lg hover:bg-secondary transition gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-xs sm:text-sm lg:text-base text-foreground mb-0.5 sm:mb-1">
-                Send Offer
-              </p>
-              <p className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground">
-                Apply coupon to next order
-              </p>
-            </div>
-            <button
-              onClick={handleApplyOffer}
-              className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 whitespace-nowrap text-xs sm:text-sm font-medium flex-shrink-0"
-            >
-              <Copy size={14} className="sm:w-[18px] sm:h-[18px]" />
-              Apply
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between p-3 sm:p-4 bg-muted rounded-lg hover:bg-secondary transition gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-xs sm:text-sm lg:text-base text-foreground mb-0.5 sm:mb-1">
-                Delete Customer
-              </p>
-              <p className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground">
-                Remove profile and history
-              </p>
-            </div>
-            <button
-              onClick={handleDeleteCustomer}
-              className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 whitespace-nowrap text-xs sm:text-sm font-medium flex-shrink-0"
-            >
-              <Trash2 size={14} className="sm:w-[18px] sm:h-[18px]" />
-              Delete
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   </div>
-);}
-// LIST VIEW ----------------------------------------------------
-return (
-<div className="min-h-screen bg-background text-foreground p-3 sm:p-4 md:p-6 lg:p-8">
-{/* Header */}
-<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 lg:mb-8 gap-3 sm:gap-4">
-<h2 className="text-xl sm:text-2xl font-semibold text-foreground">
-Customer List
-</h2>
-</div><div className="mx-auto space-y-4 sm:space-y-5 lg:space-y-6">
-    {/* Customer List Card */}
-    <div className="bg-card border border-border rounded-xl p-4 sm:p-5 lg:p-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-5 gap-3">
-        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">
-          Customers
-        </h3>
-        <div className="relative w-full sm:w-64">
-          <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-            size={16}
-          />
-          <input
-            type="text"
-            placeholder="Search customers..."
-            value={customerSearchQuery}
-            onChange={(e) => setCustomerSearchQuery(e.target.value)}
-            className="w-full bg-muted text-foreground border border-border rounded-lg pl-10 pr-3 py-2 text-xs sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-          />
-        </div>
-      </div>
-
-      {/* Customer List - Desktop */}
-      <div className="hidden md:block overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                Name
-              </th>
-              <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                Phone
-              </th>
-              <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                Email
-              </th>
-              <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                Orders
-              </th>
-              <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-semibold">
-                Loyalty
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredCustomers.map((customer) => (
-              <tr
-                key={customer.id}
-                onClick={() => handleSelectCustomer(customer)}
-                className="border-b border-border cursor-pointer transition hover:bg-muted"
-              >
-                <td className="py-3 px-2">
-                  <div className="flex items-center gap-2">
-                    <div className="bg-muted text-foreground w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      {customer.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </div>
-                    <span className="text-xs lg:text-sm text-foreground font-medium">
-                      {customer.name}
-                    </span>
-                  </div>
-                </td>
-                <td className="py-3 px-2 text-xs lg:text-sm text-foreground">
-                  {customer.phone}
-                </td>
-                <td className="py-3 px-2 text-xs lg:text-sm text-foreground">
-                  {customer.email}
-                </td>
-                <td className="py-3 px-2 text-xs lg:text-sm text-foreground font-semibold">
-                  0
-                </td>
-                <td className="py-3 px-2">
-                  <span className="inline-block px-2 py-0.5 bg-teal-600 text-white text-xs rounded-full font-medium">
-                    {customer.loyaltyPoints} pts
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Customer List - Mobile */}
-      <div className="md:hidden space-y-3">
-        {filteredCustomers.map((customer) => (
-          <div
-            key={customer.id}
-            onClick={() => handleSelectCustomer(customer)}
-            className="p-3 sm:p-4 rounded-lg cursor-pointer transition bg-muted hover:bg-secondary"
-          >
-            <div className="flex items-start gap-3 mb-2">
-              <div className="bg-background text-foreground w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
-                {customer.name
-                  .split(" ")
-                  .map((n) => n[0])
-                  .join("")}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-foreground text-sm truncate">
-                  {customer.name}
-                </p>
-                <p className="text-xs text-muted-foreground truncate">
-                  {customer.email}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {customer.phone}
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-between items-center mt-2 pt-2 border-t border-border">
-              <span className="text-xs text-muted-foreground">
-                Orders:{" "}
-                <span className="font-semibold text-foreground">0</span>
-              </span>
-              <span className="inline-block px-2 py-0.5 bg-teal-600 text-white text-xs rounded-full font-medium">
-                {customer.loyaltyPoints} pts
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {filteredCustomers.length === 0 && (
-        <div className="text-center py-8">
-          <p className="text-muted-foreground text-xs sm:text-sm">
-            No customers found
-          </p>
-        </div>
-      )}
-    </div>
-  </div>
-</div>);
-}
-export default Customers;
+</div>
+);
+};
+export default ReportsPage;

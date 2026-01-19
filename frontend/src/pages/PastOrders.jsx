@@ -8,7 +8,6 @@ const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
 const PastOrders = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
-  const [statusFilter, setStatusFilter] = useState('All');
   const [paymentFilter, setPaymentFilter] = useState('All');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showBillModal, setShowBillModal] = useState(false);
@@ -26,7 +25,7 @@ const PastOrders = () => {
     weeklyTotal: 0
   });
 
-  // FIXED: Enhanced fetchOrders with ALL filters
+  // Fetch orders with filters (removed statusFilter)
   const fetchOrders = async (showLoader = true) => {
     if (showLoader) setLoading(true);
     setError(null);
@@ -37,13 +36,7 @@ const PastOrders = () => {
         limit: '100'
       });
 
-      // Add ALL filters to API call
-      if (statusFilter !== 'All') {
-        let statusValue = statusFilter.toLowerCase();
-        if (statusValue === 'complete') statusValue = 'completed';
-        if (statusValue === 'refund') statusValue = 'refunded';
-        params.append('status', statusValue);
-      }
+      // Add filters to API call (no status filter)
       if (paymentFilter !== 'All') {
         params.append('payment_method', paymentFilter.toLowerCase());
       }
@@ -107,7 +100,6 @@ const PastOrders = () => {
     }
   };
 
-  // FIXED: Normalize status and payment in transformOrdersData
   const transformOrdersData = (apiData) => {
     if (!Array.isArray(apiData)) return [];
 
@@ -136,7 +128,7 @@ const PastOrders = () => {
           })
         : '--:--';
 
-      // FIXED: Normalize status and payment
+      // Normalize status and payment
       let normalizedStatus = (order.status || 'completed').toLowerCase().trim();
       if (normalizedStatus === 'complete') normalizedStatus = 'completed';
       if (normalizedStatus === 'refund') normalizedStatus = 'refunded';
@@ -216,12 +208,12 @@ const PastOrders = () => {
     return weekData;
   };
 
-  // FIXED: useEffect with ALL filter dependencies
+  // useEffect without statusFilter dependency
   useEffect(() => {
     fetchOrders();
-  }, [statusFilter, paymentFilter, selectedDate, searchQuery]);
+  }, [paymentFilter, selectedDate, searchQuery]);
 
-  // FIXED: Enhanced client-side filtering with normalization
+  // Client-side filtering without status filter
   const filteredOrders = orders.filter(order => {
     const matchesSearch = order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          order.customer.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -230,15 +222,8 @@ const PastOrders = () => {
                            order.payment.toLowerCase() === paymentFilter.toLowerCase();
     
     const matchesDate = !selectedDate || order.createdAt?.split('T')[0] === selectedDate;
-    
-    const orderStatusLower = order.status.toLowerCase().trim();
-    const statusLower = statusFilter.toLowerCase();
-    const matchesStatus = statusFilter === 'All' || 
-      (orderStatusLower === statusLower ||
-       (statusLower === 'complete' && orderStatusLower.includes('complete')) ||
-       (statusLower === 'refund' && orderStatusLower.includes('refund')));
 
-    return matchesSearch && matchesPayment && matchesDate && matchesStatus;
+    return matchesSearch && matchesPayment && matchesDate;
   });
 
   const handleRefresh = async () => {
@@ -515,7 +500,7 @@ Thank you for your visit!`;
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4 sm:mb-6">
-            <div className="md:col-span-5">
+            <div className="md:col-span-6">
               <div className="relative">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={17} />
                 <input
@@ -528,7 +513,7 @@ Thank you for your visit!`;
               </div>
             </div>
 
-            <div className="md:col-span-2">
+            <div className="md:col-span-3">
               <div className="relative">
                 <input
                   type="date"
@@ -542,25 +527,11 @@ Thank you for your visit!`;
 
             <div className="md:col-span-3">
               <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full text-sm sm:text-[15px] px-3.5 py-2.5 rounded-md border border-border bg-muted text-foreground focus:outline-none appearance-none cursor-pointer"
-              >
-                <option value="All">All</option>
-                <option value="pending">Pending</option>
-                <option value="completed">Completed</option>
-                <option value="paid">Paid</option>
-                <option value="refunded">Refunded</option>
-              </select>
-            </div>
-
-            <div className="md:col-span-2">
-              <select
                 value={paymentFilter}
                 onChange={(e) => setPaymentFilter(e.target.value)}
                 className="w-full text-sm sm:text-[15px] px-3.5 py-2.5 rounded-md border border-border bg-muted text-foreground focus:outline-none appearance-none cursor-pointer"
               >
-                <option value="All">All</option>
+                <option value="All">All Payments</option>
                 <option value="Cash">Cash</option>
                 <option value="UPI">UPI</option>
                 <option value="Card">Card</option>
@@ -650,109 +621,106 @@ Thank you for your visit!`;
                     </button>
                   </div>
                 </div>
+              ))}</div>
+      )}
+
+      {/* Desktop Table View */}
+      {filteredOrders.length > 0 && (
+        <div className="hidden lg:block overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Order</th>
+                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Date & Time</th>
+                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Customer</th>
+                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Items</th>
+                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Subtotal</th>
+                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">GST</th>
+                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Discount</th>
+                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Total</th>
+                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Payment</th>
+                <th className="text-right font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredOrders.map((order) => (
+                <tr key={order.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+                  <td className="py-4 px-3">
+                    <div className="font-semibold text-[15px] text-foreground">{order.id}</div>
+                    <div className="text-[13px] mt-0.5 text-muted-foreground">{order.type}</div>
+                  </td>
+                  <td className="py-4 px-3">
+                    <div className="text-[15px] font-medium text-foreground">{order.time}</div>
+                  </td>
+                  <td className="py-4 px-3">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-[13px] flex-shrink-0 text-white"
+                        style={{ backgroundColor: order.customer.color }}
+                      >
+                        {order.customer.avatar}
+                      </div>
+                      <span className="text-[15px] text-foreground">{order.customer.name}</span>
+                    </div>
+                  </td>
+                  <td className="py-4 px-3">
+                    <span className="text-[15px] text-foreground">{order.items}</span>
+                  </td>
+                  <td className="py-4 px-3">
+                    <span className="text-[15px] text-foreground">₹ {order.subtotal.toFixed(2)}</span>
+                  </td>
+                  <td className="py-4 px-3">
+                    <span className="text-[15px] text-foreground">₹ {order.gst.toFixed(2)}</span>
+                  </td>
+                  <td className="py-4 px-3">
+                    <span className="text-[15px] text-foreground">
+                      {order.discount ? `- ₹ ${order.discount.toFixed(2)}` : '-'}
+                    </span>
+                  </td>
+                  <td className="py-4 px-3">
+                    <div className="text-[15px] font-semibold text-foreground">
+                      ₹ {order.total.toFixed(2)}
+                    </div>
+                  </td>
+                  <td className="py-4 px-3">
+                    <span className="inline-block px-3.5 py-1.5 rounded-md text-[13px] font-medium bg-primary text-primary-foreground">
+                      {order.payment}
+                    </span>
+                  </td>
+                  <td className="py-4 px-3">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => handlePrintBill(order)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90"
+                        title="Print Bill"
+                      >
+                        <Printer size={16} />
+                        <span>Print Bill</span>
+                      </button>
+                      <button
+                        onClick={() => handleDownloadBill(order)}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-foreground hover:bg-muted"
+                        title="Download Bill"
+                      >
+                        <Download size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleViewBill(order)}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-foreground hover:bg-muted"
+                        title="View Bill"
+                      >
+                        <Eye size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
               ))}
-            </div>
-          )}
-
-          {/* Desktop Table View */}
-          {filteredOrders.length > 0 && (
-            <div className="hidden lg:block overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Order</th>
-                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Date & Time</th>
-                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Customer</th>
-                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Items</th>
-                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Subtotal</th>
-                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">GST</th>
-                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Discount</th>
-                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Total</th>
-                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Payment</th>
-                    <th className="text-right font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredOrders.map((order) => (
-                    <tr key={order.id} className="border-b border-border hover:bg-muted/50 transition-colors">
-                      <td className="py-4 px-3">
-                        <div className="font-semibold text-[15px] text-foreground">{order.id}</div>
-                        <div className="text-[13px] mt-0.5 text-muted-foreground">{order.type}</div>
-                      </td>
-                      <td className="py-4 px-3">
-                        <div className="text-[15px] font-medium text-foreground">{order.time}</div>
-                      </td>
-                      <td className="py-4 px-3">
-                        <div className="flex items-center gap-2.5">
-                          <div
-                            className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-[13px] flex-shrink-0 text-white"
-                            style={{ backgroundColor: order.customer.color }}
-                          >
-                            {order.customer.avatar}
-                          </div>
-                          <span className="text-[15px] text-foreground">{order.customer.name}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-3">
-                        <span className="text-[15px] text-foreground">{order.items}</span>
-                      </td>
-                      <td className="py-4 px-3">
-                        <span className="text-[15px] text-foreground">₹ {order.subtotal.toFixed(2)}</span>
-                      </td>
-                      <td className="py-4 px-3">
-                        <span className="text-[15px] text-foreground">₹ {order.gst.toFixed(2)}</span>
-                      </td>
-                      <td className="py-4 px-3">
-                        <span className="text-[15px] text-foreground">
-                          {order.discount ? `- ₹ ${order.discount.toFixed(2)}` : '-'}
-                        </span>
-                      </td>
-                      <td className="py-4 px-3">
-                        <div className="text-[15px] font-semibold text-foreground">
-                          ₹ {order.total.toFixed(2)}
-                        </div>
-                      </td>
-                      <td className="py-4 px-3">
-                        <span className="inline-block px-3.5 py-1.5 rounded-md text-[13px] font-medium bg-primary text-primary-foreground">
-                          {order.payment}
-                        </span>
-                      </td>
-                      <td className="py-4 px-3">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => handlePrintBill(order)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90"
-                            title="Print Bill"
-                          >
-                            <Printer size={16} />
-                            <span>Print Bill</span>
-                          </button>
-                          <button
-                            onClick={() => handleDownloadBill(order)}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-foreground hover:bg-muted"
-                            title="Download Bill"
-                          >
-                            <Download size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleViewBill(order)}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-foreground hover:bg-muted"
-                            title="View Bill"
-                          >
-                            <Eye size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+            </tbody>
+          </table>
         </div>
-      </div>
+      )}
     </div>
-  );
+  </div>
+</div>);
 };
-
 export default PastOrders;
