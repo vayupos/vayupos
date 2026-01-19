@@ -197,6 +197,7 @@ const ExpensesManagement = () => {
 
     const [expenses, setExpenses] = useState([]);
     const [autoAddedPayments, setAutoAddedPayments] = useState([]);
+    const [removingIds, setRemovingIds] = useState(new Set()); // ✅ Track which items are being removed
 
     const presets = [
         { id: 1, icon: Flame, label: 'Gas Cylinder', amount: '₹3,200', category: 'Kitchen Supplies' },
@@ -247,6 +248,7 @@ const ExpensesManagement = () => {
             }));
             
             setAutoAddedPayments(transformedSalaries);
+            setRemovingIds(new Set()); // ✅ Clear removing IDs when fresh data loads
         } catch (error) {
             console.error('Failed to load upcoming staff salaries:', error);
         }
@@ -382,15 +384,15 @@ const ExpensesManagement = () => {
         }
     };
 
-    // ✅ FIXED: Handle adding salary from upcoming payments with immediate UI update
+    // ✅ FIXED: Handle adding salary from upcoming payments with proper optimistic update
     const handleAddNow = async (staffId) => {
         const payment = autoAddedPayments.find(p => p.staffId === staffId);
         if (!payment) return;
 
-        // ✅ IMMEDIATELY remove from UI (optimistic update)
-        setAutoAddedPayments(prevPayments => 
-            prevPayments.filter(p => p.staffId !== staffId)
-        );
+        console.log('🔄 Adding salary for staffId:', staffId);
+
+        // ✅ Mark as removing to hide from UI immediately
+        setRemovingIds(prev => new Set([...prev, staffId]));
 
         try {
             // Create expense from salary
@@ -431,6 +433,7 @@ const ExpensesManagement = () => {
                 });
             }
 
+            console.log('✅ Salary added successfully');
             alert('Salary entry added successfully!');
             
             // Refresh both lists from server
@@ -438,10 +441,14 @@ const ExpensesManagement = () => {
             await loadUpcomingStaffSalaries();
             
         } catch (error) {
-            // ✅ If error, restore the item back to the list
-            setAutoAddedPayments(prevPayments => [...prevPayments, payment]);
+            console.error('❌ Error adding salary:', error);
+            // ✅ If error, remove from removing set to show it again
+            setRemovingIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(staffId);
+                return newSet;
+            });
             alert('Failed to add salary entry.');
-            console.error('Error:', error);
         }
     };
 
@@ -532,6 +539,9 @@ const ExpensesManagement = () => {
 
     const filteredExpenses = getFilteredExpenses();
     const hasActiveFilters = searchQuery.trim() || categoryFilter !== 'All' || paymentModeFilter !== 'All' || dateRangeFilter !== 'This Month';
+    
+    // ✅ Filter out payments that are being removed
+    const visibleAutoAddedPayments = autoAddedPayments.filter(p => !removingIds.has(p.staffId));
 
     return (
         <div className="min-h-screen bg-background">
@@ -855,7 +865,7 @@ const ExpensesManagement = () => {
 
                     {/* Mobile Card View */}
                     <div className="block sm:hidden space-y-3">
-                        {autoAddedPayments.map((payment) => (
+                        {visibleAutoAddedPayments.map((payment) => (
                             <div key={payment.id} className="bg-muted rounded-lg p-3 border border-border">
                                 <div className="flex items-start justify-between mb-2">
                                     <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -883,10 +893,11 @@ const ExpensesManagement = () => {
                                 <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
                                     <button
                                         onClick={() => handleAddNow(payment.staffId)}
-                                        className="flex items-center gap-1 px-2 py-1 rounded-lg transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                                        disabled={removingIds.has(payment.staffId)}
+                                        className="flex items-center gap-1 px-2 py-1 rounded-lg transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         <Plus size={12} />
-                                        Add Now
+                                        {removingIds.has(payment.staffId) ? 'Adding...' : 'Add Now'}
                                     </button>
                                 </div>
                             </div>
@@ -907,7 +918,7 @@ const ExpensesManagement = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {autoAddedPayments.map((payment) => (
+                                {visibleAutoAddedPayments.map((payment) => (
                                     <tr key={payment.id} className="border-b border-border">
                                         <td className="py-4 px-3">
                                             <div className="flex items-center gap-2">
@@ -941,10 +952,11 @@ const ExpensesManagement = () => {
                                             <div className="flex justify-end">
                                                 <button
                                                     onClick={() => handleAddNow(payment.staffId)}
-                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                                                    disabled={removingIds.has(payment.staffId)}
+                                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
                                                     <Plus size={14} />
-                                                    Add Now
+                                                    {removingIds.has(payment.staffId) ? 'Adding...' : 'Add Now'}
                                                 </button>
                                             </div>
                                         </td>
@@ -954,7 +966,7 @@ const ExpensesManagement = () => {
                         </table>
                     </div>
 
-                    {autoAddedPayments.length === 0 && (
+                    {visibleAutoAddedPayments.length === 0 && (
                         <div className="text-center py-8">
                             <p className="text-sm text-muted-foreground">No upcoming staff payments.</p>
                         </div>
@@ -962,7 +974,7 @@ const ExpensesManagement = () => {
                 </div>
             </div>
 
-            {/* Add/Edit Expense Modal */}
+            {/* Add/Edit Expense Modal - keeping same as before */}
             <Modal
                 isOpen={showAddForm}
                 onClose={() => {

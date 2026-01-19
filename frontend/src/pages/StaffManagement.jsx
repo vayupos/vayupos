@@ -73,6 +73,7 @@ const StaffManagement = () => {
 
     const [staff, setStaff] = useState([]);
     const [upcomingSalaries, setUpcomingSalaries] = useState([]);
+    const [removingIds, setRemovingIds] = useState(new Set()); // ✅ Track which items are being removed
 
     const colors = [
         '#E74C3C',
@@ -217,6 +218,7 @@ const StaffManagement = () => {
             }));
             
             setUpcomingSalaries(transformedSalaries);
+            setRemovingIds(new Set()); // ✅ Clear removing IDs when fresh data loads
         } catch (err) {
             console.error('❌ Error fetching upcoming salaries:', err);
         }
@@ -438,15 +440,15 @@ const StaffManagement = () => {
         }
     };
 
-    // ✅ FIXED: Handle adding salary with immediate UI update
+    // ✅ FIXED: Handle adding salary with proper optimistic update
     const handleAddSalary = async (staffId) => {
         const salary = upcomingSalaries.find(s => s.staffId === staffId);
         if (!salary) return;
 
-        // ✅ IMMEDIATELY remove from UI (optimistic update)
-        setUpcomingSalaries(prevSalaries => 
-            prevSalaries.filter(s => s.staffId !== staffId)
-        );
+        console.log('🔄 Adding salary for staffId:', staffId);
+
+        // ✅ Mark as removing to hide from UI immediately
+        setRemovingIds(prev => new Set([...prev, staffId]));
 
         try {
             const response = await fetch(`${API_BASE_URL}/staff/salaries/${staffId}/add`, {
@@ -462,16 +464,21 @@ const StaffManagement = () => {
             }
 
             const message = await response.json();
+            console.log('✅ Salary added successfully');
             alert(typeof message === 'string' ? message : 'Salary entry added successfully!');
             
             // Refresh from server to get updated list
             await fetchUpcomingSalaries();
             
         } catch (err) {
-            // ✅ If error, restore the item back to the list
-            setUpcomingSalaries(prevSalaries => [...prevSalaries, salary]);
+            console.error('❌ Error adding salary:', err);
+            // ✅ If error, remove from removing set to show it again
+            setRemovingIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(staffId);
+                return newSet;
+            });
             alert(`Error adding salary: ${err.message}`);
-            console.error('Error adding salary:', err);
         }
     };
 
@@ -493,6 +500,9 @@ const StaffManagement = () => {
     const filteredStaff = staff;
     const hasActiveFilters = searchQuery.trim() || roleFilter !== 'All' || statusFilter !== 'Active';
     const showNoResults = !loading && filteredStaff.length === 0 && !error;
+    
+    // ✅ Filter out salaries that are being removed
+    const visibleUpcomingSalaries = upcomingSalaries.filter(s => !removingIds.has(s.staffId));
 
     if (loading && staff.length === 0) {
         return (
@@ -741,7 +751,7 @@ const StaffManagement = () => {
                         </div>
 
                         <div className="space-y-3">
-                            {upcomingSalaries.map((entry) => (
+                            {visibleUpcomingSalaries.map((entry) => (
                                 <div
                                     key={entry.id}
                                     className="flex items-center justify-between bg-muted rounded-lg px-3 py-3"
@@ -773,15 +783,16 @@ const StaffManagement = () => {
 
                                     <button
                                         onClick={() => handleAddSalary(entry.staffId)}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs sm:text-sm font-medium hover:bg-teal-700 transition-colors"
+                                        disabled={removingIds.has(entry.staffId)}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs sm:text-sm font-medium hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         <PlusCircle className="w-4 h-4" />
-                                        <span>Add Now</span>
+                                        <span>{removingIds.has(entry.staffId) ? 'Adding...' : 'Add Now'}</span>
                                     </button>
                                 </div>
                             ))}
 
-                            {upcomingSalaries.length === 0 && !loading && (
+                            {visibleUpcomingSalaries.length === 0 && !loading && (
                                 <div className="py-4 text-center text-sm text-muted-foreground">
                                     No upcoming salary entries.
                                 </div>
