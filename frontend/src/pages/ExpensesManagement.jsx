@@ -248,7 +248,20 @@ const ExpensesManagement = () => {
             }));
             
             setAutoAddedPayments(transformedSalaries);
-            setRemovingIds(new Set()); // ✅ Clear removing IDs when fresh data loads
+            
+            // ✅ Smart cleanup: only keep removingIds that are still in the new data
+            // If an ID is not in the new data, it was successfully removed, so clean it up
+            setRemovingIds(prev => {
+                const newSet = new Set();
+                const currentStaffIds = new Set(transformedSalaries.map(s => s.staffId));
+                prev.forEach(id => {
+                    // Only keep the ID if it still exists in the data (meaning removal failed)
+                    if (currentStaffIds.has(id)) {
+                        newSet.add(id);
+                    }
+                });
+                return newSet;
+            });
         } catch (error) {
             console.error('Failed to load upcoming staff salaries:', error);
         }
