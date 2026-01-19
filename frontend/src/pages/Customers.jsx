@@ -12,9 +12,12 @@ import {
   PlusCircle,
   Search,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
 
 function Customers() {
+  const navigate = useNavigate();
+  
   // State management
   const [view, setView] = useState("list");
   const [isEditing, setIsEditing] = useState(false);
@@ -33,6 +36,10 @@ function Customers() {
 
   // Orders from backend for selected customer
   const [orders, setOrders] = useState([]);
+
+  // Coupons for offer modal
+  const [availableCoupons, setAvailableCoupons] = useState([]);
+  const [selectedCoupon, setSelectedCoupon] = useState("");
 
   // Helpers ------------------------------------------------------
 
@@ -117,7 +124,22 @@ function Customers() {
     }
   };
 
-  // Initial load of customers
+  const loadAvailableCoupons = async () => {
+    try {
+      const res = await api.get("/coupons/available");
+      const data = res.data || {};
+      const eligible = data.eligible || [];
+      setAvailableCoupons(eligible);
+      if (eligible.length > 0) {
+        setSelectedCoupon(eligible[0].code);
+      }
+    } catch (err) {
+      console.error("LOAD COUPONS ERROR:", err?.response?.data || err);
+      setAvailableCoupons([]);
+    }
+  };
+
+  // Initial load of customers - REMOVED AUTO-SELECTION
   useEffect(() => {
     const loadCustomers = async () => {
       try {
@@ -126,15 +148,8 @@ function Customers() {
         });
         const list = res.data.data || res.data || [];
         setCustomers(list);
-
-        if (list.length > 0) {
-          const first = list[0];
-          setSelectedCustomerId(first.id);
-          setCustomerData(mapCustomerToUi(first));
-          setEditData(mapCustomerToEdit(first));
-          await loadCustomerOrders(first.id);
-          setView("detail");
-        }
+        // REMOVED: Auto-selection of first customer
+        // Now stays on list view until user clicks
       } catch (err) {
         console.error("LOAD CUSTOMERS ERROR:", err?.response?.data || err);
         alert("Failed to load customers");
@@ -231,21 +246,48 @@ function Customers() {
 
   const handleStartPOS = () => {
     if (!customerData) return;
-    alert(
-      `Starting POS with customer: ${customerData.name}\nPhone: ${customerData.phone}`
-    );
+    
+    // Navigate to POS page with customer data
+    navigate('/pos', { 
+      state: { 
+        customer: {
+          id: customerData.id,
+          name: customerData.name,
+          phone: customerData.phone,
+          email: customerData.email
+        }
+      } 
+    });
   };
 
-  const handleApplyOffer = () => {
+  const handleApplyOffer = async () => {
+    await loadAvailableCoupons();
     setShowOfferModal(true);
   };
 
-  const confirmApplyOffer = () => {
-    if (!customerData) return;
-    alert(
-      `Offer applied to ${customerData.name}'s account!\nThey will receive a notification.`
-    );
-    setShowOfferModal(false);
+  const confirmApplyOffer = async () => {
+    if (!customerData || !selectedCoupon) return;
+    
+    try {
+      // Validate the coupon first (optional, but good practice)
+      const validateRes = await api.post("/coupons/validate", {
+        coupon_code: selectedCoupon,
+        subtotal: customerData.lifetimeSpend || 0,
+        customer_id: customerData.id.toString()
+      });
+
+      if (validateRes.data.valid && validateRes.data.eligible) {
+        alert(
+          `✅ Offer "${selectedCoupon}" applied to ${customerData.name}'s account!\n\nDiscount: ${validateRes.data.coupon.discount_type === 'percentage' ? validateRes.data.coupon.discount_value + '%' : '₹' + validateRes.data.coupon.discount_value}\n\nThey can use this coupon on their next order.`
+        );
+        setShowOfferModal(false);
+      } else {
+        alert(`❌ Coupon validation failed: ${validateRes.data.message || 'Not eligible'}`);
+      }
+    } catch (err) {
+      console.error("APPLY OFFER ERROR:", err?.response?.data || err);
+      alert("Failed to apply offer. Please try again.");
+    }
   };
 
   const handleDeleteCustomer = () => {
@@ -254,14 +296,19 @@ function Customers() {
 
   const confirmDelete = async () => {
     if (!customerData) return;
+    
     try {
       await api.delete(`/customers/${customerData.id}`);
+      
+      // Remove from local state
       setCustomers((prev) =>
         prev.filter((c) => c.id !== customerData.id)
       );
+      
       alert(
-        `Customer ${customerData.name} has been deleted along with all order history.`
+        `✅ Customer ${customerData.name} has been deactivated successfully.`
       );
+      
       setShowDeleteModal(false);
       setView("list");
       setCustomerData(null);
@@ -270,7 +317,7 @@ function Customers() {
       setOrders([]);
     } catch (err) {
       console.error("DELETE CUSTOMER ERROR:", err?.response?.data || err);
-      alert("Failed to delete customer");
+      alert("Failed to delete customer. Please try again.");
     }
   };
 
@@ -408,14 +455,12 @@ function Customers() {
         </div>
         
         <script>
-          // Focus the window when it opens
           window.focus();
         </script>
       </body>
       </html>
     `;
     
-    // Open in NEW TAB
     const newTab = window.open('', '_blank');
     newTab.document.write(popupContent);
     newTab.document.close();
@@ -455,7 +500,7 @@ function Customers() {
               </h3>
               <p className="text-sm sm:text-base text-muted-foreground mb-5 sm:mb-6">
                 Are you sure you want to delete {customerData.name}? This will
-                remove their profile and all order history. This action cannot
+                deactivate their profile and all order history. This action cannot
                 be undone.
               </p>
               <div className="flex gap-2 sm:gap-3">
@@ -486,15 +531,29 @@ function Customers() {
               <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4">
                 Select an offer to apply to {customerData.name}'s next order:
               </p>
-              <select className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-5 sm:mb-6">
-                <option>TEA5 - ₹5 off on Beverages</option>
-                <option>SAVE10 - 10% off on total bill</option>
-                <option>COMBO20 - 20% off on combo meals</option>
+              <select 
+                value={selectedCoupon}
+                onChange={(e) => setSelectedCoupon(e.target.value)}
+                className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-5 sm:mb-6"
+              >
+                {availableCoupons.length > 0 ? (
+                  availableCoupons.map((coupon) => (
+                    <option key={coupon.id} value={coupon.code}>
+                      {coupon.code} - {coupon.description || 
+                        (coupon.discount_type === 'percentage' 
+                          ? `${coupon.discount_value}% off` 
+                          : `₹${coupon.discount_value} off`)}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">No coupons available</option>
+                )}
               </select>
               <div className="flex gap-2 sm:gap-3">
                 <button
                   onClick={confirmApplyOffer}
-                  className="flex-1 py-2 sm:py-2.5 text-sm sm:text-base bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium"
+                  disabled={!selectedCoupon || availableCoupons.length === 0}
+                  className="flex-1 py-2 sm:py-2.5 text-sm sm:text-base bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Apply Offer
                 </button>
@@ -694,77 +753,78 @@ function Customers() {
                   <Clock
                     size={14}
                     className="sm:w-4 sm:h-4 text-muted-foreground"
-                  />
-                  <span className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground font-medium">
-                    Last Visit
-                  </span>
-                </div>
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-card-foreground">
-                  {customerData.lastVisit}
-                </p>
-              </div>
-            </div>
+/>
+<span className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground font-medium">
+Last Visit
+</span>
+</div>
+<p className="text-xl sm:text-2xl lg:text-3xl font-bold text-card-foreground">
+{customerData.lastVisit}
+</p>
+</div>
+</div>
+</div>
+      {/* Past Orders */}
+      <div className="bg-card border border-border rounded-xl p-4 sm:p-5 lg:p-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-5 lg:mb-6 gap-3">
+          <h3 className="text-base sm:text-lg font-semibold text-card-foreground">
+            Past Orders
+          </h3>
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-xs sm:text-sm font-medium"
+          >
+            <Download size={14} className="sm:w-[18px] sm:h-[18px]" />
+            Export
+          </button>
+        </div>
+
+        {/* Filters */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-5 lg:mb-6">
+          <div>
+            <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
+              Search orders
+            </label>
+            <input
+              type="text"
+              placeholder="Order ID, items..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-xs sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+            />
           </div>
+          <div>
+            <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
+              Date range
+            </label>
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
+              className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-xs sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+            >
+              <option>Last 30 days</option>
+              <option>Last 7 days</option>
+              <option>Last 90 days</option>
+              <option>All time</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
+              Status
+            </label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-xs sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+            >
+              <option>All / Paid / Pending</option>
+              <option>Paid</option>
+              <option>Pending</option>
+            </select>
+          </div>
+        </div>
 
-          {/* Past Orders */}
-          <div className="bg-card border border-border rounded-xl p-4 sm:p-5 lg:p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-5 lg:mb-6 gap-3">
-              <h3 className="text-base sm:text-lg font-semibold text-card-foreground">
-                Past Orders
-              </h3>
-              <button
-                onClick={handleExport}
-                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-xs sm:text-sm font-medium"
-              >
-                <Download size={14} className="sm:w-[18px] sm:h-[18px]" />
-                Export
-              </button>
-            </div>
-
-            {/* Filters */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-5 lg:mb-6">
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Search orders
-                </label>
-                <input
-                  type="text"
-                  placeholder="Order ID, items..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-xs sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Date range
-                </label>
-                <select
-                  value={dateRange}
-                  onChange={(e) => setDateRange(e.target.value)}
-                  className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-xs sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
->
-<option>Last 30 days</option>
-<option>Last 7 days</option>
-<option>Last 90 days</option>
-<option>All time</option>
-</select>
-</div>
-<div>
-<label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-Status
-</label>
-<select
-value={statusFilter}
-onChange={(e) => setStatusFilter(e.target.value)}
-className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-xs sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
->
-<option>All / Paid / Pending</option>
-<option>Paid</option>
-<option>Pending</option>
-</select>
-</div>
-</div>{/* Orders Table - Desktop */}
+        {/* Orders Table - Desktop */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -991,7 +1051,8 @@ className="w-full bg-muted text-foreground border border-border rounded-lg px-3 
       </div>
     </div>
   </div>
-);}
+);
+}
 // LIST VIEW ----------------------------------------------------
 return (
 <div className="min-h-screen bg-background text-foreground p-3 sm:p-4 md:p-6 lg:p-8">
@@ -1000,7 +1061,8 @@ return (
 <h2 className="text-xl sm:text-2xl font-semibold text-foreground">
 Customer List
 </h2>
-</div><div className="mx-auto space-y-4 sm:space-y-5 lg:space-y-6">
+</div>
+  <div className="mx-auto space-y-4 sm:space-y-5 lg:space-y-6">
     {/* Customer List Card */}
     <div className="bg-card border border-border rounded-xl p-4 sm:p-5 lg:p-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-5 gap-3">
@@ -1133,6 +1195,7 @@ Customer List
       )}
     </div>
   </div>
-</div>);
+</div>
+);
 }
 export default Customers;
