@@ -9,6 +9,12 @@ const ReportsPage = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // Helper function to get auth token from localStorage
+  const getAuthToken = () => {
+    return localStorage.getItem('access_token') || '';
+  };
+
   const [filters, setFilters] = useState({
     reportType: 'Sales',
     view: 'day',
@@ -41,20 +47,40 @@ const ReportsPage = () => {
 
   const COLORS = ['#14b8a6', '#0d9488', '#0f766e'];
 
+  // Helper function to make authenticated API calls
+  const fetchWithAuth = async (url, options = {}) => {
+    const token = getAuthToken();
+    
+    if (!token) {
+      throw new Error('No authentication token found. Please login again.');
+    }
+
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,  // ADD THIS LINE - Authentication header
+        ...options.headers,
+      }
+    });
+
+    // Handle 401 Unauthorized - token expired or invalid
+    if (response.status === 401) {
+      localStorage.removeItem('access_token');
+      throw new Error('Session expired. Please login again.');
+    }
+
+    return response;
+  };
+
   // Fetch Sales Report
   const fetchSalesReport = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(
-        `${API_BASE_URL}/reports/sales?days=${filters.days}&group_by=${filters.view}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        }
+      const response = await fetchWithAuth(
+        `${API_BASE_URL}/reports/sales?days=${filters.days}&group_by=${filters.view}`
       );
 
       if (!response.ok) {
@@ -109,14 +135,8 @@ const ReportsPage = () => {
   // Fetch Payment Methods Report
   const fetchPaymentMethodsReport = async () => {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/reports/payment-methods?days=${filters.days}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        }
+      const response = await fetchWithAuth(
+        `${API_BASE_URL}/reports/payment-methods?days=${filters.days}`
       );
 
       if (!response.ok) {
@@ -152,14 +172,8 @@ const ReportsPage = () => {
   // Fetch Product Sales Report
   const fetchProductSalesReport = async () => {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/reports/products-sales?days=${filters.days}&limit=50`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        }
+      const response = await fetchWithAuth(
+        `${API_BASE_URL}/reports/products-sales?days=${filters.days}&limit=50`
       );
 
       if (!response.ok) {
@@ -190,14 +204,8 @@ const ReportsPage = () => {
   const fetchDailySummary = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
-      const response = await fetch(
-        `${API_BASE_URL}/reports/daily-summary?date=${today}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          }
-        }
+      const response = await fetchWithAuth(
+        `${API_BASE_URL}/reports/daily-summary?date=${today}`
       );
 
       if (!response.ok) {
@@ -233,7 +241,7 @@ const ReportsPage = () => {
         fetchDailySummary()
       ]);
     } catch (err) {
-      setError('Failed to load reports. Please try again.');
+      setError(err.message || 'Failed to load reports. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -241,6 +249,11 @@ const ReportsPage = () => {
 
   // Initial load
   useEffect(() => {
+    const token = getAuthToken();
+    if (!token) {
+      setError('No authentication token found. Please login first.');
+      return;
+    }
     fetchAllReports();
   }, []);
 
@@ -394,7 +407,7 @@ const ReportsPage = () => {
             <div className="flex flex-col xs:flex-row items-start xs:items-center justify-between mb-3 sm:mb-4 gap-2">
               <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Filters</h2>
               <span className="px-2 py-0.5 sm:py-1 rounded-full text-xs font-medium bg-teal-600 text-white whitespace-nowrap">
-                API Connected
+                🔒 Authenticated
               </span>
             </div>
 
@@ -600,37 +613,37 @@ const ReportsPage = () => {
                 </thead>
                 <tbody>
                   {salesData.length === 0 ? (
-                    <tr>
-                      <td colSpan="5" className="py-8 text-center text-sm text-muted-foreground">
-                        No sales data available
-                      </td>
-                    </tr>
-                  ) : (
-                    salesData.map((row, index) => (
-                      <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                        <td className="py-2.5 px-2 sm:px-3">
-                          <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.period}</span>
-</td>
-<td className="py-2.5 px-2 sm:px-3">
-<span className="text-xs text-foreground">{row.orders}</span>
-</td>
-<td className="py-2.5 px-2 sm:px-3">
-<span className="text-xs text-foreground whitespace-nowrap">{row.grossSales}</span>
-</td>
-<td className="py-2.5 px-2 sm:px-3">
-<span className="text-xs text-foreground whitespace-nowrap">{row.discounts}</span>
-</td>
-<td className="py-2.5 px-2 sm:px-3">
-<span className="text-xs font-semibold text-foreground whitespace-nowrap">{row.net}</span>
-</td>
-</tr>
-))
-)}
-</tbody>
-</table>
-</div>
-</div>
-</div>
+                    <tr><td colSpan="5" className="py-8 text-center text-sm text-muted-foreground">
+                    No sales data available
+                  </td>
+                </tr>
+              ) : (
+                salesData.map((row, index) => (
+                  <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
+                    <td className="py-2.5 px-2 sm:px-3">
+                      <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.period}</span>
+                    </td>
+                    <td className="py-2.5 px-2 sm:px-3">
+                      <span className="text-xs text-foreground">{row.orders}</span>
+                    </td>
+                    <td className="py-2.5 px-2 sm:px-3">
+                      <span className="text-xs text-foreground whitespace-nowrap">{row.grossSales}</span>
+                    </td>
+                    <td className="py-2.5 px-2 sm:px-3">
+                      <span className="text-xs text-foreground whitespace-nowrap">{row.discounts}</span>
+                    </td>
+                    <td className="py-2.5 px-2 sm:px-3">
+                      <span className="text-xs font-semibold text-foreground whitespace-nowrap">{row.net}</span>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     {/* Orders Report with Pie Chart */}
     <div className="rounded-xl px-3 sm:px-4 py-4 mb-4 sm:mb-6 lg:mb-8 bg-card border border-border overflow-hidden">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
@@ -840,7 +853,6 @@ const ReportsPage = () => {
       </div>
     </div>
   </div>
-</div>
-);
+</div>);
 };
 export default ReportsPage;
