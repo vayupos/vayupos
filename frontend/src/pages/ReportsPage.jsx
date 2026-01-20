@@ -59,7 +59,7 @@ const ReportsPage = () => {
       ...options,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,  // ADD THIS LINE - Authentication header
+        'Authorization': `Bearer ${token}`,
         ...options.headers,
       }
     });
@@ -169,6 +169,192 @@ const ReportsPage = () => {
     }
   };
 
+  // NEW: Fetch Orders by Source/Type from /api/v1/orders endpoint
+  const fetchOrdersBySource = async () => {
+    try {
+      // Calculate date range
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - filters.days);
+
+      const response = await fetchWithAuth(
+        `${API_BASE_URL}/orders?limit=1000` // Fetch recent orders
+      );
+
+      if (!response.ok) {
+        console.error('Orders API error:', response.status);
+        throw new Error('Failed to fetch orders');
+      }
+      
+      const data = await response.json();
+      console.log('Orders data:', data);
+      
+      // Process orders by order_type (assuming your Order model has order_type field)
+      // If not, you might need to filter by another field or all orders will be "Dine-in"
+      if (data && Array.isArray(data)) {
+        // Filter orders within date range
+        const filteredOrders = data.filter(order => {
+          const orderDate = new Date(order.created_at || order.order_date);
+          return orderDate >= startDate && orderDate <= endDate;
+        });
+
+        // Group by order source/type
+        const ordersBySource = {};
+        let totalRevenue = 0;
+
+        filteredOrders.forEach(order => {
+          // Assuming your API has order_type field (e.g., "dine-in", "takeaway", "delivery")
+          // If not available, you might need to add this field to your backend
+          const source = order.order_type || order.source || 'Dine-in'; // Default to Dine-in
+          const orderTotal = order.total_amount || order.final_amount || 0;
+          
+          if (!ordersBySource[source]) {
+            ordersBySource[source] = {
+              orders: 0,
+              revenue: 0
+            };
+          }
+          
+          ordersBySource[source].orders += 1;
+          ordersBySource[source].revenue += orderTotal;
+          totalRevenue += orderTotal;
+        });
+
+        const totalOrders = filteredOrders.length;
+
+        // Transform to array format
+        const sourcesArray = Object.entries(ordersBySource)
+          .map(([source, data]) => ({
+            source: source.charAt(0).toUpperCase() + source.slice(1), // Capitalize
+            orders: data.orders,
+            share: `${totalOrders > 0 ? ((data.orders / totalOrders) * 100).toFixed(1) : 0}%`,
+            revenue: `₹${data.revenue.toLocaleString('en-IN')}`,
+            revenueNum: data.revenue
+          }))
+          .sort((a, b) => b.orders - a.orders) // Sort by order count descending
+          .map((item, index) => ({
+            ...item,
+            rank: index + 1
+          }));
+
+        setOrdersData(prev => ({
+          ...prev,
+          bySource: sourcesArray
+        }));
+
+        // Prepare pie chart data
+        const pieData = sourcesArray.map(item => ({
+          name: item.source,
+          value: item.orders
+        }));
+        setOrderDistributionData(pieData);
+      }
+    } catch (err) {
+      console.error('Error fetching orders by source:', err);
+      // Fallback to empty data instead of mock data
+      setOrdersData(prev => ({
+        ...prev,
+        bySource: []
+      }));
+      setOrderDistributionData([]);
+    }
+  };
+
+  // NEW: Fetch Expenses from /api/v1/expenses/ endpoint
+  const fetchExpensesReport = async () => {
+    try {
+      // Calculate date range
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - filters.days);
+
+      const response = await fetchWithAuth(
+        `${API_BASE_URL}/expenses/?limit=1000` // Fetch all expenses
+      );
+
+      if (!response.ok) {
+        console.error('Expenses API error:', response.status);
+        throw new Error('Failed to fetch expenses');
+      }
+      
+      const data = await response.json();
+      console.log('Expenses data:', data);
+      
+      if (data && Array.isArray(data)) {
+        // Filter expenses within date range
+        const filteredExpenses = data.filter(expense => {
+          const expenseDate = new Date(expense.date || expense.created_at);
+          return expenseDate >= startDate && expenseDate <= endDate;
+        });
+
+        // Group by category
+        const expensesByCategory = {};
+        let totalExpenses = 0;
+
+        filteredExpenses.forEach(expense => {
+          const category = expense.category || 'Other';
+          const amount = expense.amount || 0;
+          
+          if (!expensesByCategory[category]) {
+            expensesByCategory[category] = {
+              transactions: 0,
+              amount: 0
+            };
+          }
+          
+          expensesByCategory[category].transactions += 1;
+          expensesByCategory[category].amount += amount;
+          totalExpenses += amount;
+        });
+
+        // Transform to array format
+        const expensesArray = Object.entries(expensesByCategory)
+          .map(([category, data]) => ({
+            category: category,
+            transactions: data.transactions,
+            amount: `₹${data.amount.toLocaleString('en-IN')}`,
+            amountNum: data.amount,
+            share: `${totalExpenses > 0 ? ((data.amount / totalExpenses) * 100).toFixed(1) : 0}%`
+          }))
+          .sort((a, b) => b.amountNum - a.amountNum) // Sort by amount descending
+          .map((item, index) => ({
+            ...item,
+            rank: index + 1
+          }));
+
+        setExpensesData(expensesArray);
+
+        // Prepare chart data (top categories)
+        const chartData = expensesArray.slice(0, 10).map(item => ({
+          category: item.category.length > 15 ? item.category.substring(0, 15) + '...' : item.category,
+          amount: item.amountNum
+        }));
+        setExpensesChartData(chartData);
+
+        // Update total expenses in key metrics
+        setKeyMetrics(prev => ({
+          ...prev,
+          totalExpenses: `₹${totalExpenses.toLocaleString('en-IN')}`
+        }));
+
+        // Calculate gross margin if we have sales data
+        const salesAmount = parseFloat(keyMetrics.totalSales.replace(/[₹,]/g, '')) || 0;
+        if (salesAmount > 0) {
+          const margin = ((salesAmount - totalExpenses) / salesAmount * 100).toFixed(1);
+          setKeyMetrics(prev => ({
+            ...prev,
+            grossMargin: `${margin}%`
+          }));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching expenses report:', err);
+      // Fallback to empty data instead of mock data
+      setExpensesData([]);
+      setExpensesChartData([]);
+    }
+  };
+
   // Fetch Product Sales Report
   const fetchProductSalesReport = async () => {
     try {
@@ -200,7 +386,7 @@ const ReportsPage = () => {
     }
   };
 
-  // Fetch Daily Summary (for expenses estimation)
+  // Fetch Daily Summary (for additional metrics)
   const fetchDailySummary = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
@@ -210,21 +396,22 @@ const ReportsPage = () => {
 
       if (!response.ok) {
         console.error('Daily summary API error:', response.status);
-        throw new Error('Failed to fetch daily summary');
+        // Don't throw error, just log it
+        return;
       }
       
       const data = await response.json();
       console.log('Daily summary data:', data);
       
-      if (data) {
+      if (data && data.gross_margin) {
         setKeyMetrics(prev => ({
           ...prev,
-          totalExpenses: `₹${(data.total_expenses || 0).toLocaleString('en-IN')}`,
-          grossMargin: data.gross_margin ? `${data.gross_margin}%` : prev.grossMargin
+          grossMargin: `${data.gross_margin}%`
         }));
       }
     } catch (err) {
       console.error('Error fetching daily summary:', err);
+      // Don't throw, this is optional data
     }
   };
 
@@ -237,6 +424,8 @@ const ReportsPage = () => {
       await Promise.all([
         fetchSalesReport(),
         fetchPaymentMethodsReport(),
+        fetchOrdersBySource(), // NEW: Real orders data
+        fetchExpensesReport(), // NEW: Real expenses data
         fetchProductSalesReport(),
         fetchDailySummary()
       ]);
@@ -257,45 +446,19 @@ const ReportsPage = () => {
     fetchAllReports();
   }, []);
 
-  // Mock data for order sources (since API doesn't provide this)
+  // Recalculate gross margin when sales or expenses change
   useEffect(() => {
-    // This would need to come from your backend if available
-    const mockOrderSources = [
-      { source: 'Dine-in', orders: 640, share: '49.8%', revenue: '₹2,38,400', rank: 1 },
-      { source: 'Takeaway', orders: 420, share: '32.7%', revenue: '₹1,28,100', rank: 2 },
-      { source: 'Delivery', orders: 224, share: '17.5%', revenue: '₹1,15,850', rank: 3 }
-    ];
+    const salesAmount = parseFloat(keyMetrics.totalSales.replace(/[₹,]/g, '')) || 0;
+    const expensesAmount = parseFloat(keyMetrics.totalExpenses.replace(/[₹,]/g, '')) || 0;
     
-    setOrdersData(prev => ({
-      ...prev,
-      bySource: mockOrderSources
-    }));
-    
-    setOrderDistributionData([
-      { name: 'Dine-in', value: 640 },
-      { name: 'Takeaway', value: 420 },
-      { name: 'Delivery', value: 224 }
-    ]);
-  }, []);
-
-  // Mock expenses data (you'll need to add an expenses endpoint to your backend)
-  useEffect(() => {
-    const mockExpenses = [
-      { category: 'Salaries & Wages', transactions: 6, amount: '₹55,500', share: '49.5%', rank: 1 },
-      { category: 'Kitchen Supplies', transactions: 14, amount: '₹24,300', share: '21.7%', rank: 2 },
-      { category: 'Utilities', transactions: 10, amount: '₹12,350', share: '11.0%', rank: 3 },
-      { category: 'Rent', transactions: 1, amount: '₹18,000', share: '16.1%', rank: 4 }
-    ];
-    
-    setExpensesData(mockExpenses);
-    
-    setExpensesChartData([
-      { category: 'Salaries', amount: 55500 },
-      { category: 'Kitchen', amount: 24300 },
-      { category: 'Rent', amount: 18000 },
-      { category: 'Utilities', amount: 12350 }
-    ]);
-  }, []);
+    if (salesAmount > 0 && expensesAmount > 0) {
+      const margin = ((salesAmount - expensesAmount) / salesAmount * 100).toFixed(1);
+      setKeyMetrics(prev => ({
+        ...prev,
+        grossMargin: `${margin}%`
+      }));
+    }
+  }, [keyMetrics.totalSales, keyMetrics.totalExpenses]);
 
   const handleExportCSV = () => {
     const csv = salesData.map(row => 
@@ -531,89 +694,88 @@ const ReportsPage = () => {
 
           {/* Key Metrics */}
           <div className="rounded-xl px-3 sm:px-4 py-4 bg-card border border-border">
-            <h2 className="text-sm sm:text-base font-semibold mb-3 text-card-foreground">Key Metrics</h2>
-            
-            <div className="space-y-2.5">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <div className="text-center p-2 rounded-lg bg-muted">
-                  <div className="text-xs text-muted-foreground mb-0.5">Sales</div>
-                  <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalSales}</div>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-muted">
-                  <div className="text-xs text-muted-foreground mb-0.5">Orders</div>
-                  <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalOrders}</div>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-muted col-span-2 sm:col-span-1">
-                  <div className="text-xs text-muted-foreground mb-0.5">Expenses</div>
-                  <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalExpenses}</div>
-                </div>
-              </div>
+            <h2 className="text-sm sm:text-base font-semibold mb-3 text-card-foreground">Key Metrics</h2><div className="space-y-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="text-center p-2 rounded-lg bg-muted">
+              <div className="text-xs text-muted-foreground mb-0.5">Sales</div>
+              <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalSales}</div>
+            </div>
+            <div className="text-center p-2 rounded-lg bg-muted">
+              <div className="text-xs text-muted-foreground mb-0.5">Orders</div>
+              <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalOrders}</div>
+            </div>
+            <div className="text-center p-2 rounded-lg bg-muted col-span-2 sm:col-span-1">
+              <div className="text-xs text-muted-foreground mb-0.5">Expenses</div>
+              <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalExpenses}</div>
+            </div>
+          </div>
 
-              <div className="grid grid-cols-3 gap-2">
-                <div className="text-center p-2 rounded-lg bg-muted">
-                  <div className="text-xs text-muted-foreground mb-0.5">Avg</div>
-                  <div className="text-xs sm:text-sm font-bold text-foreground">{keyMetrics.avgOrderValue}</div>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-muted">
-                  <div className="text-xs text-muted-foreground mb-0.5">Margin</div>
-                  <div className="text-xs sm:text-sm font-bold text-foreground">{keyMetrics.grossMargin}</div>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-muted">
-                  <div className="text-xs text-muted-foreground mb-0.5">Top</div>
-                  <div className="text-xs font-bold text-foreground">{keyMetrics.topCategory}</div>
-                </div>
-              </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="text-center p-2 rounded-lg bg-muted">
+              <div className="text-xs text-muted-foreground mb-0.5">Avg</div>
+              <div className="text-xs sm:text-sm font-bold text-foreground">{keyMetrics.avgOrderValue}</div>
+            </div>
+            <div className="text-center p-2 rounded-lg bg-muted">
+              <div className="text-xs text-muted-foreground mb-0.5">Margin</div>
+              <div className="text-xs sm:text-sm font-bold text-foreground">{keyMetrics.grossMargin}</div>
+            </div>
+            <div className="text-center p-2 rounded-lg bg-muted">
+              <div className="text-xs text-muted-foreground mb-0.5">Top</div>
+              <div className="text-xs font-bold text-foreground">{keyMetrics.topCategory}</div>
             </div>
           </div>
         </div>
+      </div>
+    </div>
 
-        {/* Sales Report with Line Chart */}
-        <div className="rounded-xl px-3 sm:px-4 py-4 mb-4 sm:mb-6 lg:mb-8 bg-card border border-border overflow-hidden">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
-            <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Sales Report</h2>
-            <span className="text-xs text-muted-foreground">By selected view</span>
-          </div>
+    {/* Sales Report with Line Chart */}
+    <div className="rounded-xl px-3 sm:px-4 py-4 mb-4 sm:mb-6 lg:mb-8 bg-card border border-border overflow-hidden">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
+        <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Sales Report</h2>
+        <span className="text-xs text-muted-foreground">By selected view</span>
+      </div>
 
-          {/* Line Chart */}
-          {salesChartData.length > 0 && (
-            <div className="mb-6">
-              <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Sales Trend</h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={salesChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#6b7280" />
-                  <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                      fontSize: '12px'
-                    }} 
-                  />
-                  <Legend wrapperStyle={{ fontSize: '12px' }} />
-                  <Line type="monotone" dataKey="sales" stroke="#14b8a6" strokeWidth={2} name="Gross Sales" />
-                  <Line type="monotone" dataKey="net" stroke="#0d9488" strokeWidth={2} name="Net Sales" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
+      {/* Line Chart */}
+      {salesChartData.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Sales Trend</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={salesChartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#6b7280" />
+              <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: 'hsl(var(--card))', 
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '8px',
+                  fontSize: '12px'
+                }} 
+              />
+              <Legend wrapperStyle={{ fontSize: '12px' }} />
+              <Line type="monotone" dataKey="sales" stroke="#14b8a6" strokeWidth={2} name="Gross Sales" />
+              <Line type="monotone" dataKey="net" stroke="#0d9488" strokeWidth={2} name="Net Sales" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
-          <div className="overflow-x-auto -mx-3 sm:-mx-4">
-            <div className="inline-block min-w-full align-middle">
-              <table className="min-w-full">
-                <thead>
-                  <tr className="bg-muted border-b border-border">
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Period</th>
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Gross</th>
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Discount</th>
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Net</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {salesData.length === 0 ? (
-                    <tr><td colSpan="5" className="py-8 text-center text-sm text-muted-foreground">
+      <div className="overflow-x-auto -mx-3 sm:-mx-4">
+        <div className="inline-block min-w-full align-middle">
+          <table className="min-w-full">
+            <thead>
+              <tr className="bg-muted border-b border-border">
+                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Period</th>
+                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
+                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Gross</th>
+                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Discount</th>
+                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              {salesData.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="py-8 text-center text-sm text-muted-foreground">
                     No sales data available
                   </td>
                 </tr>
@@ -705,25 +867,33 @@ const ReportsPage = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {ordersData.bySource.map((row, index) => (
-                    <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                      <td className="py-2 px-2">
-                        <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.source}</span>
-                      </td>
-                      <td className="py-2 px-2">
-                        <span className="text-xs text-foreground">{row.orders}</span>
-                      </td>
-                      <td className="py-2 px-2">
-                        <span className="text-xs text-foreground">{row.share}</span>
-                      </td>
-                      <td className="py-2 px-2">
-                        <span className="text-xs text-foreground whitespace-nowrap">{row.revenue}</span>
-                      </td>
-                      <td className="py-2 px-2">
-                        <span className="text-xs text-foreground">{row.rank}</span>
+                  {ordersData.bySource.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="py-4 text-center text-sm text-muted-foreground">
+                        No order source data available
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    ordersData.bySource.map((row, index) => (
+                      <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
+                        <td className="py-2 px-2">
+                          <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.source}</span>
+                        </td>
+                        <td className="py-2 px-2">
+                          <span className="text-xs text-foreground">{row.orders}</span>
+                        </td>
+                        <td className="py-2 px-2">
+                          <span className="text-xs text-foreground">{row.share}</span>
+                        </td>
+                        <td className="py-2 px-2">
+                          <span className="text-xs text-foreground whitespace-nowrap">{row.revenue}</span>
+                        </td>
+                        <td className="py-2 px-2">
+                          <span className="text-xs text-foreground">{row.rank}</span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -828,25 +998,33 @@ const ReportsPage = () => {
               </tr>
             </thead>
             <tbody>
-              {expensesData.map((row, index) => (
-                <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                  <td className="py-2.5 px-2 sm:px-3">
-                    <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.category}</span>
-                  </td>
-                  <td className="py-2.5 px-2 sm:px-3">
-                    <span className="text-xs text-foreground">{row.transactions}</span>
-                  </td>
-                  <td className="py-2.5 px-2 sm:px-3">
-                    <span className="text-xs text-foreground whitespace-nowrap">{row.amount}</span>
-                  </td>
-                  <td className="py-2.5 px-2 sm:px-3">
-                    <span className="text-xs text-foreground">{row.share}</span>
-                  </td>
-                  <td className="py-2.5 px-2 sm:px-3">
-                    <span className="text-xs text-foreground">{row.rank}</span>
+              {expensesData.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="py-8 text-center text-sm text-muted-foreground">
+                    No expenses data available
                   </td>
                 </tr>
-              ))}
+              ) : (
+                expensesData.map((row, index) => (
+                  <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
+                    <td className="py-2.5 px-2 sm:px-3">
+                      <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.category}</span>
+                    </td>
+                    <td className="py-2.5 px-2 sm:px-3">
+                      <span className="text-xs text-foreground">{row.transactions}</span>
+                    </td>
+                    <td className="py-2.5 px-2 sm:px-3">
+                      <span className="text-xs text-foreground whitespace-nowrap">{row.amount}</span>
+                    </td>
+                    <td className="py-2.5 px-2 sm:px-3">
+                      <span className="text-xs text-foreground">{row.share}</span>
+                    </td>
+                    <td className="py-2.5 px-2 sm:px-3">
+                      <span className="text-xs text-foreground">{row.rank}</span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
