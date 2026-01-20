@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Download, Printer, Calendar, Filter, RotateCw, ChevronDown, AlertCircle } from 'lucide-react';
 import { LineChart, Line, PieChart, Pie, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 
+// API Configuration - Using your actual backend URL
+const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
+
 const ReportsPage = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -37,7 +40,6 @@ const ReportsPage = () => {
   const [productSalesData, setProductSalesData] = useState([]);
 
   const COLORS = ['#14b8a6', '#0d9488', '#0f766e'];
-  const API_BASE_URL = 'https://your-backend-url.com/api/v1'; // Replace with your actual backend URL
 
   // Fetch Sales Report
   const fetchSalesReport = async () => {
@@ -48,16 +50,21 @@ const ReportsPage = () => {
       const response = await fetch(
         `${API_BASE_URL}/reports/sales?days=${filters.days}&group_by=${filters.view}`,
         {
+          method: 'GET',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           }
         }
       );
 
-      if (!response.ok) throw new Error('Failed to fetch sales report');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Sales API Error:', response.status, errorText);
+        throw new Error(`Failed to fetch sales report (${response.status})`);
+      }
       
       const data = await response.json();
+      console.log('Sales data:', data);
       
       // Transform the API response to match your UI structure
       if (data && Array.isArray(data)) {
@@ -105,16 +112,20 @@ const ReportsPage = () => {
       const response = await fetch(
         `${API_BASE_URL}/reports/payment-methods?days=${filters.days}`,
         {
+          method: 'GET',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           }
         }
       );
 
-      if (!response.ok) throw new Error('Failed to fetch payment methods report');
+      if (!response.ok) {
+        console.error('Payment methods API error:', response.status);
+        throw new Error('Failed to fetch payment methods report');
+      }
       
       const data = await response.json();
+      console.log('Payment methods data:', data);
       
       if (data && Array.isArray(data)) {
         const totalAmount = data.reduce((sum, item) => sum + (item.total_amount || 0), 0);
@@ -144,16 +155,20 @@ const ReportsPage = () => {
       const response = await fetch(
         `${API_BASE_URL}/reports/products-sales?days=${filters.days}&limit=50`,
         {
+          method: 'GET',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           }
         }
       );
 
-      if (!response.ok) throw new Error('Failed to fetch product sales report');
+      if (!response.ok) {
+        console.error('Product sales API error:', response.status);
+        throw new Error('Failed to fetch product sales report');
+      }
       
       const data = await response.json();
+      console.log('Product sales data:', data);
       
       if (data && Array.isArray(data)) {
         setProductSalesData(data);
@@ -178,16 +193,20 @@ const ReportsPage = () => {
       const response = await fetch(
         `${API_BASE_URL}/reports/daily-summary?date=${today}`,
         {
+          method: 'GET',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
           }
         }
       );
 
-      if (!response.ok) throw new Error('Failed to fetch daily summary');
+      if (!response.ok) {
+        console.error('Daily summary API error:', response.status);
+        throw new Error('Failed to fetch daily summary');
+      }
       
       const data = await response.json();
+      console.log('Daily summary data:', data);
       
       if (data) {
         setKeyMetrics(prev => ({
@@ -198,30 +217,6 @@ const ReportsPage = () => {
       }
     } catch (err) {
       console.error('Error fetching daily summary:', err);
-    }
-  };
-
-  // Fetch Inventory Report (for expenses data)
-  const fetchInventoryReport = async () => {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/reports/inventory`,
-        {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      if (!response.ok) throw new Error('Failed to fetch inventory report');
-      
-      const data = await response.json();
-      
-      // This can be used to estimate expenses or show inventory-related costs
-      console.log('Inventory data:', data);
-    } catch (err) {
-      console.error('Error fetching inventory report:', err);
     }
   };
 
@@ -338,6 +333,17 @@ const ReportsPage = () => {
     }
   }, [filters.dateRange]);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <RotateCw className="animate-spin h-12 w-12 text-primary mx-auto mb-4" />
+          <p className="text-lg text-foreground">Loading reports...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
       <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
@@ -366,25 +372,18 @@ const ReportsPage = () => {
 
         {/* Error Message */}
         {error && (
-          <div className="mb-4 p-4 rounded-lg bg-red-50 border border-red-200 flex items-start gap-3">
-            <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={20} />
+          <div className="mb-4 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex items-start gap-3">
+            <AlertCircle className="text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" size={20} />
             <div className="flex-1">
-              <h3 className="text-sm font-semibold text-red-800 mb-1">Error Loading Reports</h3>
-              <p className="text-sm text-red-600">{error}</p>
+              <h3 className="text-sm font-semibold text-red-800 dark:text-red-300 mb-1">Error Loading Reports</h3>
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
               <button 
                 onClick={fetchAllReports}
-                className="mt-2 text-sm text-red-700 underline hover:text-red-800"
+                className="mt-2 text-sm text-red-700 dark:text-red-300 underline hover:text-red-800 dark:hover:text-red-200"
               >
                 Try Again
               </button>
             </div>
-          </div>
-        )}
-
-        {/* Loading Indicator */}
-        {loading && (
-          <div className="mb-4 p-4 rounded-lg bg-blue-50 border border-blue-200">
-            <p className="text-sm text-blue-800">Loading reports...</p>
           </div>
         )}
 
@@ -611,8 +610,8 @@ const ReportsPage = () => {
                       <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
                         <td className="py-2.5 px-2 sm:px-3">
                           <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.period}</span>
-                        </td>
-                        <td className="py-2.5 px-2 sm:px-3">
+</td>
+<td className="py-2.5 px-2 sm:px-3">
 <span className="text-xs text-foreground">{row.orders}</span>
 </td>
 <td className="py-2.5 px-2 sm:px-3">
