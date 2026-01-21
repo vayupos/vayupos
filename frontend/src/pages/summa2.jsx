@@ -73,7 +73,7 @@ const ReportsPage = () => {
     return response;
   };
 
-  // Fetch Sales Report
+  // Fetch Sales Report - FIXED VERSION
   const fetchSalesReport = async () => {
     try {
       setLoading(true);
@@ -90,32 +90,60 @@ const ReportsPage = () => {
       }
       
       const data = await response.json();
-      console.log('Sales data:', data);
+      console.log('🔍 RAW Sales API Response:', data);
+      console.log('🔍 Is Array?', Array.isArray(data));
+      console.log('🔍 Data Type:', typeof data);
+      if (data && typeof data === 'object') {
+        console.log('🔍 Data Keys:', Object.keys(data));
+      }
+      
+      // Handle different response formats - check all possible structures
+      let salesArray = [];
+      if (Array.isArray(data)) {
+        salesArray = data;
+      } else if (data && data.data && Array.isArray(data.data)) {
+        salesArray = data.data;
+      } else if (data && data.results && Array.isArray(data.results)) {
+        salesArray = data.results;
+      } else if (data && data.items && Array.isArray(data.items)) {
+        salesArray = data.items;
+      }
+      
+      console.log('🔍 Extracted Sales Array:', salesArray);
+      console.log('🔍 Sales Array Length:', salesArray.length);
+      if (salesArray.length > 0) {
+        console.log('🔍 First Item Structure:', salesArray[0]);
+      }
       
       // Transform the API response to match your UI structure
-      if (data && Array.isArray(data)) {
-        const transformedData = data.map(item => ({
-          period: item.date || item.period,
+      if (salesArray && salesArray.length > 0) {
+        const transformedData = salesArray.map(item => ({
+          period: item.date || item.period || 'Unknown',
           orders: item.order_count || item.orders || 0,
           grossSales: `₹${(item.gross_sales || item.total_sales || 0).toLocaleString('en-IN')}`,
           discounts: `₹${(item.discounts || 0).toLocaleString('en-IN')}`,
           net: `₹${(item.net_sales || (item.total_sales - item.discounts) || 0).toLocaleString('en-IN')}`
         }));
         
+        console.log('✅ Transformed Sales Data:', transformedData);
         setSalesData(transformedData);
         
         // Prepare chart data
-        const chartData = data.map(item => ({
-          month: item.date || item.period,
+        const chartData = salesArray.map(item => ({
+          month: item.date || item.period || 'Unknown',
           sales: item.gross_sales || item.total_sales || 0,
-          net: item.net_sales || (item.total_sales - item.discounts) || 0
+          net: item.net_sales || ((item.total_sales || 0) - (item.discounts || 0))
         }));
-        setSalesChartData(chartData);
+        
+        console.log('✅ Sales Chart Data:', chartData);
+        setSalesChartData([...chartData]); // Force new array reference
 
         // Calculate key metrics
-        const totalSales = data.reduce((sum, item) => sum + (item.gross_sales || item.total_sales || 0), 0);
-        const totalOrders = data.reduce((sum, item) => sum + (item.order_count || item.orders || 0), 0);
-        const totalDiscounts = data.reduce((sum, item) => sum + (item.discounts || 0), 0);
+        const totalSales = salesArray.reduce((sum, item) => sum + (item.gross_sales || item.total_sales || 0), 0);
+        const totalOrders = salesArray.reduce((sum, item) => sum + (item.order_count || item.orders || 0), 0);
+        const totalDiscounts = salesArray.reduce((sum, item) => sum + (item.discounts || 0), 0);
+        
+        console.log('✅ Calculated Metrics - Sales:', totalSales, 'Orders:', totalOrders);
         
         setKeyMetrics(prev => ({
           ...prev,
@@ -123,10 +151,108 @@ const ReportsPage = () => {
           totalOrders: totalOrders.toString(),
           avgOrderValue: `₹${totalOrders > 0 ? Math.round(totalSales / totalOrders).toLocaleString('en-IN') : '0'}`
         }));
+      } else {
+        console.warn('⚠️ No sales data found in API response');
+        console.log('💡 Attempting to calculate sales from orders...');
+        
+        // Fallback: Calculate sales from orders
+        try {
+          const ordersResponse = await fetchWithAuth(`${API_BASE_URL}/orders?limit=1000`);
+          if (ordersResponse.ok) {
+            const ordersData = await ordersResponse.json();
+            const ordersArray = Array.isArray(ordersData) ? ordersData : 
+                               (ordersData.data || ordersData.results || []);
+            
+            if (ordersArray.length > 0) {
+              // Filter by date range
+              const endDate = new Date();
+              const startDate = new Date();
+              startDate.setDate(startDate.getDate() - filters.days);
+              
+              const filteredOrders = ordersArray.filter(order => {
+                const orderDate = new Date(order.created_at || order.order_date);
+                return orderDate >= startDate && orderDate <= endDate;
+              });
+              
+              // Group by date/week/month based on filters.view
+              const groupedData = {};
+              filteredOrders.forEach(order => {
+                const orderDate = new Date(order.created_at || order.order_date);
+                let period;
+                
+                if (filters.view === 'day') {
+                  period = orderDate.toISOString().split('T')[0];
+                } else if (filters.view === 'week') {
+                  const weekNum = Math.ceil((orderDate.getDate()) / 7);
+                  period = `Week ${weekNum}`;
+                } else {
+                  period = orderDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                }
+                
+                if (!groupedData[period]) {
+                  groupedData[period] = {
+                    orders: 0,
+                    grossSales: 0,
+                    discounts: 0
+                  };
+                }
+                
+                groupedData[period].orders += 1;
+                groupedData[period].grossSales += (order.total || order.total_amount || 0);
+                groupedData[period].discounts += (order.discount || 0);
+              });
+              
+              // Convert to array
+              const calculatedSalesData = Object.entries(groupedData)
+                .map(([period, data]) => ({
+                  period,
+                  orders: data.orders,
+                  grossSales: `₹${data.grossSales.toLocaleString('en-IN')}`,
+                  discounts: `₹${data.discounts.toLocaleString('en-IN')}`,
+                  net: `₹${(data.grossSales - data.discounts).toLocaleString('en-IN')}`,
+                  grossSalesNum: data.grossSales,
+                  netNum: data.grossSales - data.discounts
+                }))
+                .sort((a, b) => a.period.localeCompare(b.period));
+              
+              console.log('✅ Calculated Sales Data from Orders:', calculatedSalesData);
+              setSalesData(calculatedSalesData);
+              
+              // Chart data
+              const chartData = calculatedSalesData.map(item => ({
+                month: item.period,
+                sales: item.grossSalesNum,
+                net: item.netNum
+              }));
+              
+              console.log('✅ Calculated Chart Data:', chartData);
+              setSalesChartData([...chartData]);
+              
+              // Update metrics
+              const totalSales = calculatedSalesData.reduce((sum, item) => sum + item.grossSalesNum, 0);
+              const totalOrders = calculatedSalesData.reduce((sum, item) => sum + item.orders, 0);
+              
+              setKeyMetrics(prev => ({
+                ...prev,
+                totalSales: `₹${totalSales.toLocaleString('en-IN')}`,
+                totalOrders: totalOrders.toString(),
+                avgOrderValue: `₹${totalOrders > 0 ? Math.round(totalSales / totalOrders).toLocaleString('en-IN') : '0'}`
+              }));
+              
+              return; // Exit successfully
+            }
+          }
+        } catch (fallbackErr) {
+          console.error('❌ Fallback calculation failed:', fallbackErr);
+        }
+        
+        // If all else fails, show empty
+        setSalesData([]);
+        setSalesChartData([]);
       }
     } catch (err) {
       setError(err.message);
-      console.error('Error fetching sales report:', err);
+      console.error('❌ Error fetching sales report:', err);
     } finally {
       setLoading(false);
     }
@@ -145,31 +271,40 @@ const ReportsPage = () => {
       }
       
       const data = await response.json();
-      console.log('Payment methods data:', data);
+      console.log('🔍 Payment methods data:', data);
       
-      if (data && Array.isArray(data)) {
-        const totalAmount = data.reduce((sum, item) => sum + (item.total_amount || 0), 0);
-        const totalCount = data.reduce((sum, item) => sum + (item.count || 0), 0);
+      // Handle different response formats
+      const paymentsArray = Array.isArray(data) ? data : 
+                           (data.data || data.results || data.items || []);
+      
+      if (paymentsArray && paymentsArray.length > 0) {
+        const totalAmount = paymentsArray.reduce((sum, item) => sum + (item.total_amount || 0), 0);
+        const totalCount = paymentsArray.reduce((sum, item) => sum + (item.count || 0), 0);
         
-        const transformedData = data.map((item, index) => ({
-          mode: item.payment_method || item.mode,
+        const transformedData = paymentsArray.map((item, index) => ({
+          mode: item.payment_method || item.mode || 'Unknown',
           count: item.count || 0,
           share: `${totalCount > 0 ? ((item.count / totalCount) * 100).toFixed(1) : 0}%`,
           amount: `₹${(item.total_amount || 0).toLocaleString('en-IN')}`,
           rank: index + 1
         }));
         
+        console.log('✅ Transformed payment data:', transformedData);
+        
         setOrdersData(prev => ({
           ...prev,
           byPayment: transformedData
         }));
+      } else {
+        console.warn('⚠️ Payment methods API returned empty, will use data from orders');
+        // Note: Orders fetch will populate this data anyway
       }
     } catch (err) {
-      console.error('Error fetching payment methods report:', err);
+      console.error('❌ Error fetching payment methods report:', err);
     }
   };
 
-  // UPDATED: Fetch Orders by Payment Method from /api/v1/orders endpoint
+  // Fetch Orders by Payment Method from /api/v1/orders endpoint - FIXED
   const fetchOrdersBySource = async () => {
     try {
       // Calculate date range
@@ -178,7 +313,7 @@ const ReportsPage = () => {
       startDate.setDate(startDate.getDate() - filters.days);
 
       const response = await fetchWithAuth(
-        `${API_BASE_URL}/orders?limit=1000` // Fetch recent orders
+        `${API_BASE_URL}/orders?limit=1000`
       );
 
       if (!response.ok) {
@@ -187,24 +322,37 @@ const ReportsPage = () => {
       }
       
       const data = await response.json();
-      console.log('Orders data for source analysis:', data);
+      console.log('🔍 RAW Orders API Response:', data);
+      console.log('🔍 Orders - Is Array?', Array.isArray(data));
       
-      if (data && Array.isArray(data) && data.length > 0) {
+      // Handle different response formats
+      let ordersArray = [];
+      if (Array.isArray(data)) {
+        ordersArray = data;
+      } else if (data && data.data && Array.isArray(data.data)) {
+        ordersArray = data.data;
+      } else if (data && data.results && Array.isArray(data.results)) {
+        ordersArray = data.results;
+      }
+      
+      console.log('🔍 Extracted Orders Array:', ordersArray.length, 'orders');
+      
+      if (ordersArray.length > 0) {
+        console.log('🔍 First Order Structure:', ordersArray[0]);
+        
         // Filter orders within date range
-        const filteredOrders = data.filter(order => {
+        const filteredOrders = ordersArray.filter(order => {
           const orderDate = new Date(order.created_at || order.order_date);
           return orderDate >= startDate && orderDate <= endDate;
         });
 
-        console.log('Filtered orders:', filteredOrders.length);
-        console.log('Sample order structure:', filteredOrders[0]); // Debug: see order structure
+        console.log('🔍 Filtered Orders:', filteredOrders.length);
 
-        // Group by payment method (since order_type doesn't exist)
+        // Group by payment method
         const ordersBySource = {};
         let totalRevenue = 0;
 
         filteredOrders.forEach(order => {
-          // Use payment_method as the source since your orders don't have order_type
           const source = order.payment_method || 'Unknown';
           const orderTotal = order.total || order.total_amount || order.final_amount || 0;
           
@@ -222,24 +370,24 @@ const ReportsPage = () => {
 
         const totalOrders = filteredOrders.length;
 
-        console.log('Orders grouped by payment method:', ordersBySource);
+        console.log('🔍 Orders grouped by payment method:', ordersBySource);
 
         // Transform to array format
         const sourcesArray = Object.entries(ordersBySource)
           .map(([source, data]) => ({
-            source: source.charAt(0).toUpperCase() + source.slice(1), // Capitalize
+            source: source.charAt(0).toUpperCase() + source.slice(1),
             orders: data.orders,
             share: `${totalOrders > 0 ? ((data.orders / totalOrders) * 100).toFixed(1) : 0}%`,
             revenue: `₹${data.revenue.toLocaleString('en-IN')}`,
             revenueNum: data.revenue
           }))
-          .sort((a, b) => b.orders - a.orders) // Sort by order count descending
+          .sort((a, b) => b.orders - a.orders)
           .map((item, index) => ({
             ...item,
             rank: index + 1
           }));
 
-        console.log('Final sources array:', sourcesArray);
+        console.log('✅ Final sources array:', sourcesArray);
 
         setOrdersData(prev => ({
           ...prev,
@@ -252,10 +400,25 @@ const ReportsPage = () => {
           value: item.orders
         }));
         
-        console.log('Pie chart data:', pieData);
-        setOrderDistributionData(pieData);
+        console.log('✅ Pie Chart Data:', pieData);
+        setOrderDistributionData([...pieData]); // Force new array reference
+        
+        // Also populate payment summary table (byPayment)
+        const paymentSummary = sourcesArray.map((item, index) => ({
+          mode: item.source,
+          count: item.orders,
+          share: item.share,
+          amount: item.revenue,
+          rank: item.rank
+        }));
+        
+        console.log('✅ Payment Summary Table:', paymentSummary);
+        setOrdersData(prev => ({
+          ...prev,
+          byPayment: paymentSummary
+        }));
       } else {
-        console.warn('No orders found or empty array');
+        console.warn('⚠️ No orders found or empty array');
         setOrdersData(prev => ({
           ...prev,
           bySource: []
@@ -263,8 +426,7 @@ const ReportsPage = () => {
         setOrderDistributionData([]);
       }
     } catch (err) {
-      console.error('Error fetching orders by source:', err);
-      // Fallback to empty data instead of mock data
+      console.error('❌ Error fetching orders by source:', err);
       setOrdersData(prev => ({
         ...prev,
         bySource: []
@@ -273,7 +435,7 @@ const ReportsPage = () => {
     }
   };
 
-  // Fetch Expenses from /api/v1/expenses/ endpoint
+  // Fetch Expenses from /api/v1/expenses/ endpoint - FIXED
   const fetchExpensesReport = async () => {
     try {
       // Calculate date range
@@ -282,7 +444,7 @@ const ReportsPage = () => {
       startDate.setDate(startDate.getDate() - filters.days);
 
       const response = await fetchWithAuth(
-        `${API_BASE_URL}/expenses/?limit=1000` // Fetch all expenses
+        `${API_BASE_URL}/expenses/?limit=1000`
       );
 
       if (!response.ok) {
@@ -291,11 +453,19 @@ const ReportsPage = () => {
       }
       
       const data = await response.json();
-      console.log('Expenses data:', data);
+      console.log('🔍 RAW Expenses data:', data);
       
-      if (data && Array.isArray(data)) {
+      // Handle different response formats
+      const expensesArray = Array.isArray(data) ? data : 
+                           (data.data || data.results || data.items || []);
+      
+      console.log('🔍 Expenses Array Length:', expensesArray.length);
+      
+      if (expensesArray && expensesArray.length > 0) {
+        console.log('🔍 First Expense Structure:', expensesArray[0]);
+        
         // Filter expenses within date range
-        const filteredExpenses = data.filter(expense => {
+        const filteredExpenses = expensesArray.filter(expense => {
           const expenseDate = new Date(expense.date || expense.created_at);
           return expenseDate >= startDate && expenseDate <= endDate;
         });
@@ -321,7 +491,7 @@ const ReportsPage = () => {
         });
 
         // Transform to array format
-        const expensesArray = Object.entries(expensesByCategory)
+        const expensesArrayTransformed = Object.entries(expensesByCategory)
           .map(([category, data]) => ({
             category: category,
             transactions: data.transactions,
@@ -329,20 +499,23 @@ const ReportsPage = () => {
             amountNum: data.amount,
             share: `${totalExpenses > 0 ? ((data.amount / totalExpenses) * 100).toFixed(1) : 0}%`
           }))
-          .sort((a, b) => b.amountNum - a.amountNum) // Sort by amount descending
+          .sort((a, b) => b.amountNum - a.amountNum)
           .map((item, index) => ({
             ...item,
             rank: index + 1
           }));
 
-        setExpensesData(expensesArray);
+        console.log('✅ Transformed expenses:', expensesArrayTransformed);
+        setExpensesData(expensesArrayTransformed);
 
         // Prepare chart data (top categories)
-        const chartData = expensesArray.slice(0, 10).map(item => ({
+        const chartData = expensesArrayTransformed.slice(0, 10).map(item => ({
           category: item.category.length > 15 ? item.category.substring(0, 15) + '...' : item.category,
           amount: item.amountNum
         }));
-        setExpensesChartData(chartData);
+        
+        console.log('✅ Expenses Chart Data:', chartData);
+        setExpensesChartData([...chartData]); // Force new array reference
 
         // Update total expenses in key metrics
         setKeyMetrics(prev => ({
@@ -359,10 +532,13 @@ const ReportsPage = () => {
             grossMargin: `${margin}%`
           }));
         }
+      } else {
+        console.warn('⚠️ No expenses data');
+        setExpensesData([]);
+        setExpensesChartData([]);
       }
     } catch (err) {
-      console.error('Error fetching expenses report:', err);
-      // Fallback to empty data instead of mock data
+      console.error('❌ Error fetching expenses report:', err);
       setExpensesData([]);
       setExpensesChartData([]);
     }
@@ -383,14 +559,17 @@ const ReportsPage = () => {
       const data = await response.json();
       console.log('Product sales data:', data);
       
-      if (data && Array.isArray(data)) {
-        setProductSalesData(data);
+      const productsArray = Array.isArray(data) ? data : 
+                           (data.data || data.results || data.items || []);
+      
+      if (productsArray && productsArray.length > 0) {
+        setProductSalesData(productsArray);
         
         // Get top category if available
-        if (data.length > 0 && data[0].category) {
+        if (productsArray[0].category) {
           setKeyMetrics(prev => ({
             ...prev,
-            topCategory: data[0].category
+            topCategory: productsArray[0].category
           }));
         }
       }
@@ -409,7 +588,6 @@ const ReportsPage = () => {
 
       if (!response.ok) {
         console.error('Daily summary API error:', response.status);
-        // Don't throw error, just log it
         return;
       }
       
@@ -424,7 +602,6 @@ const ReportsPage = () => {
       }
     } catch (err) {
       console.error('Error fetching daily summary:', err);
-      // Don't throw, this is optional data
     }
   };
 
@@ -437,7 +614,7 @@ const ReportsPage = () => {
       await Promise.all([
         fetchSalesReport(),
         fetchPaymentMethodsReport(),
-        fetchOrdersBySource(), // UPDATED: Now groups by payment method
+        fetchOrdersBySource(),
         fetchExpensesReport(),
         fetchProductSalesReport(),
         fetchDailySummary()
@@ -580,161 +757,162 @@ const ReportsPage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-6 lg:mb-8">
           {/* Filters */}
           <div className="lg:col-span-2 rounded-xl px-3 sm:px-4 py-4 bg-card border border-border">
-            <div className="flex flex-col xs:flex-row items-start xs:items-center justify-between mb-3 sm:mb-4 gap-2">
-              <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Filters</h2>
-              <span className="px-2 py-0.5 sm:py-1 rounded-full text-xs font-medium bg-teal-600 text-white whitespace-nowrap">
-                🔒 Authenticated
-              </span>
+<div className="flex flex-col xs:flex-row items-start xs:items-center justify-between mb-3 sm:mb-4 gap-2">
+<h2 className="text-sm sm:text-base font-semibold text-card-foreground">Filters</h2>
+<span className="px-2 py-0.5 sm:py-1 rounded-full text-xs font-medium bg-teal-600 text-white whitespace-nowrap">
+🔒 Authenticated
+</span>
+</div>
+        <div className="space-y-3">
+          {/* Row 1 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+            <div>
+              <label className="block text-xs mb-1 text-muted-foreground font-medium">Report Type</label>
+              <div className="relative">
+                <select
+                  value={filters.reportType}
+                  onChange={(e) => setFilters({...filters, reportType: e.target.value})}
+                  className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
+                >
+                  <option>Sales</option>
+                  <option>Orders</option>
+                  <option>Expenses</option>
+                </select>
+                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
+              </div>
             </div>
-
-            <div className="space-y-3">
-              {/* Row 1 */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-                <div>
-                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Report Type</label>
-                  <div className="relative">
-                    <select
-                      value={filters.reportType}
-                      onChange={(e) => setFilters({...filters, reportType: e.target.value})}
-                      className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
-                    >
-                      <option>Sales</option>
-                      <option>Orders</option>
-                      <option>Expenses</option>
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs mb-1 text-muted-foreground font-medium">View</label>
-                  <div className="relative">
-                    <select
-                      value={filters.view}
-                      onChange={(e) => setFilters({...filters, view: e.target.value})}
-                      className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
-                    >
-                      <option value="day">By Day</option>
-                      <option value="week">By Week</option>
-                      <option value="month">By Month</option>
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
-                  </div>
-                </div>
-                <div className="sm:col-span-2 lg:col-span-1">
-                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Days</label>
-                  <input
-                    type="number"
-                    value={filters.days}
-                    onChange={(e) => setFilters({...filters, days: parseInt(e.target.value) || 30})}
-                    className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    min="1"
-                    max="365"
-                  />
-                </div>
-              </div>
-
-              {/* Row 2 */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-                <div>
-                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Outlet</label>
-                  <div className="relative">
-                    <select
-                      value={filters.outlet}
-                      onChange={(e) => setFilters({...filters, outlet: e.target.value})}
-                      className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
-                    >
-                      <option>All</option>
-                      <option>Main Branch</option>
-                      <option>Downtown</option>
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Payment Mode</label>
-                  <div className="relative">
-                    <select
-                      value={filters.paymentMode}
-                      onChange={(e) => setFilters({...filters, paymentMode: e.target.value})}
-                      className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
-                    >
-                      <option>All</option>
-                      <option>UPI</option>
-                      <option>Cash</option>
-                      <option>Card</option>
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
-                  </div>
-                </div>
-                <div className="sm:col-span-2 lg:col-span-1">
-                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Sort</label>
-                  <div className="relative">
-                    <select
-                      value={filters.sort}
-                      onChange={(e) => setFilters({...filters, sort: e.target.value})}
-                      className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
-                    >
-                      <option>Total Desc</option>
-                      <option>Total Asc</option>
-                      <option>Date Desc</option>
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col xs:flex-row justify-end gap-2 pt-1">
-                <button
-                  onClick={handleReset}
-                  disabled={loading}
-                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-colors text-sm text-teal-600 border border-teal-600 hover:bg-teal-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            <div>
+              <label className="block text-xs mb-1 text-muted-foreground font-medium">View</label>
+              <div className="relative">
+                <select
+                  value={filters.view}
+                  onChange={(e) => setFilters({...filters, view: e.target.value})}
+                  className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
                 >
-                  <RotateCw size={14} />
-                  Reset
-                </button>
-                <button
-                  onClick={handleApply}
-                  disabled={loading}
-                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-colors text-sm bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  <option value="day">By Day</option>
+                  <option value="week">By Week</option>
+                  <option value="month">By Month</option>
+                </select>
+                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
+              </div>
+            </div>
+            <div className="sm:col-span-2 lg:col-span-1">
+              <label className="block text-xs mb-1 text-muted-foreground font-medium">Days</label>
+              <input
+                type="number"
+                value={filters.days}
+                onChange={(e) => setFilters({...filters, days: parseInt(e.target.value) || 30})}
+                className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500"
+                min="1"
+                max="365"
+              />
+            </div>
+          </div>
+
+          {/* Row 2 */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
+            <div>
+              <label className="block text-xs mb-1 text-muted-foreground font-medium">Outlet</label>
+              <div className="relative">
+                <select
+                  value={filters.outlet}
+                  onChange={(e) => setFilters({...filters, outlet: e.target.value})}
+                  className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
                 >
-                  <Filter size={14} />
-                  Apply
-                </button>
+                  <option>All</option>
+                  <option>Main Branch</option>
+                  <option>Downtown</option>
+                </select>
+                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs mb-1 text-muted-foreground font-medium">Payment Mode</label>
+              <div className="relative">
+                <select
+                  value={filters.paymentMode}
+                  onChange={(e) => setFilters({...filters, paymentMode: e.target.value})}
+                  className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
+                >
+                  <option>All</option>
+                  <option>UPI</option>
+                  <option>Cash</option>
+                  <option>Card</option>
+                </select>
+                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
+              </div>
+            </div>
+            <div className="sm:col-span-2 lg:col-span-1">
+              <label className="block text-xs mb-1 text-muted-foreground font-medium">Sort</label>
+              <div className="relative">
+                <select
+                  value={filters.sort}
+                  onChange={(e) => setFilters({...filters, sort: e.target.value})}
+                  className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
+                >
+                  <option>Total Desc</option>
+                  <option>Total Asc</option>
+                  <option>Date Desc</option>
+                </select>
+                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
               </div>
             </div>
           </div>
 
-          {/* Key Metrics */}
-          <div className="rounded-xl px-3 sm:px-4 py-4 bg-card border border-border">
-            <h2 className="text-sm sm:text-base font-semibold mb-3 text-card-foreground">Key Metrics</h2>
-            <div className="space-y-2.5">
-<div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-<div className="text-center p-2 rounded-lg bg-muted">
-<div className="text-xs text-muted-foreground mb-0.5">Sales</div>
-<div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalSales}</div>
-</div>
-<div className="text-center p-2 rounded-lg bg-muted">
-<div className="text-xs text-muted-foreground mb-0.5">Orders</div>
-<div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalOrders}</div>
-</div>
-<div className="text-center p-2 rounded-lg bg-muted col-span-2 sm:col-span-1">
-<div className="text-xs text-muted-foreground mb-0.5">Expenses</div>
-<div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalExpenses}</div>
-</div>
-</div>
+          {/* Action Buttons */}
+          <div className="flex flex-col xs:flex-row justify-end gap-2 pt-1">
+            <button
+              onClick={handleReset}
+              disabled={loading}
+              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-colors text-sm text-teal-600 border border-teal-600 hover:bg-teal-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RotateCw size={14} />
+              Reset
+            </button>
+            <button
+              onClick={handleApply}
+              disabled={loading}
+              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-colors text-sm bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Filter size={14} />
+              Apply
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Key Metrics */}
+      <div className="rounded-xl px-3 sm:px-4 py-4 bg-card border border-border">
+        <h2 className="text-sm sm:text-base font-semibold mb-3 text-card-foreground">Key Metrics</h2>
+        <div className="space-y-2.5">
           <div className="grid grid-cols-3 gap-2">
             <div className="text-center p-2 rounded-lg bg-muted">
-              <div className="text-xs text-muted-foreground mb-0.5">Avg</div>
-              <div className="text-xs sm:text-sm font-bold text-foreground">{keyMetrics.avgOrderValue}</div>
+              <div className="text-xs text-muted-foreground mb-0.5 truncate">Sales</div>
+              <div className="text-xs sm:text-sm lg:text-base font-bold text-foreground truncate">{keyMetrics.totalSales}</div>
             </div>
             <div className="text-center p-2 rounded-lg bg-muted">
-              <div className="text-xs text-muted-foreground mb-0.5">Margin</div>
-              <div className="text-xs sm:text-sm font-bold text-foreground">{keyMetrics.grossMargin}</div>
+              <div className="text-xs text-muted-foreground mb-0.5 truncate">Orders</div>
+              <div className="text-xs sm:text-sm lg:text-base font-bold text-foreground truncate">{keyMetrics.totalOrders}</div>
             </div>
             <div className="text-center p-2 rounded-lg bg-muted">
-              <div className="text-xs text-muted-foreground mb-0.5">Top</div>
-              <div className="text-xs font-bold text-foreground">{keyMetrics.topCategory}</div>
+              <div className="text-xs text-muted-foreground mb-0.5 truncate">Expenses</div>
+              <div className="text-xs sm:text-sm lg:text-base font-bold text-foreground truncate">{keyMetrics.totalExpenses}</div>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="text-center p-2 rounded-lg bg-muted">
+              <div className="text-xs text-muted-foreground mb-0.5 truncate">Avg</div>
+              <div className="text-[10px] sm:text-xs lg:text-sm font-bold text-foreground truncate">{keyMetrics.avgOrderValue}</div>
+            </div>
+            <div className="text-center p-2 rounded-lg bg-muted">
+              <div className="text-xs text-muted-foreground mb-0.5 truncate">Margin</div>
+              <div className="text-[10px] sm:text-xs lg:text-sm font-bold text-foreground truncate">{keyMetrics.grossMargin}</div>
+            </div>
+            <div className="text-center p-2 rounded-lg bg-muted">
+              <div className="text-xs text-muted-foreground mb-0.5 truncate">Top</div>
+              <div className="text-[10px] sm:text-xs font-bold text-foreground truncate" title={keyMetrics.topCategory}>
+                {keyMetrics.topCategory.length > 8 ? keyMetrics.topCategory.substring(0, 8) + '...' : keyMetrics.topCategory}
+              </div>
             </div>
           </div>
         </div>
@@ -749,7 +927,7 @@ const ReportsPage = () => {
       </div>
 
       {/* Line Chart */}
-      {salesChartData.length > 0 && (
+      {salesChartData.length > 0 ? (
         <div className="mb-6">
           <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Sales Trend</h3>
           <ResponsiveContainer width="100%" height={250}>
@@ -770,6 +948,11 @@ const ReportsPage = () => {
               <Line type="monotone" dataKey="net" stroke="#0d9488" strokeWidth={2} name="Net Sales" />
             </LineChart>
           </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className="mb-6 p-8 text-center bg-muted/50 rounded-lg border-2 border-dashed border-border">
+          <p className="text-sm text-muted-foreground">No chart data available. Check console logs 🔍</p>
+          <p className="text-xs text-muted-foreground mt-1">Sales data length: {salesChartData.length}</p>
         </div>
       )}
 
@@ -827,7 +1010,7 @@ const ReportsPage = () => {
       </div>
 
       {/* Pie Chart */}
-      {orderDistributionData.length > 0 && (
+      {orderDistributionData.length > 0 ? (
         <div className="mb-6">
           <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Order Distribution by Payment Method</h3>
           <ResponsiveContainer width="100%" height={300}>
@@ -858,6 +1041,11 @@ const ReportsPage = () => {
             </PieChart>
           </ResponsiveContainer>
         </div>
+      ) : (
+        <div className="mb-6 p-8 text-center bg-muted/50 rounded-lg border-2 border-dashed border-border">
+          <p className="text-sm text-muted-foreground">No chart data available. Check console logs 🔍</p>
+          <p className="text-xs text-muted-foreground mt-1">Order distribution length: {orderDistributionData.length}</p>
+        </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -867,16 +1055,16 @@ const ReportsPage = () => {
             <h3 className="text-xs sm:text-sm font-semibold text-card-foreground">By Payment Method</h3>
             <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Desc</span>
           </div>
-          <div className="overflow-x-auto -mx-3 sm:-mx-4 lg:mx-0">
-            <div className="inline-block min-w-full align-middle">
+          <div className="overflow-x-auto -mx-2">
+            <div className="inline-block min-w-full align-middle px-2">
               <table className="min-w-full">
                 <thead>
                   <tr className="bg-muted border-b border-border">
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Method</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Share</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Revenue</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
+                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Method</th>
+                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
+                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Share</th>
+                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Revenue</th>
+                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -889,19 +1077,19 @@ const ReportsPage = () => {
                   ) : (
                     ordersData.bySource.map((row, index) => (
                       <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                        <td className="py-2 px-2">
-                          <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.source}</span>
+                        <td className="py-2 px-4">
+                          <span className="text-xs font-medium text-foreground">{row.source}</span>
                         </td>
-                        <td className="py-2 px-2">
+                        <td className="py-2 px-4">
                           <span className="text-xs text-foreground">{row.orders}</span>
                         </td>
-                        <td className="py-2 px-2">
+                        <td className="py-2 px-4">
                           <span className="text-xs text-foreground">{row.share}</span>
                         </td>
-                        <td className="py-2 px-2">
+                        <td className="py-2 px-4">
                           <span className="text-xs text-foreground whitespace-nowrap">{row.revenue}</span>
                         </td>
-                        <td className="py-2 px-2">
+                        <td className="py-2 px-4">
                           <span className="text-xs text-foreground">{row.rank}</span>
                         </td>
                       </tr>
@@ -919,16 +1107,16 @@ const ReportsPage = () => {
             <h3 className="text-xs sm:text-sm font-semibold text-card-foreground">Payment Summary</h3>
             <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Desc</span>
           </div>
-          <div className="overflow-x-auto -mx-3 sm:-mx-4 lg:mx-0">
-            <div className="inline-block min-w-full align-middle">
+          <div className="overflow-x-auto -mx-2">
+            <div className="inline-block min-w-full align-middle px-2">
               <table className="min-w-full">
                 <thead>
                   <tr className="bg-muted border-b border-border">
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Mode</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Count</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Share</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Amount</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
+                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Mode</th>
+                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Count</th>
+                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Share</th>
+                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Amount</th>
+                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -941,19 +1129,19 @@ const ReportsPage = () => {
                   ) : (
                     ordersData.byPayment.map((row, index) => (
                       <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                        <td className="py-2 px-2">
-                          <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.mode}</span>
+                        <td className="py-2 px-4">
+                          <span className="text-xs font-medium text-foreground">{row.mode}</span>
                         </td>
-                        <td className="py-2 px-2">
+                        <td className="py-2 px-4">
                           <span className="text-xs text-foreground">{row.count}</span>
                         </td>
-                        <td className="py-2 px-2">
+                        <td className="py-2 px-4">
                           <span className="text-xs text-foreground">{row.share}</span>
                         </td>
-                        <td className="py-2 px-2">
+                        <td className="py-2 px-4">
                           <span className="text-xs text-foreground whitespace-nowrap">{row.amount}</span>
                         </td>
-                        <td className="py-2 px-2">
+                        <td className="py-2 px-4">
                           <span className="text-xs text-foreground">{row.rank}</span>
                         </td>
                       </tr>
@@ -975,7 +1163,7 @@ const ReportsPage = () => {
       </div>
 
       {/* Bar Chart */}
-      {expensesChartData.length > 0 && (
+      {expensesChartData.length > 0 ? (
         <div className="mb-6">
           <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Expenses by Category</h3>
           <ResponsiveContainer width="100%" height={250}>
@@ -995,6 +1183,11 @@ const ReportsPage = () => {
               <Bar dataKey="amount" fill="#14b8a6" name="Amount (₹)" />
             </BarChart>
           </ResponsiveContainer>
+        </div>
+      ) : (
+        <div className="mb-6 p-8 text-center bg-muted/50 rounded-lg border-2 border-dashed border-border">
+          <p className="text-sm text-muted-foreground">No chart data available. Check console logs 🔍</p>
+          <p className="text-xs text-muted-foreground mt-1">Expenses data length: {expensesChartData.length}</p>
         </div>
       )}
 
@@ -1047,4 +1240,4 @@ const ReportsPage = () => {
 </div>
 );
 };
-export default ReportsPage;
+export default ReportsPage;  

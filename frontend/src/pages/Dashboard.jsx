@@ -1,7 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DollarSign, ShoppingBag, TrendingUp, Wallet } from 'lucide-react';
 
 const Dashboard = ({ isDarkMode = true, onNavigate }) => {
+  // API Configuration
+  const API_BASE_URL = 'https://your-api-domain.com'; // Replace with your actual API URL
+  const [authToken, setAuthToken] = useState(localStorage.getItem('access_token') || '');
+
   // View state
   const [showAllOrders, setShowAllOrders] = useState(false);
   
@@ -11,20 +15,69 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
 
+  // Loading states
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  const [isLoadingOffers, setIsLoadingOffers] = useState(false);
+  const [isLoadingStaff, setIsLoadingStaff] = useState(false);
+  const [isLoadingExpenses, setIsLoadingExpenses] = useState(false);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+
   // Form states
-  const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '' });
-  const [newOffer, setNewOffer] = useState({ code: '', type: 'Percentage', value: '', category: '' });
-  const [newStaff, setNewStaff] = useState({ name: '', role: 'Cashier', salary: '', joinDate: '' });
-  const [newExpense, setNewExpense] = useState({ title: '', amount: '', date: '', category: 'Supplies' });
+  const [newCustomer, setNewCustomer] = useState({ 
+    first_name: '', 
+    last_name: '',
+    phone: '', 
+    email: '',
+    address: '',
+    city: '',
+    state: '',
+    zip_code: '',
+    country: 'India'
+  });
+  const [newOffer, setNewOffer] = useState({ 
+    code: '', 
+    discount_type: 'percentage', 
+    discount_value: '', 
+    min_order_amount: 0,
+    max_uses: 0,
+    valid_from: new Date().toISOString(),
+    valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    description: '' 
+  });
+  const [newStaff, setNewStaff] = useState({ 
+    name: '', 
+    role: 'Cashier', 
+    salary: '', 
+    joined: new Date().toISOString().split('T')[0],
+    phone: '',
+    aadhar: ''
+  });
+  const [newExpense, setNewExpense] = useState({ 
+    title: '', 
+    amount: '', 
+    date: new Date().toISOString().split('T')[0], 
+    category: 'Supplies',
+    subtitle: 'Manual entry',
+    type: 'manual',
+    account: 'Cashbook',
+    tax: 0,
+    payment_mode: 'Cash',
+    notes: ''
+  });
 
   // Data states
-  const [recentOrders, setRecentOrders] = useState([
-    { id: 1256, type: 'Dine-In', time: '2m ago', amount: 320 },
-    { id: 1255, type: 'Takeaway', time: '10m ago', amount: 580 },
-    { id: 1254, type: 'UPI', time: '18m ago', amount: 210 },
-    { id: 1253, type: 'Cash', time: '25m ago', amount: 450 },
-    { id: 1252, type: 'Dine-In', time: '32m ago', amount: 280 }
-  ]);
+  const [recentOrders, setRecentOrders] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [offers, setOffers] = useState([]);
+  const [staff, setStaff] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [dailyStats, setDailyStats] = useState({
+    today_sales: 0,
+    total_orders: 0,
+    avg_ticket: 0,
+    total_expenses: 0
+  });
 
   const activities = [
     { action: 'Staff login', time: 'just now' },
@@ -32,77 +85,365 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
     { action: 'Expense added', time: '1h ago' }
   ];
 
-  const [customers, setCustomers] = useState([
-    { name: 'Rahul Verma', phone: '98765 43210', orders: 12, email: 'rahul@example.com' },
-    { name: 'Anita Desai', phone: '99887 66554', orders: 5, email: 'anita@example.com' }
-  ]);
+  // API Helper Functions
+  const getAuthHeaders = () => ({
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${authToken}`
+  });
 
-  const [offers, setOffers] = useState([
-    { code: 'TEA5', type: 'Flat', value: '₹5', category: 'Beverages' }
-  ]);
+  const handleApiError = (error, context) => {
+    console.error(`Error in ${context}:`, error);
+    if (error.message.includes('401') || error.message.includes('403')) {
+      alert('Session expired. Please login again.');
+      // Redirect to login or refresh token
+    } else {
+      alert(`Error: ${error.message}`);
+    }
+  };
 
-  const [staff, setStaff] = useState([
-    { name: 'Satish', role: 'Cashier', payscale: '₹15,000', joined: '12 Jan 2025' }
-  ]);
+  // Fetch Functions
+  const fetchDailyStats = async () => {
+    setIsLoadingStats(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/reports/daily-summary?date=${today}`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch daily stats');
+      const data = await response.json();
+      setDailyStats({
+        today_sales: data.total_sales || 0,
+        total_orders: data.total_orders || 0,
+        avg_ticket: data.avg_ticket || 0,
+        total_expenses: data.total_expenses || 0
+      });
+    } catch (error) {
+      handleApiError(error, 'fetchDailyStats');
+    } finally {
+      setIsLoadingStats(false);
+    }
+  };
 
-  const [expenses, setExpenses] = useState([
-    { title: 'Staff salary - Satish', amount: '₹ 15,000', date: '01 Nov 2025', source: 'Auto' },
-    { title: 'Vegetables', amount: '₹ 2,150', date: '02 Nov 2025', source: 'Manual' }
-  ]);
+  const fetchOrders = async () => {
+    setIsLoadingOrders(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/orders/?skip=0&limit=10`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch orders');
+      const data = await response.json();
+      
+      // Transform API data to match your component structure
+      const transformedOrders = data.map((order, index) => ({
+        id: order.id || 1256 - index,
+        type: order.order_type || 'Dine-In',
+        time: formatTime(order.created_at),
+        amount: order.total_amount || 0
+      }));
+      setRecentOrders(transformedOrders);
+    } catch (error) {
+      handleApiError(error, 'fetchOrders');
+    } finally {
+      setIsLoadingOrders(false);
+    }
+  };
 
-  // Add functions
-  const addCustomer = () => {
-    if (newCustomer.name && newCustomer.phone) {
-      setCustomers([...customers, { ...newCustomer, orders: 0 }]);
-      setNewCustomer({ name: '', phone: '', email: '' });
-      setShowCustomerModal(false);
+  const fetchCustomers = async () => {
+    setIsLoadingCustomers(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/customers/?skip=0&limit=100&is_active=true`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch customers');
+      const data = await response.json();
+      
+      // Transform API data
+      const transformedCustomers = data.map(customer => ({
+        name: `${customer.first_name} ${customer.last_name}`,
+        phone: customer.phone,
+        email: customer.email,
+        orders: customer.order_count || 0
+      }));
+      setCustomers(transformedCustomers);
+    } catch (error) {
+      handleApiError(error, 'fetchCustomers');
+    } finally {
+      setIsLoadingCustomers(false);
+    }
+  };
+
+  const fetchOffers = async () => {
+    setIsLoadingOffers(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/coupons/?skip=0&limit=100&active_only=true`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch offers');
+      const data = await response.json();
+      
+      // Transform API data
+      const transformedOffers = data.map(coupon => ({
+        code: coupon.code,
+        type: coupon.discount_type === 'percentage' ? 'Percentage' : 'Flat',
+        value: coupon.discount_type === 'percentage' 
+          ? `${coupon.discount_value}%` 
+          : `₹${coupon.discount_value}`,
+        category: coupon.description || '',
+        id: coupon.id,
+        is_active: coupon.is_active
+      }));
+      setOffers(transformedOffers);
+    } catch (error) {
+      handleApiError(error, 'fetchOffers');
+    } finally {
+      setIsLoadingOffers(false);
+    }
+  };
+
+  const fetchStaff = async () => {
+    setIsLoadingStaff(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/staff/?skip=0&limit=100`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch staff');
+      const data = await response.json();
+      
+      // Transform API data
+      const transformedStaff = data.map(member => ({
+        name: member.name,
+        role: member.role,
+        payscale: `₹${member.salary.toLocaleString()}`,
+        joined: formatDate(member.joined),
+        id: member.id,
+        phone: member.phone
+      }));
+      setStaff(transformedStaff);
+    } catch (error) {
+      handleApiError(error, 'fetchStaff');
+    } finally {
+      setIsLoadingStaff(false);
+    }
+  };
+
+  const fetchExpenses = async () => {
+    setIsLoadingExpenses(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/expenses/?skip=0&limit=100`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch expenses');
+      const data = await response.json();
+      
+      // Transform API data
+      const transformedExpenses = data.map(expense => ({
+        title: expense.title,
+        amount: `₹ ${expense.amount.toLocaleString()}`,
+        date: formatDate(expense.date),
+        source: expense.type === 'manual' ? 'Manual' : 'Auto',
+        id: expense.id
+      }));
+      setExpenses(transformedExpenses);
+    } catch (error) {
+      handleApiError(error, 'fetchExpenses');
+    } finally {
+      setIsLoadingExpenses(false);
+    }
+  };
+
+  // Helper functions for date/time formatting
+  const formatTime = (datetime) => {
+    if (!datetime) return 'N/A';
+    const now = new Date();
+    const then = new Date(datetime);
+    const diffMs = now - then;
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${Math.floor(diffHours / 24)}d ago`;
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-IN', { 
+      day: '2-digit', 
+      month: 'short', 
+      year: 'numeric' 
+    });
+  };
+
+  // Add functions with API integration
+  const addCustomer = async () => {
+    if (!newCustomer.first_name || !newCustomer.phone) {
+      alert('Please fill in first name and phone');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/customers/`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(newCustomer)
+      });
+
+      if (!response.ok) throw new Error('Failed to create customer');
+      
+      const data = await response.json();
       alert('Customer added successfully!');
-    } else {
-      alert('Please fill in name and phone');
+      setNewCustomer({ 
+        first_name: '', 
+        last_name: '',
+        phone: '', 
+        email: '',
+        address: '',
+        city: '',
+        state: '',
+        zip_code: '',
+        country: 'India'
+      });
+      setShowCustomerModal(false);
+      fetchCustomers(); // Refresh customer list
+    } catch (error) {
+      handleApiError(error, 'addCustomer');
     }
   };
 
-  const addOffer = () => {
-    if (newOffer.code && newOffer.value) {
-      setOffers([...offers, newOffer]);
-      setNewOffer({ code: '', type: 'Percentage', value: '', category: '' });
-      setShowOfferModal(false);
-      alert('Offer created successfully!');
-    } else {
+  const addOffer = async () => {
+    if (!newOffer.code || !newOffer.discount_value) {
       alert('Please fill in code and value');
+      return;
+    }
+
+    try {
+      const payload = {
+        ...newOffer,
+        discount_value: parseFloat(newOffer.discount_value)
+      };
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/coupons/`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) throw new Error('Failed to create offer');
+      
+      alert('Offer created successfully!');
+      setNewOffer({ 
+        code: '', 
+        discount_type: 'percentage', 
+        discount_value: '', 
+        min_order_amount: 0,
+        max_uses: 0,
+        valid_from: new Date().toISOString(),
+        valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        description: '' 
+      });
+      setShowOfferModal(false);
+      fetchOffers(); // Refresh offers list
+    } catch (error) {
+      handleApiError(error, 'addOffer');
     }
   };
 
-  const addStaff = () => {
-    if (newStaff.name && newStaff.salary) {
-      setStaff([...staff, { 
-        name: newStaff.name, 
-        role: newStaff.role, 
-        payscale: `₹${newStaff.salary}`, 
-        joined: newStaff.joinDate || new Date().toLocaleDateString() 
-      }]);
-      setNewStaff({ name: '', role: 'Cashier', salary: '', joinDate: '' });
-      setShowStaffModal(false);
-      alert('Staff member added successfully!');
-    } else {
+  const addStaff = async () => {
+    if (!newStaff.name || !newStaff.salary) {
       alert('Please fill in name and salary');
+      return;
+    }
+
+    try {
+      const payload = {
+        ...newStaff,
+        salary: parseFloat(newStaff.salary)
+      };
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/staff/`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) throw new Error('Failed to add staff');
+      
+      alert('Staff member added successfully!');
+      setNewStaff({ 
+        name: '', 
+        role: 'Cashier', 
+        salary: '', 
+        joined: new Date().toISOString().split('T')[0],
+        phone: '',
+        aadhar: ''
+      });
+      setShowStaffModal(false);
+      fetchStaff(); // Refresh staff list
+    } catch (error) {
+      handleApiError(error, 'addStaff');
     }
   };
 
-  const addExpense = () => {
-    if (newExpense.title && newExpense.amount) {
-      setExpenses([...expenses, { 
-        ...newExpense, 
-        amount: `₹ ${newExpense.amount}`, 
-        source: 'Manual' 
-      }]);
-      setNewExpense({ title: '', amount: '', date: '', category: 'Supplies' });
-      setShowExpenseModal(false);
-      alert('Expense added successfully!');
-    } else {
+  const addExpense = async () => {
+    if (!newExpense.title || !newExpense.amount) {
       alert('Please fill in title and amount');
+      return;
+    }
+
+    try {
+      const payload = {
+        ...newExpense,
+        amount: parseFloat(newExpense.amount)
+      };
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/expenses/`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) throw new Error('Failed to add expense');
+      
+      alert('Expense added successfully!');
+      setNewExpense({ 
+        title: '', 
+        amount: '', 
+        date: new Date().toISOString().split('T')[0], 
+        category: 'Supplies',
+        subtitle: 'Manual entry',
+        type: 'manual',
+        account: 'Cashbook',
+        tax: 0,
+        payment_mode: 'Cash',
+        notes: ''
+      });
+      setShowExpenseModal(false);
+      fetchExpenses(); // Refresh expenses list
+      fetchDailyStats(); // Refresh stats to update expenses
+    } catch (error) {
+      handleApiError(error, 'addExpense');
     }
   };
+
+  // Load all data on component mount
+  useEffect(() => {
+    if (authToken) {
+      fetchDailyStats();
+      fetchOrders();
+      fetchCustomers();
+      fetchOffers();
+      fetchStaff();
+      fetchExpenses();
+    }
+  }, [authToken]);
 
   // Navigation handlers
   const handleNavigateToPOS = () => {
@@ -141,18 +482,25 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
       {/* Customer Modal */}
       {showCustomerModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full">
+          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Add Customer</h3>
             <input 
               type="text"
-              placeholder="Full name"
-              value={newCustomer.name}
-              onChange={(e) => setNewCustomer({...newCustomer, name: e.target.value})}
+              placeholder="First name *"
+              value={newCustomer.first_name}
+              onChange={(e) => setNewCustomer({...newCustomer, first_name: e.target.value})}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
             />
             <input 
               type="text"
-              placeholder="+91 Phone number"
+              placeholder="Last name"
+              value={newCustomer.last_name}
+              onChange={(e) => setNewCustomer({...newCustomer, last_name: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="+91 Phone number *"
               value={newCustomer.phone}
               onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
@@ -164,8 +512,36 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
               onChange={(e) => setNewCustomer({...newCustomer, email: e.target.value})}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
             />
+            <input 
+              type="text"
+              placeholder="Address"
+              value={newCustomer.address}
+              onChange={(e) => setNewCustomer({...newCustomer, address: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="City"
+              value={newCustomer.city}
+              onChange={(e) => setNewCustomer({...newCustomer, city: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="State"
+              value={newCustomer.state}
+              onChange={(e) => setNewCustomer({...newCustomer, state: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="ZIP Code"
+              value={newCustomer.zip_code}
+              onChange={(e) => setNewCustomer({...newCustomer, zip_code: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
             <div className="flex gap-2">
-              <button onClick={addCustomer} className="flex-1 py-2 bg-teal-600 text-white rounded-lg">Save</button>
+              <button onClick={addCustomer} className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Save</button>
               <button onClick={() => setShowCustomerModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
             </div>
           </div>
@@ -179,35 +555,49 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
             <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Create Offer</h3>
             <input 
               type="text"
-              placeholder="Coupon code (e.g. SAVE10)"
+              placeholder="Coupon code (e.g. SAVE10) *"
               value={newOffer.code}
               onChange={(e) => setNewOffer({...newOffer, code: e.target.value.toUpperCase()})}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
             />
             <select 
-              value={newOffer.type}
-              onChange={(e) => setNewOffer({...newOffer, type: e.target.value})}
+              value={newOffer.discount_type}
+              onChange={(e) => setNewOffer({...newOffer, discount_type: e.target.value})}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
             >
-              <option value="Percentage">Percentage</option>
-              <option value="Flat">Flat</option>
+              <option value="percentage">Percentage</option>
+              <option value="flat">Flat</option>
             </select>
             <input 
-              type="text"
-              placeholder="Value (e.g. 10 or 50)"
-              value={newOffer.value}
-              onChange={(e) => setNewOffer({...newOffer, value: e.target.value})}
+              type="number"
+              placeholder="Value (e.g. 10 or 50) *"
+              value={newOffer.discount_value}
+              onChange={(e) => setNewOffer({...newOffer, discount_value: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="number"
+              placeholder="Minimum order amount"
+              value={newOffer.min_order_amount}
+              onChange={(e) => setNewOffer({...newOffer, min_order_amount: parseFloat(e.target.value) || 0})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="number"
+              placeholder="Max uses (0 for unlimited)"
+              value={newOffer.max_uses}
+              onChange={(e) => setNewOffer({...newOffer, max_uses: parseInt(e.target.value) || 0})}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
             />
             <input 
               type="text"
-              placeholder="Category (optional)"
-              value={newOffer.category}
-              onChange={(e) => setNewOffer({...newOffer, category: e.target.value})}
+              placeholder="Description"
+              value={newOffer.description}
+              onChange={(e) => setNewOffer({...newOffer, description: e.target.value})}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
             />
             <div className="flex gap-2">
-              <button onClick={addOffer} className="flex-1 py-2 bg-teal-600 text-white rounded-lg">Create</button>
+              <button onClick={addOffer} className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Create</button>
               <button onClick={() => setShowOfferModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
             </div>
           </div>
@@ -221,9 +611,16 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
             <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Add Staff</h3>
             <input 
               type="text"
-              placeholder="Full name"
+              placeholder="Full name *"
               value={newStaff.name}
               onChange={(e) => setNewStaff({...newStaff, name: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="Phone number (10 digits) *"
+              value={newStaff.phone}
+              onChange={(e) => setNewStaff({...newStaff, phone: e.target.value})}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
             />
             <select 
@@ -237,20 +634,27 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
               <option value="Manager">Manager</option>
             </select>
             <input 
-              type="text"
-              placeholder="Monthly salary (e.g. 15000)"
+              type="number"
+              placeholder="Monthly salary (e.g. 15000) *"
               value={newStaff.salary}
               onChange={(e) => setNewStaff({...newStaff, salary: e.target.value})}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
             />
             <input 
               type="date"
-              value={newStaff.joinDate}
-              onChange={(e) => setNewStaff({...newStaff, joinDate: e.target.value})}
+              value={newStaff.joined}
+              onChange={(e) => setNewStaff({...newStaff, joined: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="Aadhar number (optional)"
+              value={newStaff.aadhar}
+              onChange={(e) => setNewStaff({...newStaff, aadhar: e.target.value})}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
             />
             <div className="flex gap-2">
-              <button onClick={addStaff} className="flex-1 py-2 bg-teal-600 text-white rounded-lg">Save</button>
+              <button onClick={addStaff} className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Save</button>
               <button onClick={() => setShowStaffModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
             </div>
           </div>
@@ -264,14 +668,14 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
             <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Add Expense</h3>
             <input 
               type="text"
-              placeholder="Expense title (e.g. Milk purchase)"
+              placeholder="Expense title (e.g. Milk purchase) *"
               value={newExpense.title}
               onChange={(e) => setNewExpense({...newExpense, title: e.target.value})}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
             />
             <input 
-              type="text"
-              placeholder="Amount (e.g. 2150)"
+              type="number"
+              placeholder="Amount (e.g. 2150) *"
               value={newExpense.amount}
               onChange={(e) => setNewExpense({...newExpense, amount: e.target.value})}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
@@ -292,8 +696,25 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
               <option value="Salary">Salary</option>
               <option value="Maintenance">Maintenance</option>
             </select>
+            <select 
+              value={newExpense.payment_mode}
+              onChange={(e) => setNewExpense({...newExpense, payment_mode: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            >
+              <option value="Cash">Cash</option>
+              <option value="UPI">UPI</option>
+              <option value="Card">Card</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+            </select>
+            <textarea 
+              placeholder="Notes (optional)"
+              value={newExpense.notes}
+              onChange={(e) => setNewExpense({...newExpense, notes: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+              rows="2"
+            />
             <div className="flex gap-2">
-              <button onClick={addExpense} className="flex-1 py-2 bg-teal-600 text-white rounded-lg">Save</button>
+              <button onClick={addExpense} className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Save</button>
               <button onClick={() => setShowExpenseModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
             </div>
           </div>
@@ -302,232 +723,281 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-4">
-        <h2 className="text-2xl font-semibold text-foreground">Dashboard</h2>
+<h2 className="text-2xl font-semibold text-foreground">Dashboard</h2>
+<button
+onClick={() => {
+fetchDailyStats();
+fetchOrders();
+fetchCustomers();
+fetchOffers();
+fetchStaff();
+fetchExpenses();
+}}
+className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm"
+>
+Refresh Data
+</button>
+</div>
+  {/* Stats Cards */}
+  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
+      <div className="flex items-center justify-between mb-2 sm:mb-3">
+        <p className="text-muted-foreground text-xs sm:text-sm">Today Sales</p>
+        <DollarSign className="text-teal-400" size={18} />
       </div>
-
-      {/* Stats Cards - Updated with enhanced hover effects */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
-        <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
-          <div className="flex items-center justify-between mb-2 sm:mb-3">
-            <p className="text-muted-foreground text-xs sm:text-sm">Today Sales</p>
-            <DollarSign className="text-teal-400" size={18} />
-          </div>
-          <p className="text-xl sm:text-3xl font-bold text-card-foreground">₹12,450</p>
-        </div>
-        <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
-          <div className="flex items-center justify-between mb-2 sm:mb-3">
-            <p className="text-muted-foreground text-xs sm:text-sm">Orders</p>
-            <ShoppingBag className="text-teal-400" size={18} />
-          </div>
-          <p className="text-xl sm:text-3xl font-bold text-card-foreground">86</p>
-        </div>
-        <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
-          <div className="flex items-center justify-between mb-2 sm:mb-3">
-            <p className="text-muted-foreground text-xs sm:text-sm">Avg Ticket</p>
-            <TrendingUp className="text-teal-400" size={18} />
-          </div>
-          <p className="text-xl sm:text-3xl font-bold text-card-foreground">₹145</p>
-        </div>
-        <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
-          <div className="flex items-center justify-between mb-2 sm:mb-3">
-            <p className="text-muted-foreground text-xs sm:text-sm">Expenses</p>
-            <Wallet className="text-teal-400" size={18} />
-          </div>
-          <p className="text-xl sm:text-3xl font-bold text-card-foreground">₹3,120</p>
-        </div>
+      <p className="text-xl sm:text-3xl font-bold text-card-foreground">
+        {isLoadingStats ? '...' : `₹${dailyStats.today_sales.toLocaleString()}`}
+      </p>
+    </div>
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
+      <div className="flex items-center justify-between mb-2 sm:mb-3">
+        <p className="text-muted-foreground text-xs sm:text-sm">Orders</p>
+        <ShoppingBag className="text-teal-400" size={18} />
       </div>
-
-      {/* Quick Links, Recent Orders, Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-        {/* Quick Links */}
-        <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
-          <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-4">Quick Links</h3>
-          <div className="space-y-3">
-            <button 
-              onClick={handleNavigateToPOS}
-              className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
-            >
-              <div className="text-left">
-                <p className="font-medium text-sm sm:text-base">Open POS</p>
-                <p className="text-xs sm:text-sm text-muted-foreground">Start billing and print KOT</p>
-              </div>
-              <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Open</span>
-            </button>
-            <button 
-              onClick={handleNavigateToMenu}
-              className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
-            >
-              <div className="text-left">
-                <p className="font-medium text-sm sm:text-base">Manage Menu</p>
-                <p className="text-xs sm:text-sm text-muted-foreground">Categories, items and prices</p>
-              </div>
-              <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Menu</span>
-            </button>
-            <button 
-              onClick={handleNavigateToReports}
-              className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
-            >
-              <div className="text-left">
-                <p className="font-medium text-sm sm:text-base">View Reports</p>
-                <p className="text-xs sm:text-sm text-muted-foreground">Sales and orders</p>
-              </div>
-              <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Reports</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Recent Orders */}
-        <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Recent Orders</h3>
-            <button 
-              onClick={handleSeeAllOrders}
-              className="text-teal-400 text-xs sm:text-sm hover:underline"
-            >
-              See all
-            </button>
-          </div>
-          <div className="space-y-3">
-            {displayedOrders.map(order => (
-              <div key={order.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <div className="text-foreground">
-                  <p className="font-medium text-xs sm:text-sm">#{order.id} • {order.type}</p>
-                  <p className="text-xs text-muted-foreground">{order.time}</p>
-                </div>
-                <p className="font-semibold text-foreground text-sm sm:text-base">₹ {order.amount}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Activity - Updated with card design for each activity */}
-        <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
-          <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-4">Activity</h3>
-          <div className="space-y-3">
-            {activities.map((activity, idx) => (
-              <div key={idx} className="flex items-center justify-between p-3 bg-muted rounded-lg hover:bg-secondary transition-colors">
-                <p className="text-foreground text-sm sm:text-base">{activity.action}</p>
-                <p className="text-xs sm:text-sm text-muted-foreground">{activity.time}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+      <p className="text-xl sm:text-3xl font-bold text-card-foreground">
+        {isLoadingStats ? '...' : dailyStats.total_orders}
+      </p>
+    </div>
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
+      <div className="flex items-center justify-between mb-2 sm:mb-3">
+        <p className="text-muted-foreground text-xs sm:text-sm">Avg Ticket</p>
+        <TrendingUp className="text-teal-400" size={18} />
       </div>
-
-      {/* Customers, Offers */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
-        {/* Customers */}
-        <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Customers</h3>
-            <button 
-              onClick={() => setShowCustomerModal(true)}
-              className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
-            >
-              Add
-            </button>
-          </div>
-          <div className="space-y-2 mb-4">
-            {customers.map((cust, idx) => (
-              <div key={idx} className="p-3 bg-muted rounded-lg">
-                <p className="font-medium text-foreground text-sm sm:text-base">{cust.name}</p>
-                <p className="text-xs sm:text-sm text-muted-foreground">{cust.phone} • {cust.orders} orders</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Offers */}
-        <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Offers</h3>
-            <button 
-              onClick={() => setShowOfferModal(true)}
-              className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
-            >
-              Create
-            </button>
-          </div>
-          <div className="space-y-2">
-            {offers.map((offer, idx) => (
-              <div key={idx} className="p-3 bg-muted rounded-lg">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-medium text-foreground text-sm sm:text-base">{offer.code}</p>
-                    <p className="text-xs sm:text-sm text-muted-foreground">{offer.type} • {offer.value} • {offer.category}</p>
-                  </div>
-                  <button 
-                    onClick={() => alert(`Offer ${offer.code} disabled`)}
-                    className="text-xs text-red-400 hover:text-red-500"
-                  >
-                    Disable
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      <p className="text-xl sm:text-3xl font-bold text-card-foreground">
+        {isLoadingStats ? '...' : `₹${dailyStats.avg_ticket.toLocaleString()}`}
+      </p>
+    </div>
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
+      <div className="flex items-center justify-between mb-2 sm:mb-3">
+        <p className="text-muted-foreground text-xs sm:text-sm">Expenses</p>
+        <Wallet className="text-teal-400" size={18} />
       </div>
+      <p className="text-xl sm:text-3xl font-bold text-card-foreground">
+        {isLoadingStats ? '...' : `₹${dailyStats.total_expenses.toLocaleString()}`}
+      </p>
+    </div>
+  </div>
 
-      {/* Staff, Expenses */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        {/* Staff */}
-        <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Staff</h3>
-            <button 
-              onClick={() => setShowStaffModal(true)}
-              className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
-            >
-              Add
-            </button>
+  {/* Quick Links, Recent Orders, Activity */}
+  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+    {/* Quick Links */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-4">Quick Links</h3>
+      <div className="space-y-3">
+        <button 
+          onClick={handleNavigateToPOS}
+          className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
+        >
+          <div className="text-left">
+            <p className="font-medium text-sm sm:text-base">Open POS</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Start billing and print KOT</p>
           </div>
-          <div className="space-y-2">
-            {staff.map((member, idx) => (
-              <div key={idx} className="p-3 bg-muted rounded-lg">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-medium text-foreground text-sm sm:text-base">{member.name}</p>
-                    <p className="text-xs sm:text-sm text-muted-foreground">{member.role} • {member.payscale}</p>
-                  </div>
-                  <button 
-                    onClick={() => alert(`Edit ${member.name}`)}
-                    className="text-xs text-teal-400 hover:text-teal-500"
-                  >
-                    Edit
-                  </button>
-                </div>
-              </div>
-            ))}
+          <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Open</span>
+        </button>
+        <button 
+          onClick={handleNavigateToMenu}
+          className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
+        >
+          <div className="text-left">
+            <p className="font-medium text-sm sm:text-base">Manage Menu</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Categories, items and prices</p>
           </div>
-        </div>
-
-        {/* Expenses */}
-        <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Expenses</h3>
-            <button 
-              onClick={() => setShowExpenseModal(true)}
-              className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
-            >
-              Add
-            </button>
+          <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Menu</span>
+        </button>
+        <button 
+          onClick={handleNavigateToReports}
+          className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
+        >
+          <div className="text-left">
+            <p className="font-medium text-sm sm:text-base">View Reports</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Sales and orders</p>
           </div>
-          <div className="space-y-2">
-            {expenses.map((exp, idx) => (
-              <div key={idx} className="p-3 bg-muted rounded-lg">
-                <p className="font-medium text-sm text-foreground">{exp.title}</p>
-                <div className="flex justify-between items-center mt-1">
-                  <p className="text-xs sm:text-sm text-muted-foreground">{exp.date}</p>
-                  <p className="font-semibold text-foreground text-sm sm:text-base">{exp.amount}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+          <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Reports</span>
+        </button>
       </div>
     </div>
-  );
-};
 
+    {/* Recent Orders */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Recent Orders</h3>
+        <button 
+          onClick={handleSeeAllOrders}
+          className="text-teal-400 text-xs sm:text-sm hover:underline"
+        >
+          See all
+        </button>
+      </div>
+      {isLoadingOrders ? (
+        <p className="text-center text-muted-foreground">Loading...</p>
+      ) : (
+        <div className="space-y-3">
+          {displayedOrders.length > 0 ? displayedOrders.map(order => (
+            <div key={order.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+              <div className="text-foreground">
+                <p className="font-medium text-xs sm:text-sm">#{order.id} • {order.type}</p>
+                <p className="text-xs text-muted-foreground">{order.time}</p>
+              </div>
+              <p className="font-semibold text-foreground text-sm sm:text-base">₹ {order.amount}</p>
+            </div>
+          )) : (
+            <p className="text-center text-muted-foreground text-sm">No orders yet</p>
+          )}
+        </div>
+      )}
+    </div>
+
+    {/* Activity */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-4">Activity</h3>
+      <div className="space-y-3">
+        {activities.map((activity, idx) => (
+          <div key={idx} className="flex items-center justify-between p-3 bg-muted rounded-lg hover:bg-secondary transition-colors">
+            <p className="text-foreground text-sm sm:text-base">{activity.action}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">{activity.time}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+
+  {/* Customers, Offers */}
+  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
+    {/* Customers */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Customers</h3>
+        <button 
+          onClick={() => setShowCustomerModal(true)}
+          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
+        >
+          Add
+        </button>
+      </div>
+      {isLoadingCustomers ? (
+        <p className="text-center text-muted-foreground">Loading...</p>
+      ) : (
+        <div className="space-y-2 mb-4">
+          {customers.length > 0 ? customers.slice(0, 5).map((cust, idx) => (
+            <div key={idx} className="p-3 bg-muted rounded-lg">
+              <p className="font-medium text-foreground text-sm sm:text-base">{cust.name}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">{cust.phone} • {cust.orders} orders</p>
+            </div>
+          )) : (
+            <p className="text-center text-muted-foreground text-sm">No customers yet</p>
+          )}
+        </div>
+      )}
+    </div>
+
+    {/* Offers */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Offers</h3>
+        <button 
+          onClick={() => setShowOfferModal(true)}
+          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
+        >
+          Create
+        </button>
+      </div>
+      {isLoadingOffers ? (
+        <p className="text-center text-muted-foreground">Loading...</p>
+      ) : (
+        <div className="space-y-2">
+          {offers.length > 0 ? offers.map((offer, idx) => (
+            <div key={idx} className="p-3 bg-muted rounded-lg">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-medium text-foreground text-sm sm:text-base">{offer.code}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">{offer.type} • {offer.value} • {offer.category}</p>
+                </div>
+                <button 
+                  onClick={() => alert(`Offer ${offer.code} disabled`)}
+                  className="text-xs text-red-400 hover:text-red-500"
+                >
+                  Disable
+                </button>
+              </div>
+            </div>
+          )) : (
+            <p className="text-center text-muted-foreground text-sm">No offers yet</p>
+          )}
+        </div>
+      )}
+    </div>
+  </div>
+
+  {/* Staff, Expenses */}
+  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+    {/* Staff */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Staff</h3>
+        <button 
+          onClick={() => setShowStaffModal(true)}
+          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
+        >
+          Add
+        </button>
+      </div>
+      {isLoadingStaff ? (
+        <p className="text-center text-muted-foreground">Loading...</p>
+      ) : (
+        <div className="space-y-2">
+          {staff.length > 0 ? staff.map((member, idx) => (
+            <div key={idx} className="p-3 bg-muted rounded-lg">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-medium text-foreground text-sm sm:text-base">{member.name}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">{member.role} • {member.payscale}</p>
+                </div>
+                <button 
+                  onClick={() => alert(`Edit ${member.name}`)}
+                  className="text-xs text-teal-400 hover:text-teal-500"
+                >
+                  Edit
+                </button>
+              </div>
+            </div>
+          )) : (
+            <p className="text-center text-muted-foreground text-sm">No staff members yet</p>
+          )}
+        </div>
+      )}
+    </div>
+
+    {/* Expenses */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Expenses</h3>
+        <button 
+          onClick={() => setShowExpenseModal(true)}
+          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
+        >
+          Add
+        </button>
+      </div>
+      {isLoadingExpenses ? (
+        <p className="text-center text-muted-foreground">Loading...</p>
+      ) : (
+        <div className="space-y-2">
+          {expenses.length > 0 ? expenses.slice(0, 5).map((exp, idx) => (
+            <div key={idx} className="p-3 bg-muted rounded-lg">
+              <p className="font-medium text-sm text-foreground">{exp.title}</p>
+              <div className="flex justify-between items-center mt-1">
+                <p className="text-xs sm:text-sm text-muted-foreground">{exp.date}</p>
+                <p className="font-semibold text-foreground text-sm sm:text-base">{exp.amount}</p>
+              </div>
+            </div>
+          )) : (
+            <p className="text-center text-muted-foreground text-sm">No expenses yet</p>
+          )}
+        </div>
+      )}
+    </div>
+  </div>
+</div>
+);
+};
 export default Dashboard;

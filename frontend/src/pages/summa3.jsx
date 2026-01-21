@@ -1,1167 +1,1003 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Plus, Filter, Eye, Edit2, Trash2, RotateCw, FileText, Flame, Droplet, Zap, Wifi, Paperclip, X, Search } from 'lucide-react';
+import { DollarSign, ShoppingBag, TrendingUp, Wallet } from 'lucide-react';
 
-const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
+const Dashboard = ({ isDarkMode = true, onNavigate }) => {
+  // API Configuration
+  const API_BASE_URL = 'https://your-api-domain.com'; // Replace with your actual API URL
+  const [authToken, setAuthToken] = useState(localStorage.getItem('access_token') || '');
 
-// API Helper Functions
-const api = {
-    async getExpenses(skip = 0, limit = 100) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/expenses?skip=${skip}&limit=${limit}`);
-            if (!response.ok) throw new Error('Failed to fetch expenses');
-            return await response.json();
-        } catch (error) {
-            console.error('Error fetching expenses:', error);
-            throw error;
-        }
-    },
+  // View state
+  const [showAllOrders, setShowAllOrders] = useState(false);
+  
+  // Modal states
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [showOfferModal, setShowOfferModal] = useState(false);
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
 
-    async createExpense(expenseData) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/expenses`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(expenseData)
-            });
-            if (!response.ok) throw new Error('Failed to create expense');
-            return await response.json();
-        } catch (error) {
-            console.error('Error creating expense:', error);
-            throw error;
-        }
-    },
+  // Loading states
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  const [isLoadingOffers, setIsLoadingOffers] = useState(false);
+  const [isLoadingStaff, setIsLoadingStaff] = useState(false);
+  const [isLoadingExpenses, setIsLoadingExpenses] = useState(false);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
 
-    async getExpense(expenseId) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/expenses/${expenseId}`);
-            if (!response.ok) throw new Error('Failed to fetch expense');
-            return await response.json();
-        } catch (error) {
-            console.error('Error fetching expense:', error);
-            throw error;
-        }
-    },
+  // Form states
+  const [newCustomer, setNewCustomer] = useState({ 
+    first_name: '', 
+    last_name: '',
+    phone: '', 
+    email: '',
+    address: '',
+    city: '',
+    state: '',
+    zip_code: '',
+    country: 'India'
+  });
+  const [newOffer, setNewOffer] = useState({ 
+    code: '', 
+    discount_type: 'percentage', 
+    discount_value: '', 
+    min_order_amount: 0,
+    max_uses: 0,
+    valid_from: new Date().toISOString(),
+    valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    description: '' 
+  });
+  const [newStaff, setNewStaff] = useState({ 
+    name: '', 
+    role: 'Cashier', 
+    salary: '', 
+    joined: new Date().toISOString().split('T')[0],
+    phone: '',
+    aadhar: ''
+  });
+  const [newExpense, setNewExpense] = useState({ 
+    title: '', 
+    amount: '', 
+    date: new Date().toISOString().split('T')[0], 
+    category: 'Supplies',
+    subtitle: 'Manual entry',
+    type: 'manual',
+    account: 'Cashbook',
+    tax: 0,
+    payment_mode: 'Cash',
+    notes: ''
+  });
 
-    async updateExpense(expenseId, updateData) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/expenses/${expenseId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(updateData)
-            });
-            if (!response.ok) throw new Error('Failed to update expense');
-            return await response.json();
-        } catch (error) {
-            console.error('Error updating expense:', error);
-            throw error;
-        }
-    },
+  // Data states
+  const [recentOrders, setRecentOrders] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [offers, setOffers] = useState([]);
+  const [staff, setStaff] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [dailyStats, setDailyStats] = useState({
+    today_sales: 0,
+    total_orders: 0,
+    avg_ticket: 0,
+    total_expenses: 0
+  });
 
-    async deleteExpense(expenseId) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/expenses/${expenseId}`, {
-                method: 'DELETE'
-            });
-            if (!response.ok) throw new Error('Failed to delete expense');
-            return await response.json();
-        } catch (error) {
-            console.error('Error deleting expense:', error);
-            throw error;
-        }
-    },
+  const activities = [
+    { action: 'Staff login', time: 'just now' },
+    { action: 'Menu updated', time: '20m ago' },
+    { action: 'Expense added', time: '1h ago' }
+  ];
 
-    // ✅ Fetch upcoming staff salaries
-    async getUpcomingStaffSalaries() {
-        try {
-            const tokenKeys = ['access_token', 'acces_Token', 'token', 'authToken'];
-            let token = null;
-            
-            for (const key of tokenKeys) {
-                const value = localStorage.getItem(key);
-                if (value && value.length > 10) {
-                    token = value;
-                    break;
-                }
-            }
+  // API Helper Functions
+  const getAuthHeaders = () => ({
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${authToken}`
+  });
 
-            const headers = {
-                'Content-Type': 'application/json',
-            };
-
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
-            }
-
-            const response = await fetch(`${API_BASE_URL}/staff/upcoming-salaries`, {
-                method: 'GET',
-                headers: headers,
-            });
-            
-            if (!response.ok) {
-                console.warn('Failed to fetch upcoming salaries');
-                return [];
-            }
-            return await response.json();
-        } catch (error) {
-            console.error('Error fetching upcoming staff salaries:', error);
-            return [];
-        }
+  const handleApiError = (error, context) => {
+    console.error(`Error in ${context}:`, error);
+    if (error.message.includes('401') || error.message.includes('403')) {
+      alert('Session expired. Please login again.');
+      // Redirect to login or refresh token
+    } else {
+      alert(`Error: ${error.message}`);
     }
-};
+  };
 
-// Reusable Modal Component
-const Modal = ({ isOpen, onClose, title, subtitle, children, size = 'default' }) => {
-    const sizeClasses = {
-        default: 'max-w-[95vw] sm:max-w-xl md:max-w-3xl',
-        large: 'max-w-[95vw] sm:max-w-2xl md:max-w-4xl'
-    };
+  // Fetch Functions
+  const fetchDailyStats = async () => {
+    setIsLoadingStats(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/reports/daily-summary?date=${today}`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch daily stats');
+      const data = await response.json();
+      setDailyStats({
+        today_sales: data.total_sales || 0,
+        total_orders: data.total_orders || 0,
+        avg_ticket: data.avg_ticket || 0,
+        total_expenses: data.total_expenses || 0
+      });
+    } catch (error) {
+      handleApiError(error, 'fetchDailyStats');
+    } finally {
+      setIsLoadingStats(false);
+    }
+  };
 
-    React.useEffect(() => {
-        const handleEscape = (e) => {
-            if (e.key === 'Escape') onClose();
-        };
+  const fetchOrders = async () => {
+    setIsLoadingOrders(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/orders/?skip=0&limit=10`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch orders');
+      const data = await response.json();
+      
+      // Transform API data to match your component structure
+      const transformedOrders = data.map((order, index) => ({
+        id: order.id || 1256 - index,
+        type: order.order_type || 'Dine-In',
+        time: formatTime(order.created_at),
+        amount: order.total_amount || 0
+      }));
+      setRecentOrders(transformedOrders);
+    } catch (error) {
+      handleApiError(error, 'fetchOrders');
+    } finally {
+      setIsLoadingOrders(false);
+    }
+  };
 
-        if (isOpen) {
-            document.addEventListener('keydown', handleEscape);
-            document.body.style.overflow = 'hidden';
-        }
+  const fetchCustomers = async () => {
+    setIsLoadingCustomers(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/customers/?skip=0&limit=100&is_active=true`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch customers');
+      const data = await response.json();
+      
+      // Transform API data
+      const transformedCustomers = data.map(customer => ({
+        name: `${customer.first_name} ${customer.last_name}`,
+        phone: customer.phone,
+        email: customer.email,
+        orders: customer.order_count || 0
+      }));
+      setCustomers(transformedCustomers);
+    } catch (error) {
+      handleApiError(error, 'fetchCustomers');
+    } finally {
+      setIsLoadingCustomers(false);
+    }
+  };
 
-        return () => {
-            document.removeEventListener('keydown', handleEscape);
-            document.body.style.overflow = 'unset';
-        };
-    }, [isOpen, onClose]);
+  const fetchOffers = async () => {
+    setIsLoadingOffers(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/coupons/?skip=0&limit=100&active_only=true`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch offers');
+      const data = await response.json();
+      
+      // Transform API data
+      const transformedOffers = data.map(coupon => ({
+        code: coupon.code,
+        type: coupon.discount_type === 'percentage' ? 'Percentage' : 'Flat',
+        value: coupon.discount_type === 'percentage' 
+          ? `${coupon.discount_value}%` 
+          : `₹${coupon.discount_value}`,
+        category: coupon.description || '',
+        id: coupon.id,
+        is_active: coupon.is_active
+      }));
+      setOffers(transformedOffers);
+    } catch (error) {
+      handleApiError(error, 'fetchOffers');
+    } finally {
+      setIsLoadingOffers(false);
+    }
+  };
 
-    if (!isOpen) return null;
+  const fetchStaff = async () => {
+    setIsLoadingStaff(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/staff/?skip=0&limit=100`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch staff');
+      const data = await response.json();
+      
+      // Transform API data
+      const transformedStaff = data.map(member => ({
+        name: member.name,
+        role: member.role,
+        payscale: `₹${member.salary.toLocaleString()}`,
+        joined: formatDate(member.joined),
+        id: member.id,
+        phone: member.phone
+      }));
+      setStaff(transformedStaff);
+    } catch (error) {
+      handleApiError(error, 'fetchStaff');
+    } finally {
+      setIsLoadingStaff(false);
+    }
+  };
 
-    return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-2 animate-in fade-in duration-200"
-            style={{ backgroundColor: 'rgba(0, 0, 0, 0.6)' }}
-            onClick={onClose}
-        >
-            <div
-                className={`relative w-full ${sizeClasses[size]} bg-card border border-border rounded-lg shadow-2xl animate-in zoom-in-95 duration-200 max-h-[96vh] flex flex-col`}
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="flex items-start justify-between p-3 sm:p-4 md:p-6 border-b border-border flex-shrink-0">
-                    <div className="flex-1 min-w-0 pr-2">
-                        <h2 className="text-base sm:text-lg md:text-xl font-bold text-foreground truncate">{title}</h2>
-                        {subtitle && <p className="text-xs sm:text-sm text-muted-foreground mt-1">{subtitle}</p>}
-                    </div>
-                    <button
-                        onClick={onClose}
-                        className="p-1.5 sm:p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground flex-shrink-0"
-                    >
-                        <X size={18} className="sm:w-5 sm:h-5" />
-                    </button>
-                </div>
-                <div className="overflow-y-auto flex-1 p-3 sm:p-4 md:p-6">
-                    {children}
-                </div>
-            </div>
-        </div>
-    );
-};
+  const fetchExpenses = async () => {
+    setIsLoadingExpenses(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/expenses/?skip=0&limit=100`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch expenses');
+      const data = await response.json();
+      
+      // Transform API data
+      const transformedExpenses = data.map(expense => ({
+        title: expense.title,
+        amount: `₹ ${expense.amount.toLocaleString()}`,
+        date: formatDate(expense.date),
+        source: expense.type === 'manual' ? 'Manual' : 'Auto',
+        id: expense.id
+      }));
+      setExpenses(transformedExpenses);
+    } catch (error) {
+      handleApiError(error, 'fetchExpenses');
+    } finally {
+      setIsLoadingExpenses(false);
+    }
+  };
 
-const ExpensesManagement = () => {
-    const [showAddForm, setShowAddForm] = useState(false);
-    const [showFilters, setShowFilters] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [editingId, setEditingId] = useState(null);
+  // Helper functions for date/time formatting
+  const formatTime = (datetime) => {
+    if (!datetime) return 'N/A';
+    const now = new Date();
+    const then = new Date(datetime);
+    const diffMs = now - then;
+    const diffMins = Math.floor(diffMs / 60000);
     
-    // ✅ Filter states
-    const [searchQuery, setSearchQuery] = useState('');
-    const [categoryFilter, setCategoryFilter] = useState('All');
-    const [paymentModeFilter, setPaymentModeFilter] = useState('All');
-    const [dateRangeFilter, setDateRangeFilter] = useState('This Month');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
-    
-    const [formData, setFormData] = useState({
-        title: '',
-        date: new Date().toISOString().split('T')[0],
-        category: '',
-        account: 'Cashbook',
-        amount: '0.00',
-        tax: '0',
-        payment_mode: 'Cash',
-        notes: '',
-        subtitle: 'Manual entry',
-        type: 'manual'
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${Math.floor(diffHours / 24)}d ago`;
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-IN', { 
+      day: '2-digit', 
+      month: 'short', 
+      year: 'numeric' 
     });
+  };
 
-    const [expenses, setExpenses] = useState([]);
-    const [autoAddedPayments, setAutoAddedPayments] = useState([]);
+  // Add functions with API integration
+  const addCustomer = async () => {
+    if (!newCustomer.first_name || !newCustomer.phone) {
+      alert('Please fill in first name and phone');
+      return;
+    }
 
-    const presets = [
-        { id: 1, icon: Flame, label: 'Gas Cylinder', amount: '₹3,200', category: 'Kitchen Supplies' },
-        { id: 2, icon: Droplet, label: 'Water Can', amount: '₹150', category: 'Kitchen Supplies' },
-        { id: 3, icon: Zap, label: 'Veg Supplier', amount: '₹2,800', category: 'Kitchen Supplies' },
-        { id: 4, icon: Wifi, label: 'Internet Bill', amount: '₹999', category: 'Utilities' }
-    ];
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/customers/`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(newCustomer)
+      });
 
-    // Load expenses and upcoming salaries on mount
-    useEffect(() => {
-        loadExpenses();
-        loadUpcomingStaffSalaries();
-    }, []);
+      if (!response.ok) throw new Error('Failed to create customer');
+      
+      const data = await response.json();
+      alert('Customer added successfully!');
+      setNewCustomer({ 
+        first_name: '', 
+        last_name: '',
+        phone: '', 
+        email: '',
+        address: '',
+        city: '',
+        state: '',
+        zip_code: '',
+        country: 'India'
+      });
+      setShowCustomerModal(false);
+      fetchCustomers(); // Refresh customer list
+    } catch (error) {
+      handleApiError(error, 'addCustomer');
+    }
+  };
 
-    const loadExpenses = async () => {
-        setLoading(true);
-        try {
-            const data = await api.getExpenses();
-            setExpenses(data);
-        } catch (error) {
-            alert('Failed to load expenses. Please check your connection.');
-        } finally {
-            setLoading(false);
-        }
-    };
+  const addOffer = async () => {
+    if (!newOffer.code || !newOffer.discount_value) {
+      alert('Please fill in code and value');
+      return;
+    }
 
-    // ✅ Load upcoming staff salaries
-    const loadUpcomingStaffSalaries = async () => {
-        try {
-            const data = await api.getUpcomingStaffSalaries();
-            
-            const colors = ['#E74C3C', '#3498DB', '#2ECC71', '#F39C12', '#9B59B6', '#1ABC9C', '#E67E22', '#95A5A6', '#D4A574', '#34495E'];
-            const getRandomColor = () => colors[Math.floor(Math.random() * colors.length)];
-            
-            const transformedSalaries = data.map(entry => ({
-                id: entry.id,
-                staffId: entry.staff_id || entry.id,
-                name: entry.name,
-                role: entry.role,
-                avatar: entry.name.charAt(0).toUpperCase(),
-                color: getRandomColor(),
-                amount: `₹${entry.salary.toLocaleString('en-IN')}`,
-                amountRaw: entry.salary,
-                cycle: new Date(entry.due_date || entry.dueDate).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }),
-                dueDate: entry.due_date || entry.dueDate,
-                status: 'Scheduled',
-                category: 'Salaries & Wages'
-            }));
-            
-            setAutoAddedPayments(transformedSalaries);
-        } catch (error) {
-            console.error('Failed to load upcoming staff salaries:', error);
-        }
-    };
+    try {
+      const payload = {
+        ...newOffer,
+        discount_value: parseFloat(newOffer.discount_value)
+      };
 
-    const formatDate = (dateString) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    };
+      const response = await fetch(`${API_BASE_URL}/api/v1/coupons/`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
 
-    const formatAmount = (amount) => {
-        return `₹${parseFloat(amount).toLocaleString('en-IN')}`;
-    };
+      if (!response.ok) throw new Error('Failed to create offer');
+      
+      alert('Offer created successfully!');
+      setNewOffer({ 
+        code: '', 
+        discount_type: 'percentage', 
+        discount_value: '', 
+        min_order_amount: 0,
+        max_uses: 0,
+        valid_from: new Date().toISOString(),
+        valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        description: '' 
+      });
+      setShowOfferModal(false);
+      fetchOffers(); // Refresh offers list
+    } catch (error) {
+      handleApiError(error, 'addOffer');
+    }
+  };
 
-    // ✅ Filter expenses based on all filter criteria
-    const getFilteredExpenses = () => {
-        let filtered = [...expenses];
+  const addStaff = async () => {
+    if (!newStaff.name || !newStaff.salary) {
+      alert('Please fill in name and salary');
+      return;
+    }
 
-        // Search filter
-        if (searchQuery.trim()) {
-            const query = searchQuery.toLowerCase();
-            filtered = filtered.filter(expense => 
-                expense.title.toLowerCase().includes(query) ||
-                expense.category.toLowerCase().includes(query) ||
-                expense.notes?.toLowerCase().includes(query)
-            );
-        }
+    try {
+      const payload = {
+        ...newStaff,
+        salary: parseFloat(newStaff.salary)
+      };
 
-        // Category filter
-        if (categoryFilter !== 'All') {
-            filtered = filtered.filter(expense => expense.category === categoryFilter);
-        }
+      const response = await fetch(`${API_BASE_URL}/api/v1/staff/`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
 
-        // Payment mode filter
-        if (paymentModeFilter !== 'All') {
-            filtered = filtered.filter(expense => expense.payment_mode === paymentModeFilter);
-        }
+      if (!response.ok) throw new Error('Failed to add staff');
+      
+      alert('Staff member added successfully!');
+      setNewStaff({ 
+        name: '', 
+        role: 'Cashier', 
+        salary: '', 
+        joined: new Date().toISOString().split('T')[0],
+        phone: '',
+        aadhar: ''
+      });
+      setShowStaffModal(false);
+      fetchStaff(); // Refresh staff list
+    } catch (error) {
+      handleApiError(error, 'addStaff');
+    }
+  };
 
-        // Date range filter
-        if (dateRangeFilter === 'Custom' && startDate && endDate) {
-            filtered = filtered.filter(expense => {
-                const expenseDate = new Date(expense.date);
-                const start = new Date(startDate);
-                const end = new Date(endDate);
-                return expenseDate >= start && expenseDate <= end;
-            });
-        } else if (dateRangeFilter === 'Today') {
-            const today = new Date().toISOString().split('T')[0];
-            filtered = filtered.filter(expense => expense.date === today);
-        } else if (dateRangeFilter === 'This Week') {
-            const now = new Date();
-            const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
-            filtered = filtered.filter(expense => new Date(expense.date) >= weekStart);
-        } else if (dateRangeFilter === 'This Month') {
-            const now = new Date();
-            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-            filtered = filtered.filter(expense => new Date(expense.date) >= monthStart);
-        } else if (dateRangeFilter === 'Last Month') {
-            const now = new Date();
-            const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-            const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-            filtered = filtered.filter(expense => {
-                const expenseDate = new Date(expense.date);
-                return expenseDate >= lastMonthStart && expenseDate <= lastMonthEnd;
-            });
-        }
+  const addExpense = async () => {
+    if (!newExpense.title || !newExpense.amount) {
+      alert('Please fill in title and amount');
+      return;
+    }
 
-        return filtered;
-    };
+    try {
+      const payload = {
+        ...newExpense,
+        amount: parseFloat(newExpense.amount)
+      };
 
-    // ✅ Get unique categories from expenses
-    const getUniqueCategories = () => {
-        const categories = new Set(expenses.map(e => e.category));
-        return ['All', ...Array.from(categories)];
-    };
+      const response = await fetch(`${API_BASE_URL}/api/v1/expenses/`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
 
-    // ✅ Get unique payment modes from expenses
-    const getUniquePaymentModes = () => {
-        const modes = new Set(expenses.map(e => e.payment_mode));
-        return ['All', ...Array.from(modes)];
-    };
+      if (!response.ok) throw new Error('Failed to add expense');
+      
+      alert('Expense added successfully!');
+      setNewExpense({ 
+        title: '', 
+        amount: '', 
+        date: new Date().toISOString().split('T')[0], 
+        category: 'Supplies',
+        subtitle: 'Manual entry',
+        type: 'manual',
+        account: 'Cashbook',
+        tax: 0,
+        payment_mode: 'Cash',
+        notes: ''
+      });
+      setShowExpenseModal(false);
+      fetchExpenses(); // Refresh expenses list
+      fetchDailyStats(); // Refresh stats to update expenses
+    } catch (error) {
+      handleApiError(error, 'addExpense');
+    }
+  };
 
-    // ✅ Reset all filters
-    const handleResetFilters = () => {
-        setSearchQuery('');
-        setCategoryFilter('All');
-        setPaymentModeFilter('All');
-        setDateRangeFilter('This Month');
-        setStartDate('');
-        setEndDate('');
-    };
+  // Load all data on component mount
+  useEffect(() => {
+    if (authToken) {
+      fetchDailyStats();
+      fetchOrders();
+      fetchCustomers();
+      fetchOffers();
+      fetchStaff();
+      fetchExpenses();
+    }
+  }, [authToken]);
 
-    const handleEdit = async (id) => {
-        try {
-            const expense = await api.getExpense(id);
-            setFormData({
-                title: expense.title,
-                date: expense.date,
-                category: expense.category,
-                account: expense.account || 'Cashbook',
-                amount: expense.amount.toString(),
-                tax: expense.tax?.toString() || '0',
-                payment_mode: expense.payment_mode || 'Cash',
-                notes: expense.notes || '',
-                subtitle: expense.subtitle || 'Manual entry',
-                type: expense.type || 'manual'
-            });
-            setEditingId(id);
-            setShowAddForm(true);
-        } catch (error) {
-            alert('Failed to load expense details.');
-        }
-    };
+  // Navigation handlers
+  const handleNavigateToPOS = () => {
+    if (onNavigate) {
+      onNavigate('pos');
+    }
+  };
 
-    const handleDelete = async (id) => {
-        if (window.confirm('Are you sure you want to delete this expense?')) {
-            try {
-                await api.deleteExpense(id);
-                await loadExpenses();
-                alert('Expense deleted successfully!');
-            } catch (error) {
-                alert('Failed to delete expense.');
-            }
-        }
-    };
+  const handleNavigateToMenu = () => {
+    if (onNavigate) {
+      onNavigate('menu');
+    }
+  };
 
-    const handleView = async (id) => {
-        try {
-            const expense = await api.getExpense(id);
-            alert(`Expense Details:\n\nTitle: ${expense.title}\nCategory: ${expense.category}\nAmount: ${formatAmount(expense.amount)}\nDate: ${formatDate(expense.date)}\nNotes: ${expense.notes || 'N/A'}`);
-        } catch (error) {
-            alert('Failed to load expense details.');
-        }
-    };
+  const handleNavigateToReports = () => {
+    if (onNavigate) {
+      onNavigate('reports');
+    }
+  };
 
-    // ✅ Handle adding salary from upcoming payments - FIXED VERSION
-    const handleAddNow = async (staffId) => {
-        const payment = autoAddedPayments.find(p => p.staffId === staffId);
-        if (!payment) return;
+  const handleNavigateToPastOrders = () => {
+    if (onNavigate) {
+      onNavigate('past-orders');
+    }
+  };
 
-        try {
-            setLoading(true);
-            
-            // Create expense from salary
-            const expenseData = {
-                title: `Salary: ${payment.name}`,
-                category: 'Salaries & Wages',
-                amount: payment.amountRaw,
-                date: new Date().toISOString().split('T')[0],
-                subtitle: `Auto-added by Staff Payroll - ${payment.role}`,
-                type: 'auto',
-                account: 'Cashbook',
-                tax: 0,
-                payment_mode: 'Cash',
-                notes: `Monthly salary payment for ${payment.name} (${payment.role}) - Cycle: ${payment.cycle}`
-            };
+  const handleSeeAllOrders = () => {
+    handleNavigateToPastOrders();
+  };
 
-            await api.createExpense(expenseData);
-            
-            // Call backend to mark salary as paid
-            const tokenKeys = ['access_token', 'acces_Token', 'token', 'authToken'];
-            let token = null;
-            
-            for (const key of tokenKeys) {
-                const value = localStorage.getItem(key);
-                if (value && value.length > 10) {
-                    token = value;
-                    break;
-                }
-            }
+  // Computed values
+  const displayedOrders = showAllOrders ? recentOrders : recentOrders.slice(0, 3);
 
-            if (token) {
-                await fetch(`${API_BASE_URL}/staff/salaries/${staffId}/add`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-            }
-
-            alert('Salary entry added successfully!');
-            
-            // IMMEDIATELY remove from UI
-            setAutoAddedPayments(prevPayments => 
-                prevPayments.filter(payment => payment.staffId !== staffId)
-            );
-            
-            // Then refresh both lists from server
-            await loadExpenses();
-            await loadUpcomingStaffSalaries();
-            
-        } catch (error) {
-            alert('Failed to add salary entry.');
-            console.error('Error:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleReset = () => {
-        setFormData({
-            title: '',
-            date: new Date().toISOString().split('T')[0],
-            category: '',
-            account: 'Cashbook',
-            amount: '0.00',
-            tax: '0',
-            payment_mode: 'Cash',
-            notes: '',
-            subtitle: 'Manual entry',
-            type: 'manual'
-        });
-        setEditingId(null);
-    };
-
-    const handleSaveDraft = () => {
-        if (!formData.title || !formData.category || parseFloat(formData.amount) === 0) {
-            alert('Please fill in at least Title, Category, and Amount to save as draft.');
-            return;
-        }
-        alert('Draft saved successfully! You can continue editing later.');
-    };
-
-    const handleAddExpense = async () => {
-        if (!formData.title || !formData.category || parseFloat(formData.amount) === 0) {
-            alert('Please fill in Title, Category, and Amount fields.');
-            return;
-        }
-
-        setLoading(true);
-        try {
-            const expenseData = {
-                title: formData.title,
-                category: formData.category,
-                amount: parseFloat(formData.amount),
-                date: formData.date,
-                subtitle: formData.subtitle,
-                type: formData.type,
-                account: formData.account,
-                tax: parseFloat(formData.tax) || 0,
-                payment_mode: formData.payment_mode,
-                notes: formData.notes
-            };
-
-            if (editingId) {
-                await api.updateExpense(editingId, expenseData);
-                alert('Expense updated successfully!');
-            } else {
-                await api.createExpense(expenseData);
-                alert('Expense added successfully!');
-            }
-
-            await loadExpenses();
-            handleReset();
-            setShowAddForm(false);
-        } catch (error) {
-            alert(editingId ? 'Failed to update expense.' : 'Failed to add expense.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handlePresetClick = (preset) => {
-        setFormData({
-            ...formData,
-            title: preset.label,
-            category: preset.category,
-            amount: preset.amount.replace('₹', '').replace(',', '')
-        });
-    };
-
-    const handleExport = () => {
-        const filtered = getFilteredExpenses();
-        const csvContent = filtered.map(e =>
-            `${e.title},${e.category},${formatAmount(e.amount)},${formatDate(e.date)}`
-        ).join('\n');
-        const blob = new Blob([`Title,Category,Amount,Date\n${csvContent}`], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `expenses_${new Date().toISOString().split('T')[0]}.csv`;
-        a.click();
-    };
-
-    const filteredExpenses = getFilteredExpenses();
-    const hasActiveFilters = searchQuery.trim() || categoryFilter !== 'All' || paymentModeFilter !== 'All' || dateRangeFilter !== 'This Month';
-
-    return (
-        <div className="min-h-screen bg-background">
-            <div className="p-3 sm:p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3">
-                    <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground">Expenses</h1>
-                    <div className="flex gap-2 w-full sm:w-auto">
-                        <button
-                            onClick={handleExport}
-                            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors bg-transparent text-foreground border border-border hover:bg-muted text-sm"
-                        >
-                            <Download size={16} />
-                            <span className="text-xs sm:text-sm">Export</span>
-                        </button>
-                        <button
-                            onClick={() => {
-                                handleReset();
-                                setShowAddForm(true);
-                            }}
-                            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90 text-sm"
-                        >
-                            <Plus size={16} />
-                            <span className="text-xs sm:text-sm">New Expense</span>
-                        </button>
-                    </div>
-                </div>
-
-                {/* Loading State */}
-                {loading && expenses.length === 0 && (
-                    <div className="text-center py-8">
-                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                        <p className="mt-2 text-sm text-muted-foreground">Loading...</p>
-                    </div>
-                )}
-
-                {/* All Expenses Table */}
-                {!loading || expenses.length > 0 ? (
-                    <div className="rounded-lg px-3 sm:px-4 md:px-5 py-4 mb-4 sm:mb-6 bg-card border border-border">
-                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3">
-                            <h2 className="text-base sm:text-lg font-bold text-foreground">All Expenses</h2>
-                            <div className="flex gap-2 w-full sm:w-auto">
-                                <span className="px-3 py-1.5 rounded-lg text-xs bg-muted text-muted-foreground border border-border whitespace-nowrap">
-                                    {filteredExpenses.length} expense{filteredExpenses.length !== 1 ? 's' : ''}
-                                </span>
-                                <button
-                                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                                    onClick={() => setShowFilters(!showFilters)}
-                                >
-                                    <Filter size={14} />
-                                    <span>Filters</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* ✅ Filter Panel */}
-                        {showFilters && (
-                            <div className="bg-muted rounded-lg p-3 sm:p-4 mb-4 border border-border">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                                    {/* Search */}
-                                    <div className="lg:col-span-2">
-                                        <label className="block text-xs text-muted-foreground mb-1.5">Search</label>
-                                        <div className="relative">
-                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                                            <input
-                                                type="text"
-                                                placeholder="Search by title, category..."
-                                                value={searchQuery}
-                                                onChange={(e) => setSearchQuery(e.target.value)}
-                                                className="w-full bg-background border border-border rounded-lg py-2 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Category */}
-                                    <div>
-                                        <label className="block text-xs text-muted-foreground mb-1.5">Category</label>
-                                        <select
-                                            value={categoryFilter}
-                                            onChange={(e) => setCategoryFilter(e.target.value)}
-                                            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                                        >
-                                            {getUniqueCategories().map(cat => (
-                                                <option key={cat} value={cat}>{cat}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    {/* Payment Mode */}
-                                    <div>
-                                        <label className="block text-xs text-muted-foreground mb-1.5">Payment Mode</label>
-                                        <select
-                                            value={paymentModeFilter}
-                                            onChange={(e) => setPaymentModeFilter(e.target.value)}
-                                            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                                        >
-                                            {getUniquePaymentModes().map(mode => (
-                                                <option key={mode} value={mode}>{mode}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    {/* Date Range */}
-                                    <div>
-                                        <label className="block text-xs text-muted-foreground mb-1.5">Date Range</label>
-                                        <select
-                                            value={dateRangeFilter}
-                                            onChange={(e) => setDateRangeFilter(e.target.value)}
-                                            className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                                        >
-                                            <option value="Today">Today</option>
-                                            <option value="This Week">This Week</option>
-                                            <option value="This Month">This Month</option>
-                                            <option value="Last Month">Last Month</option>
-                                            <option value="Custom">Custom Range</option>
-                                            <option value="All Time">All Time</option>
-                                        </select>
-                                    </div>
-
-                                    {/* Custom Date Range */}
-                                    {dateRangeFilter === 'Custom' && (
-                                        <>
-                                            <div>
-                                                <label className="block text-xs text-muted-foreground mb-1.5">Start Date</label>
-                                                <input
-                                                    type="date"
-                                                    value={startDate}
-                                                    onChange={(e) => setStartDate(e.target.value)}
-                                                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                                                />
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs text-muted-foreground mb-1.5">End Date</label>
-                                                <input
-                                                    type="date"
-                                                    value={endDate}
-                                                    onChange={(e) => setEndDate(e.target.value)}
-                                                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                                                />
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-
-                                {/* Reset Button */}
-                                {hasActiveFilters && (
-                                    <div className="mt-3 flex justify-end">
-                                        <button
-                                            onClick={handleResetFilters}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-background text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors border border-border"
-                                        >
-                                            <RotateCw className="w-3 h-3" />
-                                            <span>Reset Filters</span>
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Mobile Card View */}
-                        <div className="block sm:hidden space-y-3">
-                            {filteredExpenses.map((expense, index) => (
-                                <div key={expense.id} className="bg-muted rounded-lg p-3 border border-border">
-                                    <div className="flex items-start justify-between mb-2">
-                                        <div className="flex items-center gap-2 flex-1 min-w-0">
-                                            <div className="min-w-0 flex-1">
-                                                <div className="font-bold text-sm text-foreground truncate">{expense.title}</div>
-                                                <div className="text-xs text-muted-foreground truncate">{expense.subtitle}</div>
-                                            </div>
-                                        </div>
-                                        <span className="text-sm font-semibold text-foreground whitespace-nowrap ml-2">
-                                            {formatAmount(expense.amount)}
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
-                                        <span>{expense.category}</span>
-                                        <span>{formatDate(expense.date)}</span>
-                                    </div>
-                                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
-                                        {expense.type=== 'auto' ? (
-<>
-<span className="px-2 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground">Auto</span>
-<button
-onClick={() => handleView(expense.id)}
-className="flex items-center gap-1 px-2 py-1 rounded-lg transition-colors text-xs text-foreground border border-border hover:bg-muted"
->
-<Eye size={12} />
-View
-</button>
-</>
-) : (
-<>
-<button
-onClick={() => handleEdit(expense.id)}
-className="p-1.5 rounded transition-colors text-primary hover:bg-primary/10"
->
-<Edit2 size={14} />
-</button>
-<button
-onClick={() => handleDelete(expense.id)}
-className="p-1.5 rounded transition-colors text-red-500 hover:bg-red-500/10"
->
-<Trash2 size={14} />
-</button>
-</>
-)}
-</div>
-</div>
-))}
-</div>{/* Desktop Table View */}
-                    <div className="hidden sm:block overflow-x-auto">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="bg-primary/10 border-b border-border">
-                                    <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">#</th>
-                                    <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Title</th>
-                                    <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Category</th>
-                                    <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Amount</th>
-                                    <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground hidden md:table-cell">Date</th>
-                                    <th className="text-right font-bold py-3 px-3 text-sm text-muted-foreground">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredExpenses.map((expense, index) => (
-                                    <tr key={expense.id} className="border-b border-border">
-                                        <td className="py-4 px-3">
-                                            <span className="text-sm text-foreground">{index + 1}</span>
-                                        </td>
-                                        <td className="py-4 px-3">
-                                            <div className="flex items-center gap-2">
-                                                <div className="min-w-0">
-                                                    <div className="font-bold text-sm text-foreground">{expense.title}</div>
-                                                    <div className="text-xs text-muted-foreground">{expense.subtitle}</div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="py-4 px-3">
-                                            <span className="text-sm text-foreground">{expense.category}</span>
-                                        </td>
-                                        <td className="py-4 px-3">
-                                            <span className="text-sm font-semibold text-foreground whitespace-nowrap">
-                                                {formatAmount(expense.amount)}
-                                            </span>
-                                        </td>
-                                        <td className="py-4 px-3 hidden md:table-cell">
-                                            <span className="text-sm text-foreground whitespace-nowrap">
-                                                {formatDate(expense.date)}
-                                            </span>
-                                        </td>
-                                        <td className="py-4 px-3">
-                                            <div className="flex items-center justify-end gap-2">
-                                                {expense.type === 'auto' ? (
-                                                    <>
-                                                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground">
-                                                            Auto
-                                                        </span>
-                                                        <button
-                                                            onClick={() => handleView(expense.id)}
-                                                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors text-xs text-foreground border border-border hover:bg-muted"
-                                                        >
-                                                            <Eye size={14} />
-                                                            View
-                                                        </button>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <button
-                                                            onClick={() => handleEdit(expense.id)}
-                                                            className="p-2 rounded transition-colors text-primary hover:bg-primary/10"
-                                                        >
-                                                            <Edit2 size={16} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDelete(expense.id)}
-                                                            className="p-2 rounded transition-colors text-red-500 hover:bg-red-500/10"
-                                                        >
-                                                            <Trash2 size={16} />
-                                                        </button>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {filteredExpenses.length === 0 && (
-                        <div className="text-center py-8">
-                            <Search className="w-12 h-12 mx-auto mb-3 opacity-30 text-muted-foreground" />
-                            <p className="text-sm font-medium text-foreground mb-1">No expenses found</p>
-                            <p className="text-xs text-muted-foreground mb-4">
-                                {hasActiveFilters 
-                                    ? 'Try adjusting your filters or search criteria'
-                                    : 'Add your first expense to get started'
-                                }
-                            </p>
-                            {hasActiveFilters && (
-                                <button
-                                    onClick={handleResetFilters}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                                >
-                                    <RotateCw className="w-3 h-3" />
-                                    <span>Clear filters</span>
-                                </button>
-                            )}
-                        </div>
-                    )}
-                </div>
-            ) : null}
-
-            {/* Auto-Added Staff Payments */}
-            <div className="rounded-lg px-3 sm:px-4 md:px-5 py-4 bg-card border border-border">
-                <div className="flex flex-col gap-2 mb-4">
-                    <h2 className="text-base sm:text-lg font-bold text-foreground">Auto-Added Staff Payments</h2>
-                    <span className="text-xs text-muted-foreground">Entries generated from staff joining-date cycles</span>
-                </div>
-
-                {/* Mobile Card View */}
-                <div className="block sm:hidden space-y-3">
-                    {autoAddedPayments.map((payment) => (
-                        <div key={payment.id} className="bg-muted rounded-lg p-3 border border-border">
-                            <div className="flex items-start justify-between mb-2">
-                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                    <div
-                                        className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 text-white"
-                                        style={{ backgroundColor: payment.color }}
-                                    >
-                                        {payment.avatar}
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <div className="font-bold text-sm text-foreground truncate">{payment.name}</div>
-                                        <div className="text-xs text-muted-foreground truncate">{payment.role}</div>
-                                    </div>
-                                </div>
-                                <span className="text-sm font-semibold text-foreground whitespace-nowrap ml-2">{payment.amount}</span>
-                            </div>
-                            <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
-                                <span>{payment.cycle}</span>
-                                <span
-                                    className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500 text-white"
-                                >
-                                    {payment.status}
-                                </span>
-                            </div>
-                            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
-                                <button
-                                    onClick={() => handleAddNow(payment.staffId)}
-                                    className="flex items-center gap-1 px-2 py-1 rounded-lg transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                                >
-                                    <Plus size={12} />
-                                    Add Now
-                                </button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Desktop Table View */}
-                <div className="hidden sm:block overflow-x-auto">
-                    <table className="w-full">
-                        <thead>
-                            <tr className="bg-primary/10 border-b border-border">
-                                <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Staff</th>
-                                <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Amount</th>
-                                <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground hidden md:table-cell">Cycle</th>
-                                <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Status</th>
-                                <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground hidden lg:table-cell">Category</th>
-                                <th className="text-right font-bold py-3 px-3 text-sm text-muted-foreground">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {autoAddedPayments.map((payment) => (
-                                <tr key={payment.id} className="border-b border-border">
-                                    <td className="py-4 px-3">
-                                        <div className="flex items-center gap-2">
-                                            <div
-                                                className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 text-white"
-                                                style={{ backgroundColor: payment.color }}
-                                            >
-                                                {payment.avatar}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <div className="font-bold text-sm text-foreground truncate">{payment.name}</div>
-                                                <div className="text-xs text-muted-foreground truncate">{payment.role}</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="py-4 px-3">
-                                        <span className="text-sm font-semibold text-foreground whitespace-nowrap">{payment.amount}</span>
-                                    </td>
-                                    <td className="py-4 px-3 hidden md:table-cell">
-                                        <span className="text-sm text-foreground">{payment.cycle}</span>
-                                    </td>
-                                    <td className="py-4 px-3">
-                                        <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-blue-500 text-white">
-                                            {payment.status}
-                                        </span>
-                                    </td>
-                                    <td className="py-4 px-3 hidden lg:table-cell">
-                                        <span className="text-xs text-muted-foreground">{payment.category}</span>
-                                    </td>
-                                    <td className="py-4 px-3">
-                                        <div className="flex justify-end">
-                                            <button
-                                                onClick={() => handleAddNow(payment.staffId)}
-                                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                                            >
-                                                <Plus size={14} />
-                                                Add Now
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-
-                {autoAddedPayments.length === 0 && (
-                    <div className="text-center py-8">
-                        <p className="text-sm text-muted-foreground">No upcoming staff payments.</p>
-                    </div>
-                )}
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen">
+      {/* Customer Modal */}
+      {showCustomerModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Add Customer</h3>
+            <input 
+              type="text"
+              placeholder="First name *"
+              value={newCustomer.first_name}
+              onChange={(e) => setNewCustomer({...newCustomer, first_name: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="Last name"
+              value={newCustomer.last_name}
+              onChange={(e) => setNewCustomer({...newCustomer, last_name: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="+91 Phone number *"
+              value={newCustomer.phone}
+              onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="email"
+              placeholder="example@mail.com"
+              value={newCustomer.email}
+              onChange={(e) => setNewCustomer({...newCustomer, email: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="Address"
+              value={newCustomer.address}
+              onChange={(e) => setNewCustomer({...newCustomer, address: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="City"
+              value={newCustomer.city}
+              onChange={(e) => setNewCustomer({...newCustomer, city: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="State"
+              value={newCustomer.state}
+              onChange={(e) => setNewCustomer({...newCustomer, state: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="ZIP Code"
+              value={newCustomer.zip_code}
+              onChange={(e) => setNewCustomer({...newCustomer, zip_code: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <div className="flex gap-2">
+              <button onClick={addCustomer} className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Save</button>
+              <button onClick={() => setShowCustomerModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
             </div>
+          </div>
         </div>
+      )}
 
-        {/* Add/Edit Expense Modal */}
-        <Modal
-            isOpen={showAddForm}
-            onClose={() => {
-                setShowAddForm(false);
-                handleReset();
-            }}
-            title={editingId ? "Edit Expense" : "Add Expense"}
-            subtitle={editingId ? "Update expense details" : "Create a manual expense with full details"}
-        >
-            <div className="space-y-4">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* Expense Details */}
-                    <div className="rounded-lg px-3 sm:px-4 py-4 bg-muted border border-border">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-sm font-bold text-foreground">Expense Details</h3>
-                            <button
-                                onClick={handleReset}
-                                className="flex items-center gap-2 px-3 py-1.5 rounded-lg font-medium transition-colors text-xs text-primary border border-primary hover:bg-primary/10"
-                            >
-                                <RotateCw size={14} />
-                                Reset
-                            </button>
-                        </div>
-
-                        <div className="space-y-3">
-                            <div>
-                                <label className="block text-xs mb-1.5 text-muted-foreground">Title</label>
-                                <input
-                                    type="text"
-                                    placeholder="Enter expense title"
-                                    value={formData.title}
-                                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs mb-1.5 text-muted-foreground">Date</label>
-                                <input
-                                    type="date"
-                                    value={formData.date}
-                                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs mb-1.5 text-muted-foreground">Category</label>
-                                <select
-                                    value={formData.category}
-                                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
-                                >
-                                    <option value="">Select category</option>
-                                    <option>Kitchen Supplies</option>
-                                    <option>Salaries & Wages</option>
-                                    <option>Utilities</option>
-                                    <option>Rent</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs mb-1.5 text-muted-foreground">Account</label>
-                                <input
-                                    type="text"
-                                    value={formData.account}
-                                    onChange={(e) => setFormData({ ...formData, account: e.target.value })}
-                                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-2">
-                                <div>
-                                    <label className="block text-xs mb-1.5 text-muted-foreground">Amount</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={formData.amount}
-                                        onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                                        className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs mb-1.5 text-muted-foreground">Tax (%)</label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={formData.tax}
-                                        onChange={(e) => setFormData({ ...formData, tax: e.target.value })}
-                                        className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs mb-1.5 text-muted-foreground">Mode</label>
-                                    <input
-                                        type="text"
-                                        value={formData.payment_mode}
-                                        onChange={(e) => setFormData({ ...formData, payment_mode: e.target.value })}
-                                        className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs mb-1.5 text-muted-foreground">Notes</label>
-                                <textarea
-                                    placeholder="Optional notes"
-                                    value={formData.notes}
-                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                    rows="3"
-                                    className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-                                />
-                            </div>
-
-                            <div className="flex flex-col sm:flex-row gap-2 pt-3">
-                                <button
-                                    onClick={handleSaveDraft}
-                                    className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm bg-transparent text-foreground border border-border hover:bg-muted"
-                                >
-                                    <FileText size={16} />
-                                    Save Draft
-                                </button>
-                                <button
-                                    onClick={handleAddExpense}
-                                    disabled={loading}
-                                    className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors text-sm bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                                >
-                                    {loading ? (
-                                        <>
-                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                            Processing...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Plus size={16} />
-                                            {editingId ? 'Update Expense' : 'Add Expense'}
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Quick Add Presets */}
-                    <div className="rounded-lg px-3 sm:px-4 py-4 bg-muted border border-border">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-sm font-bold text-foreground">Quick Add Presets</h3>
-                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-primary text-primary-foreground">
-                                This Month
-                            </span>
-                        </div>
-
-                        <p className="text-xs mb-3 text-muted-foreground">Use presets for frequent expenses</p>
-
-                        <div className="grid grid-cols-2 gap-2 mb-4">
-                            {presets.map((preset) => (
-                                <button
-                                    key={preset.id}
-                                    onClick={() => handlePresetClick(preset)}
-                                    className="flex items-center gap-2 px-3 py-2.5 rounded-lg font-medium transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                                >
-                                    <preset.icon size={16} className="flex-shrink-0" />
-                                    <div className="text-left min-w-0">
-                                        <div className="font-semibold truncate">{preset.label}</div>
-                                        <div className="text-xs opacity-90">{preset.amount}</div>
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-
-                        <div>
-                            <label className="block text-xs mb-1.5 text-muted-foreground">Attach Receipt</label>
-                            <label htmlFor="file-upload">
-                                <div
-                                    className="flex flex-col items-center justify-center gap-2 px-4 py-6 rounded-lg border-2 border-dashed cursor-pointer transition-colors border-border bg-background hover:border-primary"
-                                >
-                                    <Paperclip size={18} className="text-foreground" />
-                                    <div className="text-center">
-                                        <span className="text-sm text-foreground">Drop image/PDF</span>
-                                        <span className="text-xs ml-2 text-primary">Optional</span>
-                                    </div>
-                                </div>
-                            </label>
-                            <input
-                                id="file-upload"
-                                type="file"
-                                accept="image/*,.pdf"
-                                className="hidden"
-                                onChange={(e) => {
-                                    if (e.target.files?.[0]) {
-                                        alert(`File selected: ${e.target.files[0].name}`);
-                                    }
-                                }}
-                            />
-                        </div>
-                    </div>
-                </div>
+      {/* Offer Modal */}
+      {showOfferModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Create Offer</h3>
+            <input 
+              type="text"
+              placeholder="Coupon code (e.g. SAVE10) *"
+              value={newOffer.code}
+              onChange={(e) => setNewOffer({...newOffer, code: e.target.value.toUpperCase()})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <select 
+              value={newOffer.discount_type}
+              onChange={(e) => setNewOffer({...newOffer, discount_type: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            >
+              <option value="percentage">Percentage</option>
+              <option value="flat">Flat</option>
+            </select>
+            <input 
+              type="number"
+              placeholder="Value (e.g. 10 or 50) *"
+              value={newOffer.discount_value}
+              onChange={(e) => setNewOffer({...newOffer, discount_value: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="number"
+              placeholder="Minimum order amount"
+              value={newOffer.min_order_amount}
+              onChange={(e) => setNewOffer({...newOffer, min_order_amount: parseFloat(e.target.value) || 0})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="number"
+              placeholder="Max uses (0 for unlimited)"
+              value={newOffer.max_uses}
+              onChange={(e) => setNewOffer({...newOffer, max_uses: parseInt(e.target.value) || 0})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="Description"
+              value={newOffer.description}
+              onChange={(e) => setNewOffer({...newOffer, description: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <div className="flex gap-2">
+              <button onClick={addOffer} className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Create</button>
+              <button onClick={() => setShowOfferModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
             </div>
-        </Modal>
+          </div>
+        </div>
+      )}
+
+      {/* Staff Modal */}
+      {showStaffModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Add Staff</h3>
+            <input 
+              type="text"
+              placeholder="Full name *"
+              value={newStaff.name}
+              onChange={(e) => setNewStaff({...newStaff, name: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="Phone number (10 digits) *"
+              value={newStaff.phone}
+              onChange={(e) => setNewStaff({...newStaff, phone: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <select 
+              value={newStaff.role}
+              onChange={(e) => setNewStaff({...newStaff, role: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            >
+              <option value="Cashier">Cashier</option>
+              <option value="Chef">Chef</option>
+              <option value="Waiter">Waiter</option>
+              <option value="Manager">Manager</option>
+            </select>
+            <input 
+              type="number"
+              placeholder="Monthly salary (e.g. 15000) *"
+              value={newStaff.salary}
+              onChange={(e) => setNewStaff({...newStaff, salary: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="date"
+              value={newStaff.joined}
+              onChange={(e) => setNewStaff({...newStaff, joined: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="Aadhar number (optional)"
+              value={newStaff.aadhar}
+              onChange={(e) => setNewStaff({...newStaff, aadhar: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <div className="flex gap-2">
+              <button onClick={addStaff} className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Save</button>
+              <button onClick={() => setShowStaffModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Expense Modal */}
+      {showExpenseModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Add Expense</h3>
+            <input 
+              type="text"
+              placeholder="Expense title (e.g. Milk purchase) *"
+              value={newExpense.title}
+              onChange={(e) => setNewExpense({...newExpense, title: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="number"
+              placeholder="Amount (e.g. 2150) *"
+              value={newExpense.amount}
+              onChange={(e) => setNewExpense({...newExpense, amount: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="date"
+              value={newExpense.date}
+              onChange={(e) => setNewExpense({...newExpense, date: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <select 
+              value={newExpense.category}
+              onChange={(e) => setNewExpense({...newExpense, category: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            >
+              <option value="Supplies">Supplies</option>
+              <option value="Utilities">Utilities</option>
+              <option value="Salary">Salary</option>
+              <option value="Maintenance">Maintenance</option>
+            </select>
+            <select 
+              value={newExpense.payment_mode}
+              onChange={(e) => setNewExpense({...newExpense, payment_mode: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            >
+              <option value="Cash">Cash</option>
+              <option value="UPI">UPI</option>
+              <option value="Card">Card</option>
+              <option value="Bank Transfer">Bank Transfer</option>
+            </select>
+            <textarea 
+              placeholder="Notes (optional)"
+              value={newExpense.notes}
+              onChange={(e) => setNewExpense({...newExpense, notes: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+              rows="2"
+            />
+            <div className="flex gap-2">
+              <button onClick={addExpense} className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Save</button>
+              <button onClick={() => setShowExpenseModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-4">
+<h2 className="text-2xl font-semibold text-foreground">Dashboard</h2>
+<button
+onClick={() => {
+fetchDailyStats();
+fetchOrders();
+fetchCustomers();
+fetchOffers();
+fetchStaff();
+fetchExpenses();
+}}
+className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm"
+>
+Refresh Data
+</button>
+</div>
+  {/* Stats Cards */}
+  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
+      <div className="flex items-center justify-between mb-2 sm:mb-3">
+        <p className="text-muted-foreground text-xs sm:text-sm">Today Sales</p>
+        <DollarSign className="text-teal-400" size={18} />
+      </div>
+      <p className="text-xl sm:text-3xl font-bold text-card-foreground">
+        {isLoadingStats ? '...' : `₹${dailyStats.today_sales.toLocaleString()}`}
+      </p>
     </div>
-);};
-export default ExpensesManagement;
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
+      <div className="flex items-center justify-between mb-2 sm:mb-3">
+        <p className="text-muted-foreground text-xs sm:text-sm">Orders</p>
+        <ShoppingBag className="text-teal-400" size={18} />
+      </div>
+      <p className="text-xl sm:text-3xl font-bold text-card-foreground">
+        {isLoadingStats ? '...' : dailyStats.total_orders}
+      </p>
+    </div>
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
+      <div className="flex items-center justify-between mb-2 sm:mb-3">
+        <p className="text-muted-foreground text-xs sm:text-sm">Avg Ticket</p>
+        <TrendingUp className="text-teal-400" size={18} />
+      </div>
+      <p className="text-xl sm:text-3xl font-bold text-card-foreground">
+        {isLoadingStats ? '...' : `₹${dailyStats.avg_ticket.toLocaleString()}`}
+      </p>
+    </div>
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
+      <div className="flex items-center justify-between mb-2 sm:mb-3">
+        <p className="text-muted-foreground text-xs sm:text-sm">Expenses</p>
+        <Wallet className="text-teal-400" size={18} />
+      </div>
+      <p className="text-xl sm:text-3xl font-bold text-card-foreground">
+        {isLoadingStats ? '...' : `₹${dailyStats.total_expenses.toLocaleString()}`}
+      </p>
+    </div>
+  </div>
+
+  {/* Quick Links, Recent Orders, Activity */}
+  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+    {/* Quick Links */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-4">Quick Links</h3>
+      <div className="space-y-3">
+        <button 
+          onClick={handleNavigateToPOS}
+          className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
+        >
+          <div className="text-left">
+            <p className="font-medium text-sm sm:text-base">Open POS</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Start billing and print KOT</p>
+          </div>
+          <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Open</span>
+        </button>
+        <button 
+          onClick={handleNavigateToMenu}
+          className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
+        >
+          <div className="text-left">
+            <p className="font-medium text-sm sm:text-base">Manage Menu</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Categories, items and prices</p>
+          </div>
+          <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Menu</span>
+        </button>
+        <button 
+          onClick={handleNavigateToReports}
+          className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
+        >
+          <div className="text-left">
+            <p className="font-medium text-sm sm:text-base">View Reports</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Sales and orders</p>
+          </div>
+          <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Reports</span>
+        </button>
+      </div>
+    </div>
+
+    {/* Recent Orders */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Recent Orders</h3>
+        <button 
+          onClick={handleSeeAllOrders}
+          className="text-teal-400 text-xs sm:text-sm hover:underline"
+        >
+          See all
+        </button>
+      </div>
+      {isLoadingOrders ? (
+        <p className="text-center text-muted-foreground">Loading...</p>
+      ) : (
+        <div className="space-y-3">
+          {displayedOrders.length > 0 ? displayedOrders.map(order => (
+            <div key={order.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+              <div className="text-foreground">
+                <p className="font-medium text-xs sm:text-sm">#{order.id} • {order.type}</p>
+                <p className="text-xs text-muted-foreground">{order.time}</p>
+              </div>
+              <p className="font-semibold text-foreground text-sm sm:text-base">₹ {order.amount}</p>
+            </div>
+          )) : (
+            <p className="text-center text-muted-foreground text-sm">No orders yet</p>
+          )}
+        </div>
+      )}
+    </div>
+
+    {/* Activity */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-4">Activity</h3>
+      <div className="space-y-3">
+        {activities.map((activity, idx) => (
+          <div key={idx} className="flex items-center justify-between p-3 bg-muted rounded-lg hover:bg-secondary transition-colors">
+            <p className="text-foreground text-sm sm:text-base">{activity.action}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">{activity.time}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+
+  {/* Customers, Offers */}
+  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
+    {/* Customers */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Customers</h3>
+        <button 
+          onClick={() => setShowCustomerModal(true)}
+          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
+        >
+          Add
+        </button>
+      </div>
+      {isLoadingCustomers ? (
+        <p className="text-center text-muted-foreground">Loading...</p>
+      ) : (
+        <div className="space-y-2 mb-4">
+          {customers.length > 0 ? customers.slice(0, 5).map((cust, idx) => (
+            <div key={idx} className="p-3 bg-muted rounded-lg">
+              <p className="font-medium text-foreground text-sm sm:text-base">{cust.name}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">{cust.phone} • {cust.orders} orders</p>
+            </div>
+          )) : (
+            <p className="text-center text-muted-foreground text-sm">No customers yet</p>
+          )}
+        </div>
+      )}
+    </div>
+
+    {/* Offers */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Offers</h3>
+        <button 
+          onClick={() => setShowOfferModal(true)}
+          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
+        >
+          Create
+        </button>
+      </div>
+      {isLoadingOffers ? (
+        <p className="text-center text-muted-foreground">Loading...</p>
+      ) : (
+        <div className="space-y-2">
+          {offers.length > 0 ? offers.map((offer, idx) => (
+            <div key={idx} className="p-3 bg-muted rounded-lg">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-medium text-foreground text-sm sm:text-base">{offer.code}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">{offer.type} • {offer.value} • {offer.category}</p>
+                </div>
+                <button 
+                  onClick={() => alert(`Offer ${offer.code} disabled`)}
+                  className="text-xs text-red-400 hover:text-red-500"
+                >
+                  Disable
+                </button>
+              </div>
+            </div>
+          )) : (
+            <p className="text-center text-muted-foreground text-sm">No offers yet</p>
+          )}
+        </div>
+      )}
+    </div>
+  </div>
+
+  {/* Staff, Expenses */}
+  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+    {/* Staff */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Staff</h3>
+        <button 
+          onClick={() => setShowStaffModal(true)}
+          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
+        >
+          Add
+        </button>
+      </div>
+      {isLoadingStaff ? (
+        <p className="text-center text-muted-foreground">Loading...</p>
+      ) : (
+        <div className="space-y-2">
+          {staff.length > 0 ? staff.map((member, idx) => (
+            <div key={idx} className="p-3 bg-muted rounded-lg">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-medium text-foreground text-sm sm:text-base">{member.name}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">{member.role} • {member.payscale}</p>
+                </div>
+                <button 
+                  onClick={() => alert(`Edit ${member.name}`)}
+                  className="text-xs text-teal-400 hover:text-teal-500"
+                >
+                  Edit
+                </button>
+              </div>
+            </div>
+          )) : (
+            <p className="text-center text-muted-foreground text-sm">No staff members yet</p>
+          )}
+        </div>
+      )}
+    </div>
+
+    {/* Expenses */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Expenses</h3>
+        <button 
+          onClick={() => setShowExpenseModal(true)}
+          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
+        >
+          Add
+        </button>
+      </div>
+      {isLoadingExpenses ? (
+        <p className="text-center text-muted-foreground">Loading...</p>
+      ) : (
+        <div className="space-y-2">
+          {expenses.length > 0 ? expenses.slice(0, 5).map((exp, idx) => (
+            <div key={idx} className="p-3 bg-muted rounded-lg">
+              <p className="font-medium text-sm text-foreground">{exp.title}</p>
+              <div className="flex justify-between items-center mt-1">
+                <p className="text-xs sm:text-sm text-muted-foreground">{exp.date}</p>
+                <p className="font-semibold text-foreground text-sm sm:text-base">{exp.amount}</p>
+              </div>
+            </div>
+          )) : (
+            <p className="text-center text-muted-foreground text-sm">No expenses yet</p>
+          )}
+        </div>
+      )}
+    </div>
+  </div>
+</div>
+);
+};
+export default Dashboard;
