@@ -753,17 +753,6 @@ const ReportsPage = () => {
           </div>
         )}
 
-        {/* Debug Info - Remove this after fixing */}
-        <div className="mb-4 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-          <h3 className="text-sm font-semibold mb-2">Debug Info:</h3>
-          <div className="text-xs space-y-1">
-            <p>Sales Chart Data Length: {salesChartData.length}</p>
-            <p>Order Distribution Data Length: {orderDistributionData.length}</p>
-            <p>Expenses Chart Data Length: {expensesChartData.length}</p>
-            <p className="text-blue-600 dark:text-blue-400">Check browser console for detailed logs 🔍</p>
-          </div>
-        </div>
-
         {/* Filters and Key Metrics */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-6 lg:mb-8">
           {/* Filters */}
@@ -897,32 +886,34 @@ const ReportsPage = () => {
           <div className="rounded-xl px-3 sm:px-4 py-4 bg-card border border-border">
             <h2 className="text-sm sm:text-base font-semibold mb-3 text-card-foreground">Key Metrics</h2>
             <div className="space-y-2.5">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <div className="text-center p-2 rounded-lg bg-muted">
-                  <div className="text-xs text-muted-foreground mb-0.5">Sales</div>
-                  <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalSales}</div>
+                  <div className="text-xs text-muted-foreground mb-0.5 truncate">Sales</div>
+                  <div className="text-xs sm:text-sm lg:text-base font-bold text-foreground truncate">{keyMetrics.totalSales}</div>
                 </div>
                 <div className="text-center p-2 rounded-lg bg-muted">
-                  <div className="text-xs text-muted-foreground mb-0.5">Orders</div>
-                  <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalOrders}</div>
+                  <div className="text-xs text-muted-foreground mb-0.5 truncate">Orders</div>
+                  <div className="text-xs sm:text-sm lg:text-base font-bold text-foreground truncate">{keyMetrics.totalOrders}</div>
                 </div>
-                <div className="text-center p-2 rounded-lg bg-muted col-span-2 sm:col-span-1">
-                  <div className="text-xs text-muted-foreground mb-0.5">Expenses</div>
-                  <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalExpenses}</div>
+                <div className="text-center p-2 rounded-lg bg-muted">
+                  <div className="text-xs text-muted-foreground mb-0.5 truncate">Expenses</div>
+                  <div className="text-xs sm:text-sm lg:text-base font-bold text-foreground truncate">{keyMetrics.totalExpenses}</div>
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div className="text-center p-2 rounded-lg bg-muted">
-                  <div className="text-xs text-muted-foreground mb-0.5">Avg</div>
-                  <div className="text-xs sm:text-sm font-bold text-foreground">{keyMetrics.avgOrderValue}</div>
+                  <div className="text-xs text-muted-foreground mb-0.5 truncate">Avg</div>
+                  <div className="text-[10px] sm:text-xs lg:text-sm font-bold text-foreground truncate">{keyMetrics.avgOrderValue}</div>
                 </div>
                 <div className="text-center p-2 rounded-lg bg-muted">
-                  <div className="text-xs text-muted-foreground mb-0.5">Margin</div>
-                  <div className="text-xs sm:text-sm font-bold text-foreground">{keyMetrics.grossMargin}</div>
+                  <div className="text-xs text-muted-foreground mb-0.5 truncate">Margin</div>
+                  <div className="text-[10px] sm:text-xs lg:text-sm font-bold text-foreground truncate">{keyMetrics.grossMargin}</div>
                 </div>
                 <div className="text-center p-2 rounded-lg bg-muted">
-                  <div className="text-xs text-muted-foreground mb-0.5">Top</div>
-                  <div className="text-xs font-bold text-foreground">{keyMetrics.topCategory}</div>
+                  <div className="text-xs text-muted-foreground mb-0.5 truncate">Top</div>
+                  <div className="text-[10px] sm:text-xs font-bold text-foreground truncate" title={keyMetrics.topCategory}>
+                    {keyMetrics.topCategory.length > 8 ? keyMetrics.topCategory.substring(0, 8) + '...' : keyMetrics.topCategory}
+                  </div>
                 </div>
               </div>
             </div>
