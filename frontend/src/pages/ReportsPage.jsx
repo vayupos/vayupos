@@ -73,7 +73,7 @@ const ReportsPage = () => {
     return response;
   };
 
-  // Fetch Sales Report
+  // Fetch Sales Report - FIXED VERSION
   const fetchSalesReport = async () => {
     try {
       setLoading(true);
@@ -90,32 +90,60 @@ const ReportsPage = () => {
       }
       
       const data = await response.json();
-      console.log('Sales data:', data);
+      console.log('🔍 RAW Sales API Response:', data);
+      console.log('🔍 Is Array?', Array.isArray(data));
+      console.log('🔍 Data Type:', typeof data);
+      if (data && typeof data === 'object') {
+        console.log('🔍 Data Keys:', Object.keys(data));
+      }
+      
+      // Handle different response formats - check all possible structures
+      let salesArray = [];
+      if (Array.isArray(data)) {
+        salesArray = data;
+      } else if (data && data.data && Array.isArray(data.data)) {
+        salesArray = data.data;
+      } else if (data && data.results && Array.isArray(data.results)) {
+        salesArray = data.results;
+      } else if (data && data.items && Array.isArray(data.items)) {
+        salesArray = data.items;
+      }
+      
+      console.log('🔍 Extracted Sales Array:', salesArray);
+      console.log('🔍 Sales Array Length:', salesArray.length);
+      if (salesArray.length > 0) {
+        console.log('🔍 First Item Structure:', salesArray[0]);
+      }
       
       // Transform the API response to match your UI structure
-      if (data && Array.isArray(data)) {
-        const transformedData = data.map(item => ({
-          period: item.date || item.period,
+      if (salesArray && salesArray.length > 0) {
+        const transformedData = salesArray.map(item => ({
+          period: item.date || item.period || 'Unknown',
           orders: item.order_count || item.orders || 0,
           grossSales: `₹${(item.gross_sales || item.total_sales || 0).toLocaleString('en-IN')}`,
           discounts: `₹${(item.discounts || 0).toLocaleString('en-IN')}`,
           net: `₹${(item.net_sales || (item.total_sales - item.discounts) || 0).toLocaleString('en-IN')}`
         }));
         
+        console.log('✅ Transformed Sales Data:', transformedData);
         setSalesData(transformedData);
         
         // Prepare chart data
-        const chartData = data.map(item => ({
-          month: item.date || item.period,
+        const chartData = salesArray.map(item => ({
+          month: item.date || item.period || 'Unknown',
           sales: item.gross_sales || item.total_sales || 0,
-          net: item.net_sales || (item.total_sales - item.discounts) || 0
+          net: item.net_sales || ((item.total_sales || 0) - (item.discounts || 0))
         }));
-        setSalesChartData(chartData);
+        
+        console.log('✅ Sales Chart Data:', chartData);
+        setSalesChartData([...chartData]); // Force new array reference
 
         // Calculate key metrics
-        const totalSales = data.reduce((sum, item) => sum + (item.gross_sales || item.total_sales || 0), 0);
-        const totalOrders = data.reduce((sum, item) => sum + (item.order_count || item.orders || 0), 0);
-        const totalDiscounts = data.reduce((sum, item) => sum + (item.discounts || 0), 0);
+        const totalSales = salesArray.reduce((sum, item) => sum + (item.gross_sales || item.total_sales || 0), 0);
+        const totalOrders = salesArray.reduce((sum, item) => sum + (item.order_count || item.orders || 0), 0);
+        const totalDiscounts = salesArray.reduce((sum, item) => sum + (item.discounts || 0), 0);
+        
+        console.log('✅ Calculated Metrics - Sales:', totalSales, 'Orders:', totalOrders);
         
         setKeyMetrics(prev => ({
           ...prev,
@@ -123,10 +151,14 @@ const ReportsPage = () => {
           totalOrders: totalOrders.toString(),
           avgOrderValue: `₹${totalOrders > 0 ? Math.round(totalSales / totalOrders).toLocaleString('en-IN') : '0'}`
         }));
+      } else {
+        console.warn('⚠️ No sales data found in API response');
+        setSalesData([]);
+        setSalesChartData([]);
       }
     } catch (err) {
       setError(err.message);
-      console.error('Error fetching sales report:', err);
+      console.error('❌ Error fetching sales report:', err);
     } finally {
       setLoading(false);
     }
@@ -145,19 +177,25 @@ const ReportsPage = () => {
       }
       
       const data = await response.json();
-      console.log('Payment methods data:', data);
+      console.log('🔍 Payment methods data:', data);
       
-      if (data && Array.isArray(data)) {
-        const totalAmount = data.reduce((sum, item) => sum + (item.total_amount || 0), 0);
-        const totalCount = data.reduce((sum, item) => sum + (item.count || 0), 0);
+      // Handle different response formats
+      const paymentsArray = Array.isArray(data) ? data : 
+                           (data.data || data.results || data.items || []);
+      
+      if (paymentsArray && paymentsArray.length > 0) {
+        const totalAmount = paymentsArray.reduce((sum, item) => sum + (item.total_amount || 0), 0);
+        const totalCount = paymentsArray.reduce((sum, item) => sum + (item.count || 0), 0);
         
-        const transformedData = data.map((item, index) => ({
-          mode: item.payment_method || item.mode,
+        const transformedData = paymentsArray.map((item, index) => ({
+          mode: item.payment_method || item.mode || 'Unknown',
           count: item.count || 0,
           share: `${totalCount > 0 ? ((item.count / totalCount) * 100).toFixed(1) : 0}%`,
           amount: `₹${(item.total_amount || 0).toLocaleString('en-IN')}`,
           rank: index + 1
         }));
+        
+        console.log('✅ Transformed payment data:', transformedData);
         
         setOrdersData(prev => ({
           ...prev,
@@ -165,11 +203,11 @@ const ReportsPage = () => {
         }));
       }
     } catch (err) {
-      console.error('Error fetching payment methods report:', err);
+      console.error('❌ Error fetching payment methods report:', err);
     }
   };
 
-  // UPDATED: Fetch Orders by Payment Method from /api/v1/orders endpoint
+  // Fetch Orders by Payment Method from /api/v1/orders endpoint - FIXED
   const fetchOrdersBySource = async () => {
     try {
       // Calculate date range
@@ -178,7 +216,7 @@ const ReportsPage = () => {
       startDate.setDate(startDate.getDate() - filters.days);
 
       const response = await fetchWithAuth(
-        `${API_BASE_URL}/orders?limit=1000` // Fetch recent orders
+        `${API_BASE_URL}/orders?limit=1000`
       );
 
       if (!response.ok) {
@@ -187,24 +225,37 @@ const ReportsPage = () => {
       }
       
       const data = await response.json();
-      console.log('Orders data for source analysis:', data);
+      console.log('🔍 RAW Orders API Response:', data);
+      console.log('🔍 Orders - Is Array?', Array.isArray(data));
       
-      if (data && Array.isArray(data) && data.length > 0) {
+      // Handle different response formats
+      let ordersArray = [];
+      if (Array.isArray(data)) {
+        ordersArray = data;
+      } else if (data && data.data && Array.isArray(data.data)) {
+        ordersArray = data.data;
+      } else if (data && data.results && Array.isArray(data.results)) {
+        ordersArray = data.results;
+      }
+      
+      console.log('🔍 Extracted Orders Array:', ordersArray.length, 'orders');
+      
+      if (ordersArray.length > 0) {
+        console.log('🔍 First Order Structure:', ordersArray[0]);
+        
         // Filter orders within date range
-        const filteredOrders = data.filter(order => {
+        const filteredOrders = ordersArray.filter(order => {
           const orderDate = new Date(order.created_at || order.order_date);
           return orderDate >= startDate && orderDate <= endDate;
         });
 
-        console.log('Filtered orders:', filteredOrders.length);
-        console.log('Sample order structure:', filteredOrders[0]); // Debug: see order structure
+        console.log('🔍 Filtered Orders:', filteredOrders.length);
 
-        // Group by payment method (since order_type doesn't exist)
+        // Group by payment method
         const ordersBySource = {};
         let totalRevenue = 0;
 
         filteredOrders.forEach(order => {
-          // Use payment_method as the source since your orders don't have order_type
           const source = order.payment_method || 'Unknown';
           const orderTotal = order.total || order.total_amount || order.final_amount || 0;
           
@@ -222,24 +273,24 @@ const ReportsPage = () => {
 
         const totalOrders = filteredOrders.length;
 
-        console.log('Orders grouped by payment method:', ordersBySource);
+        console.log('🔍 Orders grouped by payment method:', ordersBySource);
 
         // Transform to array format
         const sourcesArray = Object.entries(ordersBySource)
           .map(([source, data]) => ({
-            source: source.charAt(0).toUpperCase() + source.slice(1), // Capitalize
+            source: source.charAt(0).toUpperCase() + source.slice(1),
             orders: data.orders,
             share: `${totalOrders > 0 ? ((data.orders / totalOrders) * 100).toFixed(1) : 0}%`,
             revenue: `₹${data.revenue.toLocaleString('en-IN')}`,
             revenueNum: data.revenue
           }))
-          .sort((a, b) => b.orders - a.orders) // Sort by order count descending
+          .sort((a, b) => b.orders - a.orders)
           .map((item, index) => ({
             ...item,
             rank: index + 1
           }));
 
-        console.log('Final sources array:', sourcesArray);
+        console.log('✅ Final sources array:', sourcesArray);
 
         setOrdersData(prev => ({
           ...prev,
@@ -252,10 +303,10 @@ const ReportsPage = () => {
           value: item.orders
         }));
         
-        console.log('Pie chart data:', pieData);
-        setOrderDistributionData(pieData);
+        console.log('✅ Pie Chart Data:', pieData);
+        setOrderDistributionData([...pieData]); // Force new array reference
       } else {
-        console.warn('No orders found or empty array');
+        console.warn('⚠️ No orders found or empty array');
         setOrdersData(prev => ({
           ...prev,
           bySource: []
@@ -263,8 +314,7 @@ const ReportsPage = () => {
         setOrderDistributionData([]);
       }
     } catch (err) {
-      console.error('Error fetching orders by source:', err);
-      // Fallback to empty data instead of mock data
+      console.error('❌ Error fetching orders by source:', err);
       setOrdersData(prev => ({
         ...prev,
         bySource: []
@@ -273,7 +323,7 @@ const ReportsPage = () => {
     }
   };
 
-  // Fetch Expenses from /api/v1/expenses/ endpoint
+  // Fetch Expenses from /api/v1/expenses/ endpoint - FIXED
   const fetchExpensesReport = async () => {
     try {
       // Calculate date range
@@ -282,7 +332,7 @@ const ReportsPage = () => {
       startDate.setDate(startDate.getDate() - filters.days);
 
       const response = await fetchWithAuth(
-        `${API_BASE_URL}/expenses/?limit=1000` // Fetch all expenses
+        `${API_BASE_URL}/expenses/?limit=1000`
       );
 
       if (!response.ok) {
@@ -291,11 +341,19 @@ const ReportsPage = () => {
       }
       
       const data = await response.json();
-      console.log('Expenses data:', data);
+      console.log('🔍 RAW Expenses data:', data);
       
-      if (data && Array.isArray(data)) {
+      // Handle different response formats
+      const expensesArray = Array.isArray(data) ? data : 
+                           (data.data || data.results || data.items || []);
+      
+      console.log('🔍 Expenses Array Length:', expensesArray.length);
+      
+      if (expensesArray && expensesArray.length > 0) {
+        console.log('🔍 First Expense Structure:', expensesArray[0]);
+        
         // Filter expenses within date range
-        const filteredExpenses = data.filter(expense => {
+        const filteredExpenses = expensesArray.filter(expense => {
           const expenseDate = new Date(expense.date || expense.created_at);
           return expenseDate >= startDate && expenseDate <= endDate;
         });
@@ -321,7 +379,7 @@ const ReportsPage = () => {
         });
 
         // Transform to array format
-        const expensesArray = Object.entries(expensesByCategory)
+        const expensesArrayTransformed = Object.entries(expensesByCategory)
           .map(([category, data]) => ({
             category: category,
             transactions: data.transactions,
@@ -329,20 +387,23 @@ const ReportsPage = () => {
             amountNum: data.amount,
             share: `${totalExpenses > 0 ? ((data.amount / totalExpenses) * 100).toFixed(1) : 0}%`
           }))
-          .sort((a, b) => b.amountNum - a.amountNum) // Sort by amount descending
+          .sort((a, b) => b.amountNum - a.amountNum)
           .map((item, index) => ({
             ...item,
             rank: index + 1
           }));
 
-        setExpensesData(expensesArray);
+        console.log('✅ Transformed expenses:', expensesArrayTransformed);
+        setExpensesData(expensesArrayTransformed);
 
         // Prepare chart data (top categories)
-        const chartData = expensesArray.slice(0, 10).map(item => ({
+        const chartData = expensesArrayTransformed.slice(0, 10).map(item => ({
           category: item.category.length > 15 ? item.category.substring(0, 15) + '...' : item.category,
           amount: item.amountNum
         }));
-        setExpensesChartData(chartData);
+        
+        console.log('✅ Expenses Chart Data:', chartData);
+        setExpensesChartData([...chartData]); // Force new array reference
 
         // Update total expenses in key metrics
         setKeyMetrics(prev => ({
@@ -359,10 +420,13 @@ const ReportsPage = () => {
             grossMargin: `${margin}%`
           }));
         }
+      } else {
+        console.warn('⚠️ No expenses data');
+        setExpensesData([]);
+        setExpensesChartData([]);
       }
     } catch (err) {
-      console.error('Error fetching expenses report:', err);
-      // Fallback to empty data instead of mock data
+      console.error('❌ Error fetching expenses report:', err);
       setExpensesData([]);
       setExpensesChartData([]);
     }
@@ -383,14 +447,17 @@ const ReportsPage = () => {
       const data = await response.json();
       console.log('Product sales data:', data);
       
-      if (data && Array.isArray(data)) {
-        setProductSalesData(data);
+      const productsArray = Array.isArray(data) ? data : 
+                           (data.data || data.results || data.items || []);
+      
+      if (productsArray && productsArray.length > 0) {
+        setProductSalesData(productsArray);
         
         // Get top category if available
-        if (data.length > 0 && data[0].category) {
+        if (productsArray[0].category) {
           setKeyMetrics(prev => ({
             ...prev,
-            topCategory: data[0].category
+            topCategory: productsArray[0].category
           }));
         }
       }
@@ -409,7 +476,6 @@ const ReportsPage = () => {
 
       if (!response.ok) {
         console.error('Daily summary API error:', response.status);
-        // Don't throw error, just log it
         return;
       }
       
@@ -424,7 +490,6 @@ const ReportsPage = () => {
       }
     } catch (err) {
       console.error('Error fetching daily summary:', err);
-      // Don't throw, this is optional data
     }
   };
 
@@ -437,7 +502,7 @@ const ReportsPage = () => {
       await Promise.all([
         fetchSalesReport(),
         fetchPaymentMethodsReport(),
-        fetchOrdersBySource(), // UPDATED: Now groups by payment method
+        fetchOrdersBySource(),
         fetchExpensesReport(),
         fetchProductSalesReport(),
         fetchDailySummary()
@@ -576,6 +641,17 @@ const ReportsPage = () => {
           </div>
         )}
 
+        {/* Debug Info - Remove this after fixing */}
+        <div className="mb-4 p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+          <h3 className="text-sm font-semibold mb-2">Debug Info:</h3>
+          <div className="text-xs space-y-1">
+            <p>Sales Chart Data Length: {salesChartData.length}</p>
+            <p>Order Distribution Data Length: {orderDistributionData.length}</p>
+            <p>Expenses Chart Data Length: {expensesChartData.length}</p>
+            <p className="text-blue-600 dark:text-blue-400">Check browser console for detailed logs 🔍</p>
+          </div>
+        </div>
+
         {/* Filters and Key Metrics */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-6 lg:mb-8">
           {/* Filters */}
@@ -709,200 +785,111 @@ const ReportsPage = () => {
           <div className="rounded-xl px-3 sm:px-4 py-4 bg-card border border-border">
             <h2 className="text-sm sm:text-base font-semibold mb-3 text-card-foreground">Key Metrics</h2>
             <div className="space-y-2.5">
-<div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-<div className="text-center p-2 rounded-lg bg-muted">
-<div className="text-xs text-muted-foreground mb-0.5">Sales</div>
-<div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalSales}</div>
-</div>
-<div className="text-center p-2 rounded-lg bg-muted">
-<div className="text-xs text-muted-foreground mb-0.5">Orders</div>
-<div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalOrders}</div>
-</div>
-<div className="text-center p-2 rounded-lg bg-muted col-span-2 sm:col-span-1">
-<div className="text-xs text-muted-foreground mb-0.5">Expenses</div>
-<div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalExpenses}</div>
-</div>
-</div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="text-center p-2 rounded-lg bg-muted">
-              <div className="text-xs text-muted-foreground mb-0.5">Avg</div>
-              <div className="text-xs sm:text-sm font-bold text-foreground">{keyMetrics.avgOrderValue}</div>
-            </div>
-            <div className="text-center p-2 rounded-lg bg-muted">
-              <div className="text-xs text-muted-foreground mb-0.5">Margin</div>
-              <div className="text-xs sm:text-sm font-bold text-foreground">{keyMetrics.grossMargin}</div>
-            </div>
-            <div className="text-center p-2 rounded-lg bg-muted">
-              <div className="text-xs text-muted-foreground mb-0.5">Top</div>
-              <div className="text-xs font-bold text-foreground">{keyMetrics.topCategory}</div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="text-center p-2 rounded-lg bg-muted">
+                  <div className="text-xs text-muted-foreground mb-0.5">Sales</div>
+                  <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalSales}</div>
+                </div>
+                <div className="text-center p-2 rounded-lg bg-muted">
+                  <div className="text-xs text-muted-foreground mb-0.5">Orders</div>
+                  <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalOrders}</div>
+                </div>
+                <div className="text-center p-2 rounded-lg bg-muted col-span-2 sm:col-span-1">
+                  <div className="text-xs text-muted-foreground mb-0.5">Expenses</div>
+                  <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalExpenses}</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="text-center p-2 rounded-lg bg-muted">
+                  <div className="text-xs text-muted-foreground mb-0.5">Avg</div>
+                  <div className="text-xs sm:text-sm font-bold text-foreground">{keyMetrics.avgOrderValue}</div>
+                </div>
+                <div className="text-center p-2 rounded-lg bg-muted">
+                  <div className="text-xs text-muted-foreground mb-0.5">Margin</div>
+                  <div className="text-xs sm:text-sm font-bold text-foreground">{keyMetrics.grossMargin}</div>
+                </div>
+                <div className="text-center p-2 rounded-lg bg-muted">
+                  <div className="text-xs text-muted-foreground mb-0.5">Top</div>
+                  <div className="text-xs font-bold text-foreground">{keyMetrics.topCategory}</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </div>
 
-    {/* Sales Report with Line Chart */}
-    <div className="rounded-xl px-3 sm:px-4 py-4 mb-4 sm:mb-6 lg:mb-8 bg-card border border-border overflow-hidden">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
-        <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Sales Report</h2>
-        <span className="text-xs text-muted-foreground">By selected view</span>
-      </div>
-
-      {/* Line Chart */}
-      {salesChartData.length > 0 && (
-        <div className="mb-6">
-          <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Sales Trend</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={salesChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#6b7280" />
-              <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'hsl(var(--card))', 
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: '8px',
-                  fontSize: '12px'
-                }} 
-              />
-              <Legend wrapperStyle={{ fontSize: '12px' }} />
-              <Line type="monotone" dataKey="sales" stroke="#14b8a6" strokeWidth={2} name="Gross Sales" />
-              <Line type="monotone" dataKey="net" stroke="#0d9488" strokeWidth={2} name="Net Sales" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      <div className="overflow-x-auto -mx-3 sm:-mx-4">
-        <div className="inline-block min-w-full align-middle">
-          <table className="min-w-full">
-            <thead>
-              <tr className="bg-muted border-b border-border">
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Period</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Gross</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Discount</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Net</th>
-              </tr>
-            </thead>
-            <tbody>
-              {salesData.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="py-8 text-center text-sm text-muted-foreground">
-                    No sales data available
-                  </td>
-                </tr>
-              ) : (
-                salesData.map((row, index) => (
-                  <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.period}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs text-foreground">{row.orders}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs text-foreground whitespace-nowrap">{row.grossSales}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs text-foreground whitespace-nowrap">{row.discounts}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs font-semibold text-foreground whitespace-nowrap">{row.net}</span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    {/* Orders Report with Pie Chart */}
-    <div className="rounded-xl px-3 sm:px-4 py-4 mb-4 sm:mb-6 lg:mb-8 bg-card border border-border overflow-hidden">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
-        <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Orders Report</h2>
-        <span className="text-xs text-muted-foreground">By payment method</span>
-      </div>
-
-      {/* Pie Chart */}
-      {orderDistributionData.length > 0 && (
-        <div className="mb-6">
-          <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Order Distribution by Payment Method</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={orderDistributionData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {orderDistributionData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'hsl(var(--card))', 
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: '8px',
-                  fontSize: '12px'
-                }} 
-              />
-              <Legend wrapperStyle={{ fontSize: '12px' }} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Orders by Payment Method */}
-        <div className="overflow-hidden">
-          <div className="flex items-center justify-between mb-2.5">
-            <h3 className="text-xs sm:text-sm font-semibold text-card-foreground">By Payment Method</h3>
-            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Desc</span>
+        {/* Sales Report with Line Chart */}
+        <div className="rounded-xl px-3 sm:px-4 py-4 mb-4 sm:mb-6 lg:mb-8 bg-card border border-border overflow-hidden">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
+            <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Sales Report</h2>
+            <span className="text-xs text-muted-foreground">By selected view</span>
           </div>
-          <div className="overflow-x-auto -mx-3 sm:-mx-4 lg:mx-0">
+
+          {/* Line Chart */}
+          {salesChartData.length > 0 ? (
+            <div className="mb-6">
+              <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Sales Trend</h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={salesChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#6b7280" />
+                  <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      fontSize: '12px'
+                    }} 
+                  />
+                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <Line type="monotone" dataKey="sales" stroke="#14b8a6" strokeWidth={2} name="Gross Sales" />
+                  <Line type="monotone" dataKey="net" stroke="#0d9488" strokeWidth={2} name="Net Sales" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="mb-6 p-8 text-center bg-muted/50 rounded-lg border-2 border-dashed border-border">
+              <p className="text-sm text-muted-foreground">No chart data available. Check console logs 🔍</p>
+              <p className="text-xs text-muted-foreground mt-1">Sales data length: {salesChartData.length}</p>
+            </div>
+          )}
+
+          <div className="overflow-x-auto -mx-3 sm:-mx-4">
             <div className="inline-block min-w-full align-middle">
               <table className="min-w-full">
                 <thead>
                   <tr className="bg-muted border-b border-border">
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Method</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Share</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Revenue</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
+                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Period</th>
+                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
+                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Gross</th>
+                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Discount</th>
+                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Net</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {ordersData.bySource.length === 0 ? (
+                  {salesData.length === 0 ? (
                     <tr>
-                      <td colSpan="5" className="py-4 text-center text-sm text-muted-foreground">
-                        No order data available
+                      <td colSpan="5" className="py-8 text-center text-sm text-muted-foreground">
+                        No sales data available
                       </td>
                     </tr>
                   ) : (
-                    ordersData.bySource.map((row, index) => (
+                    salesData.map((row, index) => (
                       <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                        <td className="py-2 px-2">
-                          <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.source}</span>
+                        <td className="py-2.5 px-2 sm:px-3">
+                          <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.period}</span>
                         </td>
-                        <td className="py-2 px-2">
+                        <td className="py-2.5 px-2 sm:px-3">
                           <span className="text-xs text-foreground">{row.orders}</span>
                         </td>
-                        <td className="py-2 px-2">
-                          <span className="text-xs text-foreground">{row.share}</span>
+                        <td className="py-2.5 px-2 sm:px-3">
+                          <span className="text-xs text-foreground whitespace-nowrap">{row.grossSales}</span>
                         </td>
-                        <td className="py-2 px-2">
-                          <span className="text-xs text-foreground whitespace-nowrap">{row.revenue}</span>
+                        <td className="py-2.5 px-2 sm:px-3">
+                          <span className="text-xs text-foreground whitespace-nowrap">{row.discounts}</span>
                         </td>
-                        <td className="py-2 px-2">
-                          <span className="text-xs text-foreground">{row.rank}</span>
+                        <td className="py-2.5 px-2 sm:px-3">
+                          <span className="text-xs font-semibold text-foreground whitespace-nowrap">{row.net}</span>
                         </td>
                       </tr>
                     ))
@@ -913,47 +900,230 @@ const ReportsPage = () => {
           </div>
         </div>
 
-        {/* Payments by Mode */}
-        <div className="overflow-hidden">
-          <div className="flex items-center justify-between mb-2.5">
-            <h3 className="text-xs sm:text-sm font-semibold text-card-foreground">Payment Summary</h3>
-            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Desc</span>
+        {/* Orders Report with Pie Chart */}
+        <div className="rounded-xl px-3 sm:px-4 py-4 mb-4 sm:mb-6 lg:mb-8 bg-card border border-border overflow-hidden">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
+            <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Orders Report</h2>
+            <span className="text-xs text-muted-foreground">By payment method</span>
           </div>
-          <div className="overflow-x-auto -mx-3 sm:-mx-4 lg:mx-0">
+
+          {/* Pie Chart */}
+          {orderDistributionData.length > 0 ? (
+            <div className="mb-6">
+              <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Order Distribution by Payment Method</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={orderDistributionData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {orderDistributionData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      fontSize: '12px'
+                    }} 
+                  />
+                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="mb-6 p-8 text-center bg-muted/50 rounded-lg border-2 border-dashed border-border">
+              <p className="text-sm text-muted-foreground">No chart data available. Check console logs 🔍</p>
+              <p className="text-xs text-muted-foreground mt-1">Order distribution length: {orderDistributionData.length}</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Orders by Payment Method */}
+            <div className="overflow-hidden">
+              <div className="flex items-center justify-between mb-2.5">
+                <h3 className="text-xs sm:text-sm font-semibold text-card-foreground">By Payment Method</h3>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Desc</span>
+              </div>
+              <div className="overflow-x-auto -mx-3 sm:-mx-4 lg:mx-0">
+                <div className="inline-block min-w-full align-middle">
+                  <table className="min-w-full">
+                    <thead>
+                      <tr className="bg-muted border-b border-border">
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Method</th>
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Share</th>
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Revenue</th>
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ordersData.bySource.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="py-4 text-center text-sm text-muted-foreground">
+                            No order data available
+                          </td>
+                        </tr>
+                      ) : (
+                        ordersData.bySource.map((row, index) => (
+                          <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
+                            <td className="py-2 px-2">
+                              <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.source}</span>
+                            </td>
+                            <td className="py-2 px-2">
+                              <span className="text-xs text-foreground">{row.orders}</span>
+                            </td>
+                            <td className="py-2 px-2">
+                              <span className="text-xs text-foreground">{row.share}</span>
+                            </td>
+                            <td className="py-2 px-2">
+                              <span className="text-xs text-foreground whitespace-nowrap">{row.revenue}</span>
+                            </td>
+                            <td className="py-2 px-2">
+                              <span className="text-xs text-foreground">{row.rank}</span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Payments by Mode */}
+            <div className="overflow-hidden">
+              <div className="flex items-center justify-between mb-2.5">
+                <h3 className="text-xs sm:text-sm font-semibold text-card-foreground">Payment Summary</h3>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Desc</span>
+              </div>
+              <div className="overflow-x-auto -mx-3 sm:-mx-4 lg:mx-0">
+                <div className="inline-block min-w-full align-middle">
+                  <table className="min-w-full">
+                    <thead>
+                      <tr className="bg-muted border-b border-border">
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Mode</th>
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Count</th>
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Share</th>
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Amount</th>
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ordersData.byPayment.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" className="py-4 text-center text-sm text-muted-foreground">
+                            No payment data available
+                          </td>
+                        </tr>
+                      ) : (
+                        ordersData.byPayment.map((row, index) => (
+                          <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
+                            <td className="py-2 px-2">
+                              <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.mode}</span>
+                            </td>
+                            <td className="py-2 px-2">
+                              <span className="text-xs text-foreground">{row.count}</span>
+                            </td>
+                            <td className="py-2 px-2">
+                              <span className="text-xs text-foreground">{row.share}</span>
+                            </td>
+                            <td className="py-2 px-2">
+                              <span className="text-xs text-foreground whitespace-nowrap">{row.amount}</span>
+                            </td>
+                            <td className="py-2 px-2">
+                              <span className="text-xs text-foreground">{row.rank}</span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Expenses Report with Bar Chart */}
+        <div className="rounded-xl px-3 sm:px-4 py-4 bg-card border border-border overflow-hidden">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
+            <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Expenses Report</h2>
+            <span className="text-xs text-muted-foreground">By category</span>
+          </div>
+
+          {/* Bar Chart */}
+          {expensesChartData.length > 0 ? (
+            <div className="mb-6">
+              <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Expenses by Category</h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={expensesChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="category" tick={{ fontSize: 12 }} stroke="#6b7280" />
+                  <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'hsl(var(--card))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      fontSize: '12px'
+                    }} 
+                  />
+                  <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  <Bar dataKey="amount" fill="#14b8a6" name="Amount (₹)" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="mb-6 p-8 text-center bg-muted/50 rounded-lg border-2 border-dashed border-border">
+              <p className="text-sm text-muted-foreground">No chart data available. Check console logs 🔍</p>
+              <p className="text-xs text-muted-foreground mt-1">Expenses data length: {expensesChartData.length}</p>
+            </div>
+          )}
+
+          <div className="overflow-x-auto -mx-3 sm:-mx-4">
             <div className="inline-block min-w-full align-middle">
               <table className="min-w-full">
                 <thead>
                   <tr className="bg-muted border-b border-border">
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Mode</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Count</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Share</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Amount</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
+                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Category</th>
+                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Trans.</th>
+                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Amount</th>
+                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Share</th>
+                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {ordersData.byPayment.length === 0 ? (
+                  {expensesData.length === 0 ? (
                     <tr>
-                      <td colSpan="5" className="py-4 text-center text-sm text-muted-foreground">
-                        No payment data available
+                      <td colSpan="5" className="py-8 text-center text-sm text-muted-foreground">
+                        No expenses data available
                       </td>
                     </tr>
                   ) : (
-                    ordersData.byPayment.map((row, index) => (
+                    expensesData.map((row, index) => (
                       <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                        <td className="py-2 px-2">
-                          <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.mode}</span>
+                        <td className="py-2.5 px-2 sm:px-3">
+                          <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.category}</span>
                         </td>
-                        <td className="py-2 px-2">
-                          <span className="text-xs text-foreground">{row.count}</span>
+                        <td className="py-2.5 px-2 sm:px-3">
+                          <span className="text-xs text-foreground">{row.transactions}</span>
                         </td>
-                        <td className="py-2 px-2">
-                          <span className="text-xs text-foreground">{row.share}</span>
-                        </td>
-                        <td className="py-2 px-2">
+                        <td className="py-2.5 px-2 sm:px-3">
                           <span className="text-xs text-foreground whitespace-nowrap">{row.amount}</span>
                         </td>
-                        <td className="py-2 px-2">
+                        <td className="py-2.5 px-2 sm:px-3">
+                          <span className="text-xs text-foreground">{row.share}</span>
+                        </td>
+                        <td className="py-2.5 px-2 sm:px-3">
                           <span className="text-xs text-foreground">{row.rank}</span>
                         </td>
                       </tr>
@@ -966,85 +1136,7 @@ const ReportsPage = () => {
         </div>
       </div>
     </div>
-
-    {/* Expenses Report with Bar Chart */}
-    <div className="rounded-xl px-3 sm:px-4 py-4 bg-card border border-border overflow-hidden">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
-        <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Expenses Report</h2>
-        <span className="text-xs text-muted-foreground">By category</span>
-      </div>
-
-      {/* Bar Chart */}
-      {expensesChartData.length > 0 && (
-        <div className="mb-6">
-          <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Expenses by Category</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={expensesChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="category" tick={{ fontSize: 12 }} stroke="#6b7280" />
-              <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'hsl(var(--card))', 
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: '8px',
-                  fontSize: '12px'
-                }} 
-              />
-              <Legend wrapperStyle={{ fontSize: '12px' }} />
-              <Bar dataKey="amount" fill="#14b8a6" name="Amount (₹)" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      <div className="overflow-x-auto -mx-3 sm:-mx-4">
-        <div className="inline-block min-w-full align-middle">
-          <table className="min-w-full">
-            <thead>
-              <tr className="bg-muted border-b border-border">
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Category</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Trans.</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Amount</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Share</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
-              </tr>
-            </thead>
-            <tbody>
-              {expensesData.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="py-8 text-center text-sm text-muted-foreground">
-                    No expenses data available
-                  </td>
-                </tr>
-              ) : (
-                expensesData.map((row, index) => (
-                  <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.category}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs text-foreground">{row.transactions}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs text-foreground whitespace-nowrap">{row.amount}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs text-foreground">{row.share}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs text-foreground">{row.rank}</span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-);
+  );
 };
+
 export default ReportsPage;
