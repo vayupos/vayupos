@@ -153,6 +153,100 @@ const ReportsPage = () => {
         }));
       } else {
         console.warn('⚠️ No sales data found in API response');
+        console.log('💡 Attempting to calculate sales from orders...');
+        
+        // Fallback: Calculate sales from orders
+        try {
+          const ordersResponse = await fetchWithAuth(`${API_BASE_URL}/orders?limit=1000`);
+          if (ordersResponse.ok) {
+            const ordersData = await ordersResponse.json();
+            const ordersArray = Array.isArray(ordersData) ? ordersData : 
+                               (ordersData.data || ordersData.results || []);
+            
+            if (ordersArray.length > 0) {
+              // Filter by date range
+              const endDate = new Date();
+              const startDate = new Date();
+              startDate.setDate(startDate.getDate() - filters.days);
+              
+              const filteredOrders = ordersArray.filter(order => {
+                const orderDate = new Date(order.created_at || order.order_date);
+                return orderDate >= startDate && orderDate <= endDate;
+              });
+              
+              // Group by date/week/month based on filters.view
+              const groupedData = {};
+              filteredOrders.forEach(order => {
+                const orderDate = new Date(order.created_at || order.order_date);
+                let period;
+                
+                if (filters.view === 'day') {
+                  period = orderDate.toISOString().split('T')[0];
+                } else if (filters.view === 'week') {
+                  const weekNum = Math.ceil((orderDate.getDate()) / 7);
+                  period = `Week ${weekNum}`;
+                } else {
+                  period = orderDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                }
+                
+                if (!groupedData[period]) {
+                  groupedData[period] = {
+                    orders: 0,
+                    grossSales: 0,
+                    discounts: 0
+                  };
+                }
+                
+                groupedData[period].orders += 1;
+                groupedData[period].grossSales += (order.total || order.total_amount || 0);
+                groupedData[period].discounts += (order.discount || 0);
+              });
+              
+              // Convert to array
+              const calculatedSalesData = Object.entries(groupedData)
+                .map(([period, data]) => ({
+                  period,
+                  orders: data.orders,
+                  grossSales: `₹${data.grossSales.toLocaleString('en-IN')}`,
+                  discounts: `₹${data.discounts.toLocaleString('en-IN')}`,
+                  net: `₹${(data.grossSales - data.discounts).toLocaleString('en-IN')}`,
+                  grossSalesNum: data.grossSales,
+                  netNum: data.grossSales - data.discounts
+                }))
+                .sort((a, b) => a.period.localeCompare(b.period));
+              
+              console.log('✅ Calculated Sales Data from Orders:', calculatedSalesData);
+              setSalesData(calculatedSalesData);
+              
+              // Chart data
+              const chartData = calculatedSalesData.map(item => ({
+                month: item.period,
+                sales: item.grossSalesNum,
+                net: item.netNum
+              }));
+              
+              console.log('✅ Calculated Chart Data:', chartData);
+              setSalesChartData([...chartData]);
+              
+              // Update metrics
+              const totalSales = calculatedSalesData.reduce((sum, item) => sum + item.grossSalesNum, 0);
+              const totalOrders = calculatedSalesData.reduce((sum, item) => sum + item.orders, 0);
+              
+              setKeyMetrics(prev => ({
+                ...prev,
+                totalSales: `₹${totalSales.toLocaleString('en-IN')}`,
+                totalOrders: totalOrders.toString(),
+                avgOrderValue: `₹${totalOrders > 0 ? Math.round(totalSales / totalOrders).toLocaleString('en-IN') : '0'}`
+              }));
+              
+              return; // Exit successfully
+            }
+          }
+        } catch (fallbackErr) {
+          console.error('❌ Fallback calculation failed:', fallbackErr);
+        }
+        
+        // If all else fails, show empty
         setSalesData([]);
         setSalesChartData([]);
       }
@@ -201,6 +295,9 @@ const ReportsPage = () => {
           ...prev,
           byPayment: transformedData
         }));
+      } else {
+        console.warn('⚠️ Payment methods API returned empty, will use data from orders');
+        // Note: Orders fetch will populate this data anyway
       }
     } catch (err) {
       console.error('❌ Error fetching payment methods report:', err);
@@ -305,6 +402,21 @@ const ReportsPage = () => {
         
         console.log('✅ Pie Chart Data:', pieData);
         setOrderDistributionData([...pieData]); // Force new array reference
+        
+        // Also populate payment summary table (byPayment)
+        const paymentSummary = sourcesArray.map((item, index) => ({
+          mode: item.source,
+          count: item.orders,
+          share: item.share,
+          amount: item.revenue,
+          rank: item.rank
+        }));
+        
+        console.log('✅ Payment Summary Table:', paymentSummary);
+        setOrdersData(prev => ({
+          ...prev,
+          byPayment: paymentSummary
+        }));
       } else {
         console.warn('⚠️ No orders found or empty array');
         setOrdersData(prev => ({
