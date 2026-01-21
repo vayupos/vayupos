@@ -169,7 +169,7 @@ const ReportsPage = () => {
     }
   };
 
-  // NEW: Fetch Orders by Source/Type from /api/v1/orders endpoint
+  // UPDATED: Fetch Orders by Payment Method from /api/v1/orders endpoint
   const fetchOrdersBySource = async () => {
     try {
       // Calculate date range
@@ -187,26 +187,26 @@ const ReportsPage = () => {
       }
       
       const data = await response.json();
-      console.log('Orders data:', data);
+      console.log('Orders data for source analysis:', data);
       
-      // Process orders by order_type (assuming your Order model has order_type field)
-      // If not, you might need to filter by another field or all orders will be "Dine-in"
-      if (data && Array.isArray(data)) {
+      if (data && Array.isArray(data) && data.length > 0) {
         // Filter orders within date range
         const filteredOrders = data.filter(order => {
           const orderDate = new Date(order.created_at || order.order_date);
           return orderDate >= startDate && orderDate <= endDate;
         });
 
-        // Group by order source/type
+        console.log('Filtered orders:', filteredOrders.length);
+        console.log('Sample order structure:', filteredOrders[0]); // Debug: see order structure
+
+        // Group by payment method (since order_type doesn't exist)
         const ordersBySource = {};
         let totalRevenue = 0;
 
         filteredOrders.forEach(order => {
-          // Assuming your API has order_type field (e.g., "dine-in", "takeaway", "delivery")
-          // If not available, you might need to add this field to your backend
-          const source = order.order_type || order.source || 'Dine-in'; // Default to Dine-in
-          const orderTotal = order.total_amount || order.final_amount || 0;
+          // Use payment_method as the source since your orders don't have order_type
+          const source = order.payment_method || 'Unknown';
+          const orderTotal = order.total || order.total_amount || order.final_amount || 0;
           
           if (!ordersBySource[source]) {
             ordersBySource[source] = {
@@ -221,6 +221,8 @@ const ReportsPage = () => {
         });
 
         const totalOrders = filteredOrders.length;
+
+        console.log('Orders grouped by payment method:', ordersBySource);
 
         // Transform to array format
         const sourcesArray = Object.entries(ordersBySource)
@@ -237,6 +239,8 @@ const ReportsPage = () => {
             rank: index + 1
           }));
 
+        console.log('Final sources array:', sourcesArray);
+
         setOrdersData(prev => ({
           ...prev,
           bySource: sourcesArray
@@ -247,7 +251,16 @@ const ReportsPage = () => {
           name: item.source,
           value: item.orders
         }));
+        
+        console.log('Pie chart data:', pieData);
         setOrderDistributionData(pieData);
+      } else {
+        console.warn('No orders found or empty array');
+        setOrdersData(prev => ({
+          ...prev,
+          bySource: []
+        }));
+        setOrderDistributionData([]);
       }
     } catch (err) {
       console.error('Error fetching orders by source:', err);
@@ -260,7 +273,7 @@ const ReportsPage = () => {
     }
   };
 
-  // NEW: Fetch Expenses from /api/v1/expenses/ endpoint
+  // Fetch Expenses from /api/v1/expenses/ endpoint
   const fetchExpensesReport = async () => {
     try {
       // Calculate date range
@@ -424,8 +437,8 @@ const ReportsPage = () => {
       await Promise.all([
         fetchSalesReport(),
         fetchPaymentMethodsReport(),
-        fetchOrdersBySource(), // NEW: Real orders data
-        fetchExpensesReport(), // NEW: Real expenses data
+        fetchOrdersBySource(), // UPDATED: Now groups by payment method
+        fetchExpensesReport(),
         fetchProductSalesReport(),
         fetchDailySummary()
       ]);
@@ -694,22 +707,22 @@ const ReportsPage = () => {
 
           {/* Key Metrics */}
           <div className="rounded-xl px-3 sm:px-4 py-4 bg-card border border-border">
-            <h2 className="text-sm sm:text-base font-semibold mb-3 text-card-foreground">Key Metrics</h2><div className="space-y-2.5">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            <div className="text-center p-2 rounded-lg bg-muted">
-              <div className="text-xs text-muted-foreground mb-0.5">Sales</div>
-              <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalSales}</div>
-            </div>
-            <div className="text-center p-2 rounded-lg bg-muted">
-              <div className="text-xs text-muted-foreground mb-0.5">Orders</div>
-              <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalOrders}</div>
-            </div>
-            <div className="text-center p-2 rounded-lg bg-muted col-span-2 sm:col-span-1">
-              <div className="text-xs text-muted-foreground mb-0.5">Expenses</div>
-              <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalExpenses}</div>
-            </div>
-          </div>
-
+            <h2 className="text-sm sm:text-base font-semibold mb-3 text-card-foreground">Key Metrics</h2>
+            <div className="space-y-2.5">
+<div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+<div className="text-center p-2 rounded-lg bg-muted">
+<div className="text-xs text-muted-foreground mb-0.5">Sales</div>
+<div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalSales}</div>
+</div>
+<div className="text-center p-2 rounded-lg bg-muted">
+<div className="text-xs text-muted-foreground mb-0.5">Orders</div>
+<div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalOrders}</div>
+</div>
+<div className="text-center p-2 rounded-lg bg-muted col-span-2 sm:col-span-1">
+<div className="text-xs text-muted-foreground mb-0.5">Expenses</div>
+<div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalExpenses}</div>
+</div>
+</div>
           <div className="grid grid-cols-3 gap-2">
             <div className="text-center p-2 rounded-lg bg-muted">
               <div className="text-xs text-muted-foreground mb-0.5">Avg</div>
@@ -810,13 +823,13 @@ const ReportsPage = () => {
     <div className="rounded-xl px-3 sm:px-4 py-4 mb-4 sm:mb-6 lg:mb-8 bg-card border border-border overflow-hidden">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
         <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Orders Report</h2>
-        <span className="text-xs text-muted-foreground">Mix & payments</span>
+        <span className="text-xs text-muted-foreground">By payment method</span>
       </div>
 
       {/* Pie Chart */}
       {orderDistributionData.length > 0 && (
         <div className="mb-6">
-          <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Order Distribution by Source</h3>
+          <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Order Distribution by Payment Method</h3>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
@@ -848,10 +861,10 @@ const ReportsPage = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Orders by Source */}
+        {/* Orders by Payment Method */}
         <div className="overflow-hidden">
           <div className="flex items-center justify-between mb-2.5">
-            <h3 className="text-xs sm:text-sm font-semibold text-card-foreground">By Source</h3>
+            <h3 className="text-xs sm:text-sm font-semibold text-card-foreground">By Payment Method</h3>
             <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Desc</span>
           </div>
           <div className="overflow-x-auto -mx-3 sm:-mx-4 lg:mx-0">
@@ -859,7 +872,7 @@ const ReportsPage = () => {
               <table className="min-w-full">
                 <thead>
                   <tr className="bg-muted border-b border-border">
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Source</th>
+                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Method</th>
                     <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
                     <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Share</th>
                     <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Revenue</th>
@@ -870,7 +883,7 @@ const ReportsPage = () => {
                   {ordersData.bySource.length === 0 ? (
                     <tr>
                       <td colSpan="5" className="py-4 text-center text-sm text-muted-foreground">
-                        No order source data available
+                        No order data available
                       </td>
                     </tr>
                   ) : (
@@ -903,7 +916,7 @@ const ReportsPage = () => {
         {/* Payments by Mode */}
         <div className="overflow-hidden">
           <div className="flex items-center justify-between mb-2.5">
-            <h3 className="text-xs sm:text-sm font-semibold text-card-foreground">By Payment</h3>
+            <h3 className="text-xs sm:text-sm font-semibold text-card-foreground">Payment Summary</h3>
             <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Desc</span>
           </div>
           <div className="overflow-x-auto -mx-3 sm:-mx-4 lg:mx-0">
@@ -1031,6 +1044,7 @@ const ReportsPage = () => {
       </div>
     </div>
   </div>
-</div>);
+</div>
+);
 };
 export default ReportsPage;
