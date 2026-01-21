@@ -1,1243 +1,1165 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Printer, Calendar, Filter, RotateCw, ChevronDown, AlertCircle } from 'lucide-react';
-import { LineChart, Line, PieChart, Pie, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import { DollarSign, ShoppingBag, TrendingUp, Wallet } from 'lucide-react';
 
-// API Configuration - Using your actual backend URL
-const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
+const Dashboard = ({ isDarkMode = true, onNavigate }) => {
+  // API Configuration
+  const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
+  const [authToken, setAuthToken] = useState('');
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [credentials, setCredentials] = useState({ username: '', password: '' });
 
-const ReportsPage = () => {
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  // View state
+  const [showAllOrders, setShowAllOrders] = useState(false);
   
-  // Helper function to get auth token from localStorage
-  const getAuthToken = () => {
-    return localStorage.getItem('access_token') || '';
-  };
+  // Modal states
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [showOfferModal, setShowOfferModal] = useState(false);
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
 
-  const [filters, setFilters] = useState({
-    reportType: 'Sales',
-    view: 'day',
-    outlet: 'All',
-    paymentMode: 'All',
-    sort: 'Total Desc',
-    days: 30,
-    dateRange: { start: '2025-01', end: '2025-12' }
+  // Loading states
+  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
+  const [isLoadingOffers, setIsLoadingOffers] = useState(false);
+  const [isLoadingStaff, setIsLoadingStaff] = useState(false);
+  const [isLoadingExpenses, setIsLoadingExpenses] = useState(false);
+  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  // Form states
+  const [newCustomer, setNewCustomer] = useState({ 
+    first_name: '', 
+    last_name: '',
+    phone: '', 
+    email: '',
+    address: '',
+    city: '',
+    state: '',
+    zip_code: '',
+    country: 'India'
+  });
+  const [newOffer, setNewOffer] = useState({ 
+    code: '', 
+    discount_type: 'percentage', 
+    discount_value: '', 
+    min_order_amount: 0,
+    max_uses: 0,
+    valid_from: new Date().toISOString(),
+    valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    description: '' 
+  });
+  const [newStaff, setNewStaff] = useState({ 
+    name: '', 
+    role: 'Cashier', 
+    salary: '', 
+    joined: new Date().toISOString().split('T')[0],
+    phone: '',
+    aadhar: ''
+  });
+  const [newExpense, setNewExpense] = useState({ 
+    title: '', 
+    amount: '', 
+    date: new Date().toISOString().split('T')[0], 
+    category: 'Supplies',
+    subtitle: 'Manual entry',
+    type: 'manual',
+    account: 'Cashbook',
+    tax: 0,
+    payment_mode: 'Cash',
+    notes: ''
   });
 
-  const [keyMetrics, setKeyMetrics] = useState({
-    totalSales: '₹0',
-    totalOrders: '0',
-    totalExpenses: '₹0',
-    avgOrderValue: '₹0',
-    grossMargin: '0%',
-    topCategory: '-'
+  // Data states
+  const [recentOrders, setRecentOrders] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [offers, setOffers] = useState([]);
+  const [staff, setStaff] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [dailyStats, setDailyStats] = useState({
+    today_sales: 0,
+    total_orders: 0,
+    avg_ticket: 0,
+    total_expenses: 0
   });
 
-  const [salesData, setSalesData] = useState([]);
-  const [salesChartData, setSalesChartData] = useState([]);
-  const [ordersData, setOrdersData] = useState({
-    bySource: [],
-    byPayment: []
+  const activities = [
+    { action: 'Staff login', time: 'just now' },
+    { action: 'Menu updated', time: '20m ago' },
+    { action: 'Expense added', time: '1h ago' }
+  ];
+
+  // API Helper Functions
+  const getAuthHeaders = () => ({
+    'Content-Type': 'application/json',
+    ...(authToken && { 'Authorization': `Bearer ${authToken}` })
   });
-  const [orderDistributionData, setOrderDistributionData] = useState([]);
-  const [expensesData, setExpensesData] = useState([]);
-  const [expensesChartData, setExpensesChartData] = useState([]);
-  const [productSalesData, setProductSalesData] = useState([]);
 
-  const COLORS = ['#14b8a6', '#0d9488', '#0f766e'];
-
-  // Helper function to make authenticated API calls
-  const fetchWithAuth = async (url, options = {}) => {
-    const token = getAuthToken();
-    
-    if (!token) {
-      throw new Error('No authentication token found. Please login again.');
-    }
-
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        ...options.headers,
-      }
-    });
-
-    // Handle 401 Unauthorized - token expired or invalid
-    if (response.status === 401) {
-      localStorage.removeItem('access_token');
-      throw new Error('Session expired. Please login again.');
-    }
-
-    return response;
-  };
-
-  // Fetch Sales Report - FIXED VERSION
-  const fetchSalesReport = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await fetchWithAuth(
-        `${API_BASE_URL}/reports/sales?days=${filters.days}&group_by=${filters.view}`
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Sales API Error:', response.status, errorText);
-        throw new Error(`Failed to fetch sales report (${response.status})`);
-      }
-      
-      const data = await response.json();
-      console.log('🔍 RAW Sales API Response:', data);
-      console.log('🔍 Is Array?', Array.isArray(data));
-      console.log('🔍 Data Type:', typeof data);
-      if (data && typeof data === 'object') {
-        console.log('🔍 Data Keys:', Object.keys(data));
-      }
-      
-      // Handle different response formats - check all possible structures
-      let salesArray = [];
-      if (Array.isArray(data)) {
-        salesArray = data;
-      } else if (data && data.data && Array.isArray(data.data)) {
-        salesArray = data.data;
-      } else if (data && data.results && Array.isArray(data.results)) {
-        salesArray = data.results;
-      } else if (data && data.items && Array.isArray(data.items)) {
-        salesArray = data.items;
-      }
-      
-      console.log('🔍 Extracted Sales Array:', salesArray);
-      console.log('🔍 Sales Array Length:', salesArray.length);
-      if (salesArray.length > 0) {
-        console.log('🔍 First Item Structure:', salesArray[0]);
-      }
-      
-      // Transform the API response to match your UI structure
-      if (salesArray && salesArray.length > 0) {
-        const transformedData = salesArray.map(item => ({
-          period: item.date || item.period || 'Unknown',
-          orders: item.order_count || item.orders || 0,
-          grossSales: `₹${(item.gross_sales || item.total_sales || 0).toLocaleString('en-IN')}`,
-          discounts: `₹${(item.discounts || 0).toLocaleString('en-IN')}`,
-          net: `₹${(item.net_sales || (item.total_sales - item.discounts) || 0).toLocaleString('en-IN')}`
-        }));
-        
-        console.log('✅ Transformed Sales Data:', transformedData);
-        setSalesData(transformedData);
-        
-        // Prepare chart data
-        const chartData = salesArray.map(item => ({
-          month: item.date || item.period || 'Unknown',
-          sales: item.gross_sales || item.total_sales || 0,
-          net: item.net_sales || ((item.total_sales || 0) - (item.discounts || 0))
-        }));
-        
-        console.log('✅ Sales Chart Data:', chartData);
-        setSalesChartData([...chartData]); // Force new array reference
-
-        // Calculate key metrics
-        const totalSales = salesArray.reduce((sum, item) => sum + (item.gross_sales || item.total_sales || 0), 0);
-        const totalOrders = salesArray.reduce((sum, item) => sum + (item.order_count || item.orders || 0), 0);
-        const totalDiscounts = salesArray.reduce((sum, item) => sum + (item.discounts || 0), 0);
-        
-        console.log('✅ Calculated Metrics - Sales:', totalSales, 'Orders:', totalOrders);
-        
-        setKeyMetrics(prev => ({
-          ...prev,
-          totalSales: `₹${totalSales.toLocaleString('en-IN')}`,
-          totalOrders: totalOrders.toString(),
-          avgOrderValue: `₹${totalOrders > 0 ? Math.round(totalSales / totalOrders).toLocaleString('en-IN') : '0'}`
-        }));
-      } else {
-        console.warn('⚠️ No sales data found in API response');
-        console.log('💡 Attempting to calculate sales from orders...');
-        
-        // Fallback: Calculate sales from orders
-        try {
-          const ordersResponse = await fetchWithAuth(`${API_BASE_URL}/orders?limit=1000`);
-          if (ordersResponse.ok) {
-            const ordersData = await ordersResponse.json();
-            const ordersArray = Array.isArray(ordersData) ? ordersData : 
-                               (ordersData.data || ordersData.results || []);
-            
-            if (ordersArray.length > 0) {
-              // Filter by date range
-              const endDate = new Date();
-              const startDate = new Date();
-              startDate.setDate(startDate.getDate() - filters.days);
-              
-              const filteredOrders = ordersArray.filter(order => {
-                const orderDate = new Date(order.created_at || order.order_date);
-                return orderDate >= startDate && orderDate <= endDate;
-              });
-              
-              // Group by date/week/month based on filters.view
-              const groupedData = {};
-              filteredOrders.forEach(order => {
-                const orderDate = new Date(order.created_at || order.order_date);
-                let period;
-                
-                if (filters.view === 'day') {
-                  period = orderDate.toISOString().split('T')[0];
-                } else if (filters.view === 'week') {
-                  const weekNum = Math.ceil((orderDate.getDate()) / 7);
-                  period = `Week ${weekNum}`;
-                } else {
-                  period = orderDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-                }
-                
-                if (!groupedData[period]) {
-                  groupedData[period] = {
-                    orders: 0,
-                    grossSales: 0,
-                    discounts: 0
-                  };
-                }
-                
-                groupedData[period].orders += 1;
-                groupedData[period].grossSales += (order.total || order.total_amount || 0);
-                groupedData[period].discounts += (order.discount || 0);
-              });
-              
-              // Convert to array
-              const calculatedSalesData = Object.entries(groupedData)
-                .map(([period, data]) => ({
-                  period,
-                  orders: data.orders,
-                  grossSales: `₹${data.grossSales.toLocaleString('en-IN')}`,
-                  discounts: `₹${data.discounts.toLocaleString('en-IN')}`,
-                  net: `₹${(data.grossSales - data.discounts).toLocaleString('en-IN')}`,
-                  grossSalesNum: data.grossSales,
-                  netNum: data.grossSales - data.discounts
-                }))
-                .sort((a, b) => a.period.localeCompare(b.period));
-              
-              console.log('✅ Calculated Sales Data from Orders:', calculatedSalesData);
-              setSalesData(calculatedSalesData);
-              
-              // Chart data
-              const chartData = calculatedSalesData.map(item => ({
-                month: item.period,
-                sales: item.grossSalesNum,
-                net: item.netNum
-              }));
-              
-              console.log('✅ Calculated Chart Data:', chartData);
-              setSalesChartData([...chartData]);
-              
-              // Update metrics
-              const totalSales = calculatedSalesData.reduce((sum, item) => sum + item.grossSalesNum, 0);
-              const totalOrders = calculatedSalesData.reduce((sum, item) => sum + item.orders, 0);
-              
-              setKeyMetrics(prev => ({
-                ...prev,
-                totalSales: `₹${totalSales.toLocaleString('en-IN')}`,
-                totalOrders: totalOrders.toString(),
-                avgOrderValue: `₹${totalOrders > 0 ? Math.round(totalSales / totalOrders).toLocaleString('en-IN') : '0'}`
-              }));
-              
-              return; // Exit successfully
-            }
-          }
-        } catch (fallbackErr) {
-          console.error('❌ Fallback calculation failed:', fallbackErr);
-        }
-        
-        // If all else fails, show empty
-        setSalesData([]);
-        setSalesChartData([]);
-      }
-    } catch (err) {
-      setError(err.message);
-      console.error('❌ Error fetching sales report:', err);
-    } finally {
-      setLoading(false);
+  const handleApiError = (error, context) => {
+    console.error(`Error in ${context}:`, error);
+    if (error.message.includes('401') || error.message.includes('403')) {
+      alert('Session expired or unauthorized. Please login again.');
+      setAuthToken('');
+      setShowLoginModal(true);
+    } else {
+      console.error(`Error in ${context}: ${error.message}`);
     }
   };
 
-  // Fetch Payment Methods Report
-  const fetchPaymentMethodsReport = async () => {
-    try {
-      const response = await fetchWithAuth(
-        `${API_BASE_URL}/reports/payment-methods?days=${filters.days}`
-      );
-
-      if (!response.ok) {
-        console.error('Payment methods API error:', response.status);
-        throw new Error('Failed to fetch payment methods report');
-      }
-      
-      const data = await response.json();
-      console.log('🔍 Payment methods data:', data);
-      
-      // Handle different response formats
-      const paymentsArray = Array.isArray(data) ? data : 
-                           (data.data || data.results || data.items || []);
-      
-      if (paymentsArray && paymentsArray.length > 0) {
-        const totalAmount = paymentsArray.reduce((sum, item) => sum + (item.total_amount || 0), 0);
-        const totalCount = paymentsArray.reduce((sum, item) => sum + (item.count || 0), 0);
-        
-        const transformedData = paymentsArray.map((item, index) => ({
-          mode: item.payment_method || item.mode || 'Unknown',
-          count: item.count || 0,
-          share: `${totalCount > 0 ? ((item.count / totalCount) * 100).toFixed(1) : 0}%`,
-          amount: `₹${(item.total_amount || 0).toLocaleString('en-IN')}`,
-          rank: index + 1
-        }));
-        
-        console.log('✅ Transformed payment data:', transformedData);
-        
-        setOrdersData(prev => ({
-          ...prev,
-          byPayment: transformedData
-        }));
-      } else {
-        console.warn('⚠️ Payment methods API returned empty, will use data from orders');
-        // Note: Orders fetch will populate this data anyway
-      }
-    } catch (err) {
-      console.error('❌ Error fetching payment methods report:', err);
-    }
-  };
-
-  // Fetch Orders by Payment Method from /api/v1/orders endpoint - FIXED
-  const fetchOrdersBySource = async () => {
-    try {
-      // Calculate date range
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - filters.days);
-
-      const response = await fetchWithAuth(
-        `${API_BASE_URL}/orders?limit=1000`
-      );
-
-      if (!response.ok) {
-        console.error('Orders API error:', response.status);
-        throw new Error('Failed to fetch orders');
-      }
-      
-      const data = await response.json();
-      console.log('🔍 RAW Orders API Response:', data);
-      console.log('🔍 Orders - Is Array?', Array.isArray(data));
-      
-      // Handle different response formats
-      let ordersArray = [];
-      if (Array.isArray(data)) {
-        ordersArray = data;
-      } else if (data && data.data && Array.isArray(data.data)) {
-        ordersArray = data.data;
-      } else if (data && data.results && Array.isArray(data.results)) {
-        ordersArray = data.results;
-      }
-      
-      console.log('🔍 Extracted Orders Array:', ordersArray.length, 'orders');
-      
-      if (ordersArray.length > 0) {
-        console.log('🔍 First Order Structure:', ordersArray[0]);
-        
-        // Filter orders within date range
-        const filteredOrders = ordersArray.filter(order => {
-          const orderDate = new Date(order.created_at || order.order_date);
-          return orderDate >= startDate && orderDate <= endDate;
-        });
-
-        console.log('🔍 Filtered Orders:', filteredOrders.length);
-
-        // Group by payment method
-        const ordersBySource = {};
-        let totalRevenue = 0;
-
-        filteredOrders.forEach(order => {
-          const source = order.payment_method || 'Unknown';
-          const orderTotal = order.total || order.total_amount || order.final_amount || 0;
-          
-          if (!ordersBySource[source]) {
-            ordersBySource[source] = {
-              orders: 0,
-              revenue: 0
-            };
-          }
-          
-          ordersBySource[source].orders += 1;
-          ordersBySource[source].revenue += orderTotal;
-          totalRevenue += orderTotal;
-        });
-
-        const totalOrders = filteredOrders.length;
-
-        console.log('🔍 Orders grouped by payment method:', ordersBySource);
-
-        // Transform to array format
-        const sourcesArray = Object.entries(ordersBySource)
-          .map(([source, data]) => ({
-            source: source.charAt(0).toUpperCase() + source.slice(1),
-            orders: data.orders,
-            share: `${totalOrders > 0 ? ((data.orders / totalOrders) * 100).toFixed(1) : 0}%`,
-            revenue: `₹${data.revenue.toLocaleString('en-IN')}`,
-            revenueNum: data.revenue
-          }))
-          .sort((a, b) => b.orders - a.orders)
-          .map((item, index) => ({
-            ...item,
-            rank: index + 1
-          }));
-
-        console.log('✅ Final sources array:', sourcesArray);
-
-        setOrdersData(prev => ({
-          ...prev,
-          bySource: sourcesArray
-        }));
-
-        // Prepare pie chart data
-        const pieData = sourcesArray.map(item => ({
-          name: item.source,
-          value: item.orders
-        }));
-        
-        console.log('✅ Pie Chart Data:', pieData);
-        setOrderDistributionData([...pieData]); // Force new array reference
-        
-        // Also populate payment summary table (byPayment)
-        const paymentSummary = sourcesArray.map((item, index) => ({
-          mode: item.source,
-          count: item.orders,
-          share: item.share,
-          amount: item.revenue,
-          rank: item.rank
-        }));
-        
-        console.log('✅ Payment Summary Table:', paymentSummary);
-        setOrdersData(prev => ({
-          ...prev,
-          byPayment: paymentSummary
-        }));
-      } else {
-        console.warn('⚠️ No orders found or empty array');
-        setOrdersData(prev => ({
-          ...prev,
-          bySource: []
-        }));
-        setOrderDistributionData([]);
-      }
-    } catch (err) {
-      console.error('❌ Error fetching orders by source:', err);
-      setOrdersData(prev => ({
-        ...prev,
-        bySource: []
-      }));
-      setOrderDistributionData([]);
-    }
-  };
-
-  // Fetch Expenses from /api/v1/expenses/ endpoint - FIXED
-  const fetchExpensesReport = async () => {
-    try {
-      // Calculate date range
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - filters.days);
-
-      const response = await fetchWithAuth(
-        `${API_BASE_URL}/expenses/?limit=1000`
-      );
-
-      if (!response.ok) {
-        console.error('Expenses API error:', response.status);
-        throw new Error('Failed to fetch expenses');
-      }
-      
-      const data = await response.json();
-      console.log('🔍 RAW Expenses data:', data);
-      
-      // Handle different response formats
-      const expensesArray = Array.isArray(data) ? data : 
-                           (data.data || data.results || data.items || []);
-      
-      console.log('🔍 Expenses Array Length:', expensesArray.length);
-      
-      if (expensesArray && expensesArray.length > 0) {
-        console.log('🔍 First Expense Structure:', expensesArray[0]);
-        
-        // Filter expenses within date range
-        const filteredExpenses = expensesArray.filter(expense => {
-          const expenseDate = new Date(expense.date || expense.created_at);
-          return expenseDate >= startDate && expenseDate <= endDate;
-        });
-
-        // Group by category
-        const expensesByCategory = {};
-        let totalExpenses = 0;
-
-        filteredExpenses.forEach(expense => {
-          const category = expense.category || 'Other';
-          const amount = expense.amount || 0;
-          
-          if (!expensesByCategory[category]) {
-            expensesByCategory[category] = {
-              transactions: 0,
-              amount: 0
-            };
-          }
-          
-          expensesByCategory[category].transactions += 1;
-          expensesByCategory[category].amount += amount;
-          totalExpenses += amount;
-        });
-
-        // Transform to array format
-        const expensesArrayTransformed = Object.entries(expensesByCategory)
-          .map(([category, data]) => ({
-            category: category,
-            transactions: data.transactions,
-            amount: `₹${data.amount.toLocaleString('en-IN')}`,
-            amountNum: data.amount,
-            share: `${totalExpenses > 0 ? ((data.amount / totalExpenses) * 100).toFixed(1) : 0}%`
-          }))
-          .sort((a, b) => b.amountNum - a.amountNum)
-          .map((item, index) => ({
-            ...item,
-            rank: index + 1
-          }));
-
-        console.log('✅ Transformed expenses:', expensesArrayTransformed);
-        setExpensesData(expensesArrayTransformed);
-
-        // Prepare chart data (top categories)
-        const chartData = expensesArrayTransformed.slice(0, 10).map(item => ({
-          category: item.category.length > 15 ? item.category.substring(0, 15) + '...' : item.category,
-          amount: item.amountNum
-        }));
-        
-        console.log('✅ Expenses Chart Data:', chartData);
-        setExpensesChartData([...chartData]); // Force new array reference
-
-        // Update total expenses in key metrics
-        setKeyMetrics(prev => ({
-          ...prev,
-          totalExpenses: `₹${totalExpenses.toLocaleString('en-IN')}`
-        }));
-
-        // Calculate gross margin if we have sales data
-        const salesAmount = parseFloat(keyMetrics.totalSales.replace(/[₹,]/g, '')) || 0;
-        if (salesAmount > 0) {
-          const margin = ((salesAmount - totalExpenses) / salesAmount * 100).toFixed(1);
-          setKeyMetrics(prev => ({
-            ...prev,
-            grossMargin: `${margin}%`
-          }));
-        }
-      } else {
-        console.warn('⚠️ No expenses data');
-        setExpensesData([]);
-        setExpensesChartData([]);
-      }
-    } catch (err) {
-      console.error('❌ Error fetching expenses report:', err);
-      setExpensesData([]);
-      setExpensesChartData([]);
-    }
-  };
-
-  // Fetch Product Sales Report
-  const fetchProductSalesReport = async () => {
-    try {
-      const response = await fetchWithAuth(
-        `${API_BASE_URL}/reports/products-sales?days=${filters.days}&limit=50`
-      );
-
-      if (!response.ok) {
-        console.error('Product sales API error:', response.status);
-        throw new Error('Failed to fetch product sales report');
-      }
-      
-      const data = await response.json();
-      console.log('Product sales data:', data);
-      
-      const productsArray = Array.isArray(data) ? data : 
-                           (data.data || data.results || data.items || []);
-      
-      if (productsArray && productsArray.length > 0) {
-        setProductSalesData(productsArray);
-        
-        // Get top category if available
-        if (productsArray[0].category) {
-          setKeyMetrics(prev => ({
-            ...prev,
-            topCategory: productsArray[0].category
-          }));
-        }
-      }
-    } catch (err) {
-      console.error('Error fetching product sales report:', err);
-    }
-  };
-
-  // Fetch Daily Summary (for additional metrics)
-  const fetchDailySummary = async () => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const response = await fetchWithAuth(
-        `${API_BASE_URL}/reports/daily-summary?date=${today}`
-      );
-
-      if (!response.ok) {
-        console.error('Daily summary API error:', response.status);
-        return;
-      }
-      
-      const data = await response.json();
-      console.log('Daily summary data:', data);
-      
-      if (data && data.gross_margin) {
-        setKeyMetrics(prev => ({
-          ...prev,
-          grossMargin: `${data.gross_margin}%`
-        }));
-      }
-    } catch (err) {
-      console.error('Error fetching daily summary:', err);
-    }
-  };
-
-  // Fetch all reports
-  const fetchAllReports = async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      await Promise.all([
-        fetchSalesReport(),
-        fetchPaymentMethodsReport(),
-        fetchOrdersBySource(),
-        fetchExpensesReport(),
-        fetchProductSalesReport(),
-        fetchDailySummary()
-      ]);
-    } catch (err) {
-      setError(err.message || 'Failed to load reports. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Initial load
-  useEffect(() => {
-    const token = getAuthToken();
-    if (!token) {
-      setError('No authentication token found. Please login first.');
+  // Login Function
+  const handleLogin = async () => {
+    if (!credentials.username || !credentials.password) {
+      alert('Please enter username and password');
       return;
     }
-    fetchAllReports();
-  }, []);
 
-  // Recalculate gross margin when sales or expenses change
-  useEffect(() => {
-    const salesAmount = parseFloat(keyMetrics.totalSales.replace(/[₹,]/g, '')) || 0;
-    const expensesAmount = parseFloat(keyMetrics.totalExpenses.replace(/[₹,]/g, '')) || 0;
-    
-    if (salesAmount > 0 && expensesAmount > 0) {
-      const margin = ((salesAmount - expensesAmount) / salesAmount * 100).toFixed(1);
-      setKeyMetrics(prev => ({
-        ...prev,
-        grossMargin: `${margin}%`
-      }));
+    setIsLoggingIn(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: credentials.username,
+          password: credentials.password
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Login failed. Please check your credentials.');
+      }
+
+      const data = await response.json();
+      const token = data.access_token || data.token;
+      
+      if (token) {
+        setAuthToken(token);
+        setShowLoginModal(false);
+        setCredentials({ username: '', password: '' });
+      } else {
+        throw new Error('No token received from server');
+      }
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setIsLoggingIn(false);
     }
-  }, [keyMetrics.totalSales, keyMetrics.totalExpenses]);
-
-  const handleExportCSV = () => {
-    const csv = salesData.map(row => 
-      `${row.period},${row.orders},${row.grossSales},${row.discounts},${row.net}`
-    ).join('\n');
-    const blob = new Blob([`Period,Orders,Gross Sales,Discounts,Net\n${csv}`], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sales_report_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
   };
 
-  const handlePrint = () => {
-    window.print();
+  // Skip Login (Demo Mode)
+  const handleSkipLogin = () => {
+    setShowLoginModal(false);
+    // Load mock data instead
+    loadMockData();
   };
 
-  const handleReset = () => {
-    setFilters({
-      reportType: 'Sales',
-      view: 'day',
-      outlet: 'All',
-      paymentMode: 'All',
-      sort: 'Total Desc',
-      days: 30,
-      dateRange: { start: '2025-01', end: '2025-12' }
+  const loadMockData = () => {
+    setDailyStats({
+      today_sales: 12450,
+      total_orders: 24,
+      avg_ticket: 518,
+      total_expenses: 3200
+    });
+    
+    setRecentOrders([
+      { id: '#1256', type: 'Dine-In', time: '5m ago', amount: 850 },
+      { id: '#1255', type: 'Takeaway', time: '15m ago', amount: 420 },
+      { id: '#1254', type: 'Delivery', time: '32m ago', amount: 1200 }
+    ]);
+
+    setCustomers([
+      { name: 'John Doe', phone: '+91 9876543210', email: 'john@example.com', orders: 15 },
+      { name: 'Jane Smith', phone: '+91 9876543211', email: 'jane@example.com', orders: 8 }
+    ]);
+
+    setOffers([
+      { code: 'SAVE10', type: 'Percentage', value: '10%', category: 'All items', id: 1, is_active: true },
+      { code: 'FLAT50', type: 'Flat', value: '₹50', category: 'Min ₹500', id: 2, is_active: true }
+    ]);
+
+    setStaff([
+      { name: 'Raj Kumar', role: 'Chef', payscale: '₹25,000', joined: '01 Jan, 2024', id: 1 },
+      { name: 'Priya Singh', role: 'Cashier', payscale: '₹18,000', joined: '15 Feb, 2024', id: 2 }
+    ]);
+
+    setExpenses([
+      { title: 'Vegetables', amount: '₹ 1,200', date: '20 Jan, 2026', source: 'Manual', id: 1 },
+      { title: 'Electricity Bill', amount: '₹ 2,000', date: '19 Jan, 2026', source: 'Auto', id: 2 }
+    ]);
+  };
+
+  // Fetch Functions
+  const fetchDailyStats = async () => {
+    if (!authToken) return;
+    
+    setIsLoadingStats(true);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const response = await fetch(
+        `${API_BASE_URL}/reports/daily-summary?date=${today}`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch daily stats');
+      const data = await response.json();
+      setDailyStats({
+        today_sales: data.total_sales || 0,
+        total_orders: data.total_orders || 0,
+        avg_ticket: data.avg_ticket || 0,
+        total_expenses: data.total_expenses || 0
+      });
+    } catch (error) {
+      handleApiError(error, 'fetchDailyStats');
+    } finally {
+      setIsLoadingStats(false);
+    }
+  };
+
+  const fetchOrders = async () => {
+    if (!authToken) return;
+    
+    setIsLoadingOrders(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/orders?skip=0&limit=10`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch orders');
+      const data = await response.json();
+      
+      const ordersArray = data.data || data || [];
+      const transformedOrders = ordersArray.map((order, index) => ({
+        id: order.order_number || order.id || (1256 - index),
+        type: order.order_type || 'Dine-In',
+        time: formatTime(order.created_at),
+        amount: order.total || order.total_amount || 0
+      }));
+      setRecentOrders(transformedOrders);
+    } catch (error) {
+      handleApiError(error, 'fetchOrders');
+    } finally {
+      setIsLoadingOrders(false);
+    }
+  };
+
+  const fetchCustomers = async () => {
+    if (!authToken) return;
+    
+    setIsLoadingCustomers(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/customers?skip=0&limit=100&is_active=true`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch customers');
+      const data = await response.json();
+      
+      const customersArray = data.data || data || [];
+      const transformedCustomers = customersArray.map(customer => ({
+        name: `${customer.first_name} ${customer.last_name || ''}`.trim(),
+        phone: customer.phone,
+        email: customer.email,
+        orders: customer.order_count || 0
+      }));
+      setCustomers(transformedCustomers);
+    } catch (error) {
+      handleApiError(error, 'fetchCustomers');
+    } finally {
+      setIsLoadingCustomers(false);
+    }
+  };
+
+  const fetchOffers = async () => {
+    if (!authToken) return;
+    
+    setIsLoadingOffers(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/coupons?skip=0&limit=100&active_only=true`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch offers');
+      const data = await response.json();
+      
+      const offersArray = data.data || data || [];
+      const transformedOffers = offersArray.map(coupon => ({
+        code: coupon.code,
+        type: coupon.discount_type === 'percentage' ? 'Percentage' : 'Flat',
+        value: coupon.discount_type === 'percentage' 
+          ? `${coupon.discount_value}%` 
+          : `₹${coupon.discount_value}`,
+        category: coupon.description || '',
+        id: coupon.id,
+        is_active: coupon.is_active
+      }));
+      setOffers(transformedOffers);
+    } catch (error) {
+      handleApiError(error, 'fetchOffers');
+    } finally {
+      setIsLoadingOffers(false);
+    }
+  };
+
+  const fetchStaff = async () => {
+    if (!authToken) return;
+    
+    setIsLoadingStaff(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/staff?skip=0&limit=100`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch staff');
+      const data = await response.json();
+      
+      const staffArray = data.data || data || [];
+      const transformedStaff = staffArray.map(member => ({
+        name: member.name,
+        role: member.role,
+        payscale: `₹${member.salary?.toLocaleString() || 0}`,
+        joined: formatDate(member.joined),
+        id: member.id,
+        phone: member.phone
+      }));
+      setStaff(transformedStaff);
+    } catch (error) {
+      handleApiError(error, 'fetchStaff');
+    } finally {
+      setIsLoadingStaff(false);
+    }
+  };
+
+  const fetchExpenses = async () => {
+    if (!authToken) return;
+    
+    setIsLoadingExpenses(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/expenses?skip=0&limit=100`,
+        { headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch expenses');
+      const data = await response.json();
+      
+      const expensesArray = data.data || data || [];
+      const transformedExpenses = expensesArray.map(expense => ({
+        title: expense.title,
+        amount: `₹ ${expense.amount?.toLocaleString() || 0}`,
+        date: formatDate(expense.date),
+        source: expense.type === 'manual' ? 'Manual' : 'Auto',
+        id: expense.id
+      }));
+      setExpenses(transformedExpenses);
+    } catch (error) {
+      handleApiError(error, 'fetchExpenses');
+    } finally {
+      setIsLoadingExpenses(false);
+    }
+  };
+
+  // Helper functions for date/time formatting
+  const formatTime = (datetime) => {
+    if (!datetime) return 'N/A';
+    const now = new Date();
+    const then = new Date(datetime);
+    const diffMs = now - then;
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${Math.floor(diffHours / 24)}d ago`;
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-IN', { 
+      day: '2-digit', 
+      month: 'short', 
+      year: 'numeric' 
     });
   };
 
-  const handleApply = () => {
-    fetchAllReports();
-  };
-
-  const formatDateRange = (dateStr) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-  };
-
-  // Calculate days from date range
-  useEffect(() => {
-    const startDate = new Date(filters.dateRange.start);
-    const endDate = new Date(filters.dateRange.end);
-    const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
-    
-    if (daysDiff > 0 && daysDiff !== filters.days) {
-      setFilters(prev => ({ ...prev, days: daysDiff }));
+  // Add functions with API integration
+  const addCustomer = async () => {
+    if (!newCustomer.first_name || !newCustomer.phone) {
+      alert('Please fill in first name and phone');
+      return;
     }
-  }, [filters.dateRange]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <RotateCw className="animate-spin h-12 w-12 text-primary mx-auto mb-4" />
-          <p className="text-lg text-foreground">Loading reports...</p>
-        </div>
-      </div>
-    );
-  }
+    if (!authToken) {
+      alert('Please login first');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/customers`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(newCustomer)
+      });
+
+      if (!response.ok) throw new Error('Failed to create customer');
+      
+      alert('Customer added successfully!');
+      setNewCustomer({ 
+        first_name: '', 
+        last_name: '',
+        phone: '', 
+        email: '',
+        address: '',
+        city: '',
+        state: '',
+        zip_code: '',
+        country: 'India'
+      });
+      setShowCustomerModal(false);
+      fetchCustomers();
+    } catch (error) {
+      handleApiError(error, 'addCustomer');
+    }
+  };
+
+  const addOffer = async () => {
+    if (!newOffer.code || !newOffer.discount_value) {
+      alert('Please fill in code and value');
+      return;
+    }
+
+    if (!authToken) {
+      alert('Please login first');
+      return;
+    }
+
+    try {
+      const payload = {
+        ...newOffer,
+        discount_value: parseFloat(newOffer.discount_value)
+      };
+
+      const response = await fetch(`${API_BASE_URL}/coupons`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) throw new Error('Failed to create offer');
+      
+      alert('Offer created successfully!');
+      setNewOffer({ 
+        code: '', 
+        discount_type: 'percentage', 
+        discount_value: '', 
+        min_order_amount: 0,
+        max_uses: 0,
+        valid_from: new Date().toISOString(),
+        valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        description: '' 
+      });
+      setShowOfferModal(false);
+      fetchOffers();
+    } catch (error) {
+      handleApiError(error, 'addOffer');
+    }
+  };
+
+  const addStaff = async () => {
+    if (!newStaff.name || !newStaff.salary) {
+      alert('Please fill in name and salary');
+      return;
+    }
+
+    if (!authToken) {
+      alert('Please login first');
+      return;
+    }
+
+    try {
+      const payload = {
+        ...newStaff,
+        salary: parseFloat(newStaff.salary)
+      };
+
+      const response = await fetch(`${API_BASE_URL}/staff`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) throw new Error('Failed to add staff');
+      
+      alert('Staff member added successfully!');
+      setNewStaff({ 
+        name: '', 
+        role: 'Cashier', 
+        salary: '', 
+        joined: new Date().toISOString().split('T')[0],
+        phone: '',
+        aadhar: ''
+      });
+      setShowStaffModal(false);
+      fetchStaff();
+    } catch (error) {
+      handleApiError(error, 'addStaff');
+    }
+  };
+
+  const addExpense = async () => {
+    if (!newExpense.title || !newExpense.amount) {
+      alert('Please fill in title and amount');
+      return;
+    }
+
+    if (!authToken) {
+      alert('Please login first');
+      return;
+    }
+
+    try {
+      const payload = {
+        ...newExpense,
+        amount: parseFloat(newExpense.amount)
+      };
+
+      const response = await fetch(`${API_BASE_URL}/expenses`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) throw new Error('Failed to add expense');
+      
+      alert('Expense added successfully!');
+      setNewExpense({ 
+        title: '', 
+        amount: '', 
+        date: new Date().toISOString().split('T')[0], 
+        category: 'Supplies',
+        subtitle: 'Manual entry',
+        type: 'manual',
+        account: 'Cashbook',
+        tax: 0,
+        payment_mode: 'Cash',
+        notes: ''
+      });
+      setShowExpenseModal(false);
+      fetchExpenses();
+      fetchDailyStats();
+    } catch (error) {
+      handleApiError(error, 'addExpense');
+    }
+  };
+
+  // Load all data on component mount
+  useEffect(() => {
+    if (authToken) {
+      fetchDailyStats();
+      fetchOrders();
+      fetchCustomers();
+      fetchOffers();
+      fetchStaff();
+      fetchExpenses();
+    } else {
+      setShowLoginModal(true);
+    }
+  }, [authToken]);
+
+  // Navigation handlers
+  const handleNavigateToPOS = () => {
+    if (onNavigate) {
+      onNavigate('pos');
+    }
+  };
+
+  const handleNavigateToMenu = () => {
+    if (onNavigate) {
+      onNavigate('menu');
+    }
+  };
+
+  const handleNavigateToReports = () => {
+    if (onNavigate) {
+      onNavigate('reports');
+    }
+  };
+
+  const handleNavigateToPastOrders = () => {
+    if (onNavigate) {
+      onNavigate('past-orders');
+    }
+  };
+
+  const handleSeeAllOrders = () => {
+    handleNavigateToPastOrders();
+  };
+
+  // Computed values
+  const displayedOrders = showAllOrders ? recentOrders : recentOrders.slice(0, 3);
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
-      <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 lg:mb-8 gap-3">
-          <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Reports</h1>
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <button 
-              onClick={handleExportCSV}
-              disabled={loading || salesData.length === 0}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Download size={16} />
-              <span>Export</span>
-            </button>
-            <button 
-              onClick={handlePrint}
-              disabled={loading}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Printer size={16} />
-              <span>Print</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Error Message */}
-        {error && (
-          <div className="mb-4 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex items-start gap-3">
-            <AlertCircle className="text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" size={20} />
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-red-800 dark:text-red-300 mb-1">Error Loading Reports</h3>
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+    <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen">
+      {/* Login Modal */}
+      {showLoginModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Login Required</h3>
+            <p className="text-sm text-muted-foreground mb-4">Please login to access the dashboard or continue in demo mode.</p>
+            
+            <input 
+              type="text"
+              placeholder="Username"
+              value={credentials.username}
+              onChange={(e) => setCredentials({...credentials, username: e.target.value})}
+              onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="password"
+              placeholder="Password"
+              value={credentials.password}
+              onChange={(e) => setCredentials({...credentials, password: e.target.value})}
+              onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-4"
+            />
+            
+            <div className="flex gap-2 mb-3">
               <button 
-                onClick={fetchAllReports}
-                className="mt-2 text-sm text-red-700 dark:text-red-300 underline hover:text-red-800 dark:hover:text-red-200"
+                onClick={handleLogin} 
+                disabled={isLoggingIn}
+                className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:bg-gray-400"
               >
-                Try Again
+                {isLoggingIn ? 'Logging in...' : 'Login'}
               </button>
             </div>
+            
+            <button 
+              onClick={handleSkipLogin}
+              className="w-full py-2 bg-muted text-foreground rounded-lg hover:bg-secondary"
+            >
+              Continue in Demo Mode
+            </button>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Filters and Key Metrics */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-6 lg:mb-8">
-          {/* Filters */}
-          <div className="lg:col-span-2 rounded-xl px-3 sm:px-4 py-4 bg-card border border-border">
-<div className="flex flex-col xs:flex-row items-start xs:items-center justify-between mb-3 sm:mb-4 gap-2">
-<h2 className="text-sm sm:text-base font-semibold text-card-foreground">Filters</h2>
-<span className="px-2 py-0.5 sm:py-1 rounded-full text-xs font-medium bg-teal-600 text-white whitespace-nowrap">
-🔒 Authenticated
-</span>
+      {/* Customer Modal */}
+      {showCustomerModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Add Customer</h3>
+            <input 
+              type="text"
+              placeholder="First name *"
+              value={newCustomer.first_name}
+              onChange={(e) => setNewCustomer({...newCustomer, first_name: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="Last name"
+              value={newCustomer.last_name}
+              onChange={(e) => setNewCustomer({...newCustomer, last_name: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="+91 Phone number *"
+              value={newCustomer.phone}
+              onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="email"
+              placeholder="example@mail.com"
+              value={newCustomer.email}
+              onChange={(e) => setNewCustomer({...newCustomer, email: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="Address"
+              value={newCustomer.address}
+              onChange={(e) => setNewCustomer({...newCustomer, address: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="City"
+              value={newCustomer.city}
+              onChange={(e) => setNewCustomer({...newCustomer, city: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="State"
+              value={newCustomer.state}
+              onChange={(e) => setNewCustomer({...newCustomer, state: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="ZIP Code"
+              value={newCustomer.zip_code}
+              onChange={(e) => setNewCustomer({...newCustomer, zip_code: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <div className="flex gap-2">
+              <button onClick={addCustomer} className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Save</button>
+              <button onClick={() => setShowCustomerModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Offer Modal */}
+      {showOfferModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Create Offer</h3>
+            <input 
+              type="text"
+              placeholder="Coupon code (e.g. SAVE10) *"
+              value={newOffer.code}
+              onChange={(e) => setNewOffer({...newOffer, code: e.target.value.toUpperCase()})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <select 
+              value={newOffer.discount_type}
+              onChange={(e) => setNewOffer({...newOffer, discount_type: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            >
+              <option value="percentage">Percentage</option>
+              <option value="flat">Flat</option>
+            </select>
+            <input 
+              type="number"
+              placeholder="Value (e.g. 10 or 50) *"
+              value={newOffer.discount_value}
+              onChange={(e) => setNewOffer({...newOffer, discount_value: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="number"
+              placeholder="Minimum order amount"
+              value={newOffer.min_order_amount}
+              onChange={(e) => setNewOffer({...newOffer, min_order_amount: parseFloat(e.target.value) || 0})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="number"
+              placeholder="Max uses (0 for unlimited)"
+              value={newOffer.max_uses}
+              onChange={(e) => setNewOffer({...newOffer, max_uses: parseInt(e.target.value) || 0})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="Description"
+              value={newOffer.description}
+              onChange={(e) => setNewOffer({...newOffer, description: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <div className="flex gap-2">
+              <button onClick={addOffer} className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Create</button>
+              <button onClick={() => setShowOfferModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Staff Modal */}
+      {showStaffModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Add Staff</h3>
+            <input 
+              type="text"
+              placeholder="Full name *"
+              value={newStaff.name}
+onChange={(e) => setNewStaff({...newStaff, name: e.target.value})}
+className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+/>
+<input
+type="text"
+placeholder="Phone number (10 digits) *"
+value={newStaff.phone}
+onChange={(e) => setNewStaff({...newStaff, phone: e.target.value})}
+className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+/>
+<select
+value={newStaff.role}
+onChange={(e) => setNewStaff({...newStaff, role: e.target.value})}
+className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+>
+<option value="Cashier">Cashier</option>
+<option value="Chef">Chef</option>
+<option value="Waiter">Waiter</option>
+<option value="Manager">Manager</option>
+</select>
+<input
+type="number"
+placeholder="Monthly salary (e.g. 15000) *"
+value={newStaff.salary}
+onChange={(e) => setNewStaff({...newStaff, salary: e.target.value})}
+className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+/>
+<input
+type="date"
+value={newStaff.joined}
+onChange={(e) => setNewStaff({...newStaff, joined: e.target.value})}
+className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+/>
+<input
+type="text"
+placeholder="Aadhar number (optional)"
+value={newStaff.aadhar}
+onChange={(e) => setNewStaff({...newStaff, aadhar: e.target.value})}
+className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+/>
+<div className="flex gap-2">
+<button onClick={addStaff} className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Save</button>
+<button onClick={() => setShowStaffModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
 </div>
+</div>
+</div>
+)}  {/* Expense Modal */}
+  {showExpenseModal && (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full">
+        <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Add Expense</h3>
+        <input 
+          type="text"
+          placeholder="Expense title (e.g. Milk purchase) *"
+          value={newExpense.title}
+          onChange={(e) => setNewExpense({...newExpense, title: e.target.value})}
+          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+        />
+        <input 
+          type="number"
+          placeholder="Amount (e.g. 2150) *"
+          value={newExpense.amount}
+          onChange={(e) => setNewExpense({...newExpense, amount: e.target.value})}
+          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+        />
+        <input 
+          type="date"
+          value={newExpense.date}
+          onChange={(e) => setNewExpense({...newExpense, date: e.target.value})}
+          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+        />
+        <select 
+          value={newExpense.category}
+          onChange={(e) => setNewExpense({...newExpense, category: e.target.value})}
+          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+        >
+          <option value="Supplies">Supplies</option>
+          <option value="Utilities">Utilities</option>
+          <option value="Salary">Salary</option>
+          <option value="Maintenance">Maintenance</option>
+        </select>
+        <select 
+          value={newExpense.payment_mode}
+          onChange={(e) => setNewExpense({...newExpense, payment_mode: e.target.value})}
+          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+        >
+          <option value="Cash">Cash</option>
+          <option value="UPI">UPI</option>
+          <option value="Card">Card</option>
+          <option value="Bank Transfer">Bank Transfer</option>
+        </select>
+        <textarea 
+          placeholder="Notes (optional)"
+          value={newExpense.notes}
+          onChange={(e) => setNewExpense({...newExpense, notes: e.target.value})}
+          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+          rows="2"
+        />
+        <div className="flex gap-2">
+          <button onClick={addExpense} className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Save</button>
+          <button onClick={() => setShowExpenseModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
+        </div>
+      </div>
+    </div>
+  )}  {/* Header */}
+  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-4">
+    <div>
+      <h2 className="text-2xl font-semibold text-foreground">Dashboard</h2>
+      {!authToken && (
+        <p className="text-sm text-muted-foreground">Demo Mode - Data is not synced</p>
+      )}
+    </div>
+    <div className="flex gap-2">
+      {authToken && (
+        <button
+          onClick={() => {
+            fetchDailyStats();
+            fetchOrders();
+            fetchCustomers();
+            fetchOffers();
+            fetchStaff();
+            fetchExpenses();
+          }}
+          className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm"
+        >
+          Refresh Data
+        </button>
+      )}
+      <button
+        onClick={() => {
+          setAuthToken('');
+          setShowLoginModal(true);
+        }}
+        className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-secondary text-sm"
+      >
+        {authToken ? 'Logout' : 'Login'}
+      </button>
+    </div>
+  </div>  {/* Stats Cards */}
+  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
+      <div className="flex items-center justify-between mb-2 sm:mb-3">
+        <p className="text-muted-foreground text-xs sm:text-sm">Today Sales</p>
+        <DollarSign className="text-teal-400" size={18} />
+      </div>
+      <p className="text-xl sm:text-3xl font-bold text-card-foreground">
+        {isLoadingStats ? '...' : `₹${dailyStats.today_sales.toLocaleString()}`}
+      </p>
+    </div>
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
+      <div className="flex items-center justify-between mb-2 sm:mb-3">
+        <p className="text-muted-foreground text-xs sm:text-sm">Orders</p>
+        <ShoppingBag className="text-teal-400" size={18} />
+      </div>
+      <p className="text-xl sm:text-3xl font-bold text-card-foreground">
+        {isLoadingStats ? '...' : dailyStats.total_orders}
+      </p>
+    </div>
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
+      <div className="flex items-center justify-between mb-2 sm:mb-3">
+        <p className="text-muted-foreground text-xs sm:text-sm">Avg Ticket</p>
+        <TrendingUp className="text-teal-400" size={18} />
+      </div>
+      <p className="text-xl sm:text-3xl font-bold text-card-foreground">
+        {isLoadingStats ? '...' : `₹${dailyStats.avg_ticket.toLocaleString()}`}
+      </p>
+    </div>
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
+      <div className="flex items-center justify-between mb-2 sm:mb-3">
+        <p className="text-muted-foreground text-xs sm:text-sm">Expenses</p>
+        <Wallet className="text-teal-400" size={18} />
+      </div>
+      <p className="text-xl sm:text-3xl font-bold text-card-foreground">
+        {isLoadingStats ? '...' : `₹${dailyStats.total_expenses.toLocaleString()}`}
+      </p>
+    </div>
+  </div>  {/* Quick Links, Recent Orders, Activity */}
+  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+    {/* Quick Links */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-4">Quick Links</h3>
+      <div className="space-y-3">
+        <button 
+          onClick={handleNavigateToPOS}
+          className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
+        >
+          <div className="text-left">
+            <p className="font-medium text-sm sm:text-base">Open POS</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Start billing and print KOT</p>
+          </div>
+          <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Open</span>
+        </button>
+        <button 
+          onClick={handleNavigateToMenu}
+          className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
+        >
+          <div className="text-left">
+            <p className="font-medium text-sm sm:text-base">Manage Menu</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Categories, items and prices</p>
+          </div>
+          <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Menu</span>
+        </button>
+        <button 
+          onClick={handleNavigateToReports}
+          className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
+        >
+          <div className="text-left">
+            <p className="font-medium text-sm sm:text-base">View Reports</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Sales and orders</p>
+          </div>
+          <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Reports</span>
+        </button>
+      </div>
+    </div>    {/* Recent Orders */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Recent Orders</h3>
+        <button 
+          onClick={handleSeeAllOrders}
+          className="text-teal-400 text-xs sm:text-sm hover:underline"
+        >
+          See all
+        </button>
+      </div>
+      {isLoadingOrders ? (
+        <p className="text-center text-muted-foreground">Loading...</p>
+      ) : (
         <div className="space-y-3">
-          {/* Row 1 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-            <div>
-              <label className="block text-xs mb-1 text-muted-foreground font-medium">Report Type</label>
-              <div className="relative">
-                <select
-                  value={filters.reportType}
-                  onChange={(e) => setFilters({...filters, reportType: e.target.value})}
-                  className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
-                >
-                  <option>Sales</option>
-                  <option>Orders</option>
-                  <option>Expenses</option>
-                </select>
-                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
+          {displayedOrders.length > 0 ? displayedOrders.map(order => (
+            <div key={order.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+              <div className="text-foreground">
+                <p className="font-medium text-xs sm:text-sm">{order.id} • {order.type}</p>
+                <p className="text-xs text-muted-foreground">{order.time}</p>
               </div>
+              <p className="font-semibold text-foreground text-sm sm:text-base">₹ {order.amount}</p>
             </div>
-            <div>
-              <label className="block text-xs mb-1 text-muted-foreground font-medium">View</label>
-              <div className="relative">
-                <select
-                  value={filters.view}
-                  onChange={(e) => setFilters({...filters, view: e.target.value})}
-                  className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
-                >
-                  <option value="day">By Day</option>
-                  <option value="week">By Week</option>
-                  <option value="month">By Month</option>
-                </select>
-                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
-              </div>
-            </div>
-            <div className="sm:col-span-2 lg:col-span-1">
-              <label className="block text-xs mb-1 text-muted-foreground font-medium">Days</label>
-              <input
-                type="number"
-                value={filters.days}
-                onChange={(e) => setFilters({...filters, days: parseInt(e.target.value) || 30})}
-                className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500"
-                min="1"
-                max="365"
-              />
-            </div>
-          </div>
-
-          {/* Row 2 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-            <div>
-              <label className="block text-xs mb-1 text-muted-foreground font-medium">Outlet</label>
-              <div className="relative">
-                <select
-                  value={filters.outlet}
-                  onChange={(e) => setFilters({...filters, outlet: e.target.value})}
-                  className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
-                >
-                  <option>All</option>
-                  <option>Main Branch</option>
-                  <option>Downtown</option>
-                </select>
-                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs mb-1 text-muted-foreground font-medium">Payment Mode</label>
-              <div className="relative">
-                <select
-                  value={filters.paymentMode}
-                  onChange={(e) => setFilters({...filters, paymentMode: e.target.value})}
-                  className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
-                >
-                  <option>All</option>
-                  <option>UPI</option>
-                  <option>Cash</option>
-                  <option>Card</option>
-                </select>
-                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
-              </div>
-            </div>
-            <div className="sm:col-span-2 lg:col-span-1">
-              <label className="block text-xs mb-1 text-muted-foreground font-medium">Sort</label>
-              <div className="relative">
-                <select
-                  value={filters.sort}
-                  onChange={(e) => setFilters({...filters, sort: e.target.value})}
-                  className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
-                >
-                  <option>Total Desc</option>
-                  <option>Total Asc</option>
-                  <option>Date Desc</option>
-                </select>
-                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
-              </div>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex flex-col xs:flex-row justify-end gap-2 pt-1">
-            <button
-              onClick={handleReset}
-              disabled={loading}
-              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-colors text-sm text-teal-600 border border-teal-600 hover:bg-teal-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <RotateCw size={14} />
-              Reset
-            </button>
-            <button
-              onClick={handleApply}
-              disabled={loading}
-              className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-colors text-sm bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Filter size={14} />
-              Apply
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Key Metrics */}
-      <div className="rounded-xl px-3 sm:px-4 py-4 bg-card border border-border">
-        <h2 className="text-sm sm:text-base font-semibold mb-3 text-card-foreground">Key Metrics</h2>
-        <div className="space-y-2.5">
-          <div className="grid grid-cols-3 gap-2">
-            <div className="text-center p-2 rounded-lg bg-muted">
-              <div className="text-xs text-muted-foreground mb-0.5 truncate">Sales</div>
-              <div className="text-xs sm:text-sm lg:text-base font-bold text-foreground truncate">{keyMetrics.totalSales}</div>
-            </div>
-            <div className="text-center p-2 rounded-lg bg-muted">
-              <div className="text-xs text-muted-foreground mb-0.5 truncate">Orders</div>
-              <div className="text-xs sm:text-sm lg:text-base font-bold text-foreground truncate">{keyMetrics.totalOrders}</div>
-            </div>
-            <div className="text-center p-2 rounded-lg bg-muted">
-              <div className="text-xs text-muted-foreground mb-0.5 truncate">Expenses</div>
-              <div className="text-xs sm:text-sm lg:text-base font-bold text-foreground truncate">{keyMetrics.totalExpenses}</div>
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="text-center p-2 rounded-lg bg-muted">
-              <div className="text-xs text-muted-foreground mb-0.5 truncate">Avg</div>
-              <div className="text-[10px] sm:text-xs lg:text-sm font-bold text-foreground truncate">{keyMetrics.avgOrderValue}</div>
-            </div>
-            <div className="text-center p-2 rounded-lg bg-muted">
-              <div className="text-xs text-muted-foreground mb-0.5 truncate">Margin</div>
-              <div className="text-[10px] sm:text-xs lg:text-sm font-bold text-foreground truncate">{keyMetrics.grossMargin}</div>
-            </div>
-            <div className="text-center p-2 rounded-lg bg-muted">
-              <div className="text-xs text-muted-foreground mb-0.5 truncate">Top</div>
-              <div className="text-[10px] sm:text-xs font-bold text-foreground truncate" title={keyMetrics.topCategory}>
-                {keyMetrics.topCategory.length > 8 ? keyMetrics.topCategory.substring(0, 8) + '...' : keyMetrics.topCategory}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {/* Sales Report with Line Chart */}
-    <div className="rounded-xl px-3 sm:px-4 py-4 mb-4 sm:mb-6 lg:mb-8 bg-card border border-border overflow-hidden">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
-        <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Sales Report</h2>
-        <span className="text-xs text-muted-foreground">By selected view</span>
-      </div>
-
-      {/* Line Chart */}
-      {salesChartData.length > 0 ? (
-        <div className="mb-6">
-          <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Sales Trend</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={salesChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#6b7280" />
-              <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'hsl(var(--card))', 
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: '8px',
-                  fontSize: '12px'
-                }} 
-              />
-              <Legend wrapperStyle={{ fontSize: '12px' }} />
-              <Line type="monotone" dataKey="sales" stroke="#14b8a6" strokeWidth={2} name="Gross Sales" />
-              <Line type="monotone" dataKey="net" stroke="#0d9488" strokeWidth={2} name="Net Sales" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      ) : (
-        <div className="mb-6 p-8 text-center bg-muted/50 rounded-lg border-2 border-dashed border-border">
-          <p className="text-sm text-muted-foreground">No chart data available. Check console logs 🔍</p>
-          <p className="text-xs text-muted-foreground mt-1">Sales data length: {salesChartData.length}</p>
+          )) : (
+            <p className="text-center text-muted-foreground text-sm">No orders yet</p>
+          )}
         </div>
       )}
-
-      <div className="overflow-x-auto -mx-3 sm:-mx-4">
-        <div className="inline-block min-w-full align-middle">
-          <table className="min-w-full">
-            <thead>
-              <tr className="bg-muted border-b border-border">
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Period</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Gross</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Discount</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Net</th>
-              </tr>
-            </thead>
-            <tbody>
-              {salesData.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="py-8 text-center text-sm text-muted-foreground">
-                    No sales data available
-                  </td>
-                </tr>
-              ) : (
-                salesData.map((row, index) => (
-                  <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.period}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs text-foreground">{row.orders}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs text-foreground whitespace-nowrap">{row.grossSales}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs text-foreground whitespace-nowrap">{row.discounts}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs font-semibold text-foreground whitespace-nowrap">{row.net}</span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+    </div>    {/* Activity */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-4">Activity</h3>
+      <div className="space-y-3">
+        {activities.map((activity, idx) => (
+          <div key={idx} className="flex items-center justify-between p-3 bg-muted rounded-lg hover:bg-secondary transition-colors">
+            <p className="text-foreground text-sm sm:text-base">{activity.action}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">{activity.time}</p>
+          </div>
+        ))}
       </div>
     </div>
-
-    {/* Orders Report with Pie Chart */}
-    <div className="rounded-xl px-3 sm:px-4 py-4 mb-4 sm:mb-6 lg:mb-8 bg-card border border-border overflow-hidden">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
-        <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Orders Report</h2>
-        <span className="text-xs text-muted-foreground">By payment method</span>
+  </div>  {/* Customers, Offers */}
+  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
+    {/* Customers */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Customers</h3>
+        <button 
+          onClick={() => setShowCustomerModal(true)}
+          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
+        >
+          Add
+        </button>
       </div>
-
-      {/* Pie Chart */}
-      {orderDistributionData.length > 0 ? (
-        <div className="mb-6">
-          <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Order Distribution by Payment Method</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={orderDistributionData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {orderDistributionData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'hsl(var(--card))', 
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: '8px',
-                  fontSize: '12px'
-                }} 
-              />
-              <Legend wrapperStyle={{ fontSize: '12px' }} />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+      {isLoadingCustomers ? (
+        <p className="text-center text-muted-foreground">Loading...</p>
       ) : (
-        <div className="mb-6 p-8 text-center bg-muted/50 rounded-lg border-2 border-dashed border-border">
-          <p className="text-sm text-muted-foreground">No chart data available. Check console logs 🔍</p>
-          <p className="text-xs text-muted-foreground mt-1">Order distribution length: {orderDistributionData.length}</p>
+        <div className="space-y-2 mb-4">
+          {customers.length > 0 ? customers.slice(0, 5).map((cust, idx) => (
+            <div key={idx} className="p-3 bg-muted rounded-lg">
+              <p className="font-medium text-foreground text-sm sm:text-base">{cust.name}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">{cust.phone} • {cust.orders} orders</p>
+            </div>
+          )) : (
+            <p className="text-center text-muted-foreground text-sm">No customers yet</p>
+          )}
         </div>
       )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Orders by Payment Method */}
-        <div className="overflow-hidden">
-          <div className="flex items-center justify-between mb-2.5">
-            <h3 className="text-xs sm:text-sm font-semibold text-card-foreground">By Payment Method</h3>
-            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Desc</span>
-          </div>
-          <div className="overflow-x-auto -mx-2">
-            <div className="inline-block min-w-full align-middle px-2">
-              <table className="min-w-full">
-                <thead>
-                  <tr className="bg-muted border-b border-border">
-                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Method</th>
-                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
-                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Share</th>
-                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Revenue</th>
-                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ordersData.bySource.length === 0 ? (
-                    <tr>
-                      <td colSpan="5" className="py-4 text-center text-sm text-muted-foreground">
-                        No order data available
-                      </td>
-                    </tr>
-                  ) : (
-                    ordersData.bySource.map((row, index) => (
-                      <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                        <td className="py-2 px-4">
-                          <span className="text-xs font-medium text-foreground">{row.source}</span>
-                        </td>
-                        <td className="py-2 px-4">
-                          <span className="text-xs text-foreground">{row.orders}</span>
-                        </td>
-                        <td className="py-2 px-4">
-                          <span className="text-xs text-foreground">{row.share}</span>
-                        </td>
-                        <td className="py-2 px-4">
-                          <span className="text-xs text-foreground whitespace-nowrap">{row.revenue}</span>
-                        </td>
-                        <td className="py-2 px-4">
-                          <span className="text-xs text-foreground">{row.rank}</span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* Payments by Mode */}
-        <div className="overflow-hidden">
-          <div className="flex items-center justify-between mb-2.5">
-            <h3 className="text-xs sm:text-sm font-semibold text-card-foreground">Payment Summary</h3>
-            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Desc</span>
-          </div>
-          <div className="overflow-x-auto -mx-2">
-            <div className="inline-block min-w-full align-middle px-2">
-              <table className="min-w-full">
-                <thead>
-                  <tr className="bg-muted border-b border-border">
-                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Mode</th>
-                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Count</th>
-                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Share</th>
-                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Amount</th>
-                    <th className="text-left font-semibold py-2 px-4 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ordersData.byPayment.length === 0 ? (
-                    <tr>
-                      <td colSpan="5" className="py-4 text-center text-sm text-muted-foreground">
-                        No payment data available
-                      </td>
-                    </tr>
-                  ) : (
-                    ordersData.byPayment.map((row, index) => (
-                      <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                        <td className="py-2 px-4">
-                          <span className="text-xs font-medium text-foreground">{row.mode}</span>
-                        </td>
-                        <td className="py-2 px-4">
-                          <span className="text-xs text-foreground">{row.count}</span>
-                        </td>
-                        <td className="py-2 px-4">
-                          <span className="text-xs text-foreground">{row.share}</span>
-                        </td>
-                        <td className="py-2 px-4">
-                          <span className="text-xs text-foreground whitespace-nowrap">{row.amount}</span>
-                        </td>
-                        <td className="py-2 px-4">
-                          <span className="text-xs text-foreground">{row.rank}</span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+    </div>    {/* Offers */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Offers</h3>
+        <button 
+          onClick={() => setShowOfferModal(true)}
+          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
+        >
+          Create
+        </button>
       </div>
+      {isLoadingOffers ? (
+        <p className="text-center text-muted-foreground">Loading...</p>
+      ) : (
+        <div className="space-y-2">
+          {offers.length > 0 ? offers.map((offer, idx) => (
+            <div key={idx} className="p-3 bg-muted rounded-lg">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-medium text-foreground text-sm sm:text-base">{offer.code}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">{offer.type} • {offer.value} • {offer.category}</p>
+                </div>
+                <button 
+                  onClick={() => alert(`Offer ${offer.code} disabled`)}
+                  className="text-xs text-red-400 hover:text-red-500"
+                >
+                  Disable
+                </button>
+              </div>
+            </div>
+          )) : (
+            <p className="text-center text-muted-foreground text-sm">No offers yet</p>
+          )}
+        </div>
+      )}
     </div>
-
-    {/* Expenses Report with Bar Chart */}
-    <div className="rounded-xl px-3 sm:px-4 py-4 bg-card border border-border overflow-hidden">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
-        <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Expenses Report</h2>
-        <span className="text-xs text-muted-foreground">By category</span>
+  </div>  {/* Staff, Expenses */}
+  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+    {/* Staff */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Staff</h3>
+        <button 
+          onClick={() => setShowStaffModal(true)}
+          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
+        >
+          Add
+        </button>
       </div>
-
-      {/* Bar Chart */}
-      {expensesChartData.length > 0 ? (
-        <div className="mb-6">
-          <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Expenses by Category</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={expensesChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="category" tick={{ fontSize: 12 }} stroke="#6b7280" />
-              <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'hsl(var(--card))', 
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: '8px',
-                  fontSize: '12px'
-                }} 
-              />
-              <Legend wrapperStyle={{ fontSize: '12px' }} />
-              <Bar dataKey="amount" fill="#14b8a6" name="Amount (₹)" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+      {isLoadingStaff ? (
+        <p className="text-center text-muted-foreground">Loading...</p>
       ) : (
-        <div className="mb-6 p-8 text-center bg-muted/50 rounded-lg border-2 border-dashed border-border">
-          <p className="text-sm text-muted-foreground">No chart data available. Check console logs 🔍</p>
-          <p className="text-xs text-muted-foreground mt-1">Expenses data length: {expensesChartData.length}</p>
+        <div className="space-y-2">
+          {staff.length > 0 ? staff.map((member, idx) => (
+            <div key={idx} className="p-3 bg-muted rounded-lg">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-medium text-foreground text-sm sm:text-base">{member.name}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">{member.role} • {member.payscale}</p>
+                </div>
+                <button 
+                  onClick={() => alert(`Edit ${member.name}`)}
+                  className="text-xs text-teal-400 hover:text-teal-500"
+                >
+                  Edit
+                </button>
+              </div>
+            </div>
+          )) : (
+            <p className="text-center text-muted-foreground text-sm">No staff members yet</p>
+          )}
         </div>
       )}
-
-      <div className="overflow-x-auto -mx-3 sm:-mx-4">
-        <div className="inline-block min-w-full align-middle">
-          <table className="min-w-full">
-            <thead>
-              <tr className="bg-muted border-b border-border">
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Category</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Trans.</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Amount</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Share</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
-              </tr>
-            </thead>
-            <tbody>
-              {expensesData.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="py-8 text-center text-sm text-muted-foreground">
-                    No expenses data available
-                  </td>
-                </tr>
-              ) : (
-                expensesData.map((row, index) => (
-                  <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.category}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs text-foreground">{row.transactions}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs text-foreground whitespace-nowrap">{row.amount}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs text-foreground">{row.share}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs text-foreground">{row.rank}</span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+    </div>    {/* Expenses */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Expenses</h3>
+        <button 
+          onClick={() => setShowExpenseModal(true)}
+          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
+        >
+          Add
+        </button>
       </div>
+      {isLoadingExpenses ? (
+        <p className="text-center text-muted-foreground">Loading...</p>
+      ) : (
+        <div className="space-y-2">
+          {expenses.length > 0 ? expenses.slice(0, 5).map((exp, idx) => (
+            <div key={idx} className="p-3 bg-muted rounded-lg">
+              <p className="font-medium text-sm text-foreground">{exp.title}</p>
+              <div className="flex justify-between items-center mt-1">
+                <p className="text-xs sm:text-sm text-muted-foreground">{exp.date}</p>
+                <p className="font-semibold text-foreground text-sm sm:text-base">{exp.amount}</p>
+              </div>
+            </div>
+          )) : (
+            <p className="text-center text-muted-foreground text-sm">No expenses yet</p>
+          )}
+        </div>
+      )}
     </div>
   </div>
 </div>
 );
-};
-export default ReportsPage;  
+};export default Dashboard;

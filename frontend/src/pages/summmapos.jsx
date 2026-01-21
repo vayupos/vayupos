@@ -1,1072 +1,940 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-    Search,
-    UserPlus,
-    Upload,
-    Edit2,
-    Trash2,
-    RotateCw,
-    Filter,
-    Save,
-    PlusCircle,
-    X,
-    Download,
-    AlertCircle,
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { DollarSign, ShoppingBag, TrendingUp, Wallet, RefreshCw, AlertCircle } from 'lucide-react';
 
+// API Configuration
 const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
 
-const getAuthHeaders = () => {
-    const tokenKeys = ['access_token', 'acces_Token', 'token', 'authToken', 'jwt', 'bearer', 'Token'];
-    let token = null;
-    let tokenKey = null;
+const Dashboard = ({ isDarkMode = true, onNavigate }) => {
+  // View state
+  const [showAllOrders, setShowAllOrders] = useState(false);
+  
+  // Modal states
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [showOfferModal, setShowOfferModal] = useState(false);
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+
+  // Form states
+  const [newCustomer, setNewCustomer] = useState({ first_name: '', last_name: '', phone: '', email: '' });
+  const [newOffer, setNewOffer] = useState({ code: '', discount_type: 'percentage', discount_value: '', min_order_amount: 0, description: '' });
+  const [newStaff, setNewStaff] = useState({ name: '', role: 'Cashier', salary: '', joined: '' });
+  const [newExpense, setNewExpense] = useState({ title: '', amount: '', date: '', category: 'Supplies' });
+
+  // Data states
+  const [recentOrders, setRecentOrders] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [offers, setOffers] = useState([]);
+  const [staff, setStaff] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+  const [dailySummary, setDailySummary] = useState({
+    todaySales: 0,
+    ordersCount: 0,
+    avgTicket: 0,
+    totalExpenses: 0
+  });
+
+  // Loading and error states
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const activities = [
+    { action: 'Staff login', time: 'just now' },
+    { action: 'Menu updated', time: '20m ago' },
+    { action: 'Expense added', time: '1h ago' }
+  ];
+
+  // Fetch all data on mount
+  useEffect(() => {
+    fetchAllData();
+  }, []);
+
+  const fetchAllData = async () => {
+    setLoading(true);
+    setError(null);
     
-    for (const key of tokenKeys) {
-        const value = localStorage.getItem(key);
-        if (value && value.length > 10) {
-            token = value;
-            tokenKey = key;
-            break;
-        }
+    try {
+      await Promise.all([
+        fetchDailySummary(),
+        fetchRecentOrders(),
+        fetchCustomers(),
+        fetchOffers(),
+        fetchStaff(),
+        fetchExpenses()
+      ]);
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+      setError('Failed to load dashboard data');
+    } finally {
+      setLoading(false);
     }
-    
-    console.log('🔑 Auth Check:', {
-        found: !!token,
-        key: tokenKey,
-        length: token ? token.length : 0,
-        preview: token ? token.substring(0, 20) + '...' : 'none'
-    });
-    
-    if (!token) {
-        console.error('❌ No authentication token found');
-        console.log('📦 Available localStorage keys:', Object.keys(localStorage));
-        return {
-            'Content-Type': 'application/json',
-        };
+  };
+
+  // Fetch daily summary
+  const fetchDailySummary = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const response = await fetch(`${API_BASE_URL}/reports/daily-summary?date=${today}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setDailySummary({
+          todaySales: data.total_sales || 0,
+          ordersCount: data.orders_count || 0,
+          avgTicket: data.average_order_value || 0,
+          totalExpenses: data.total_expenses || 0
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching daily summary:', err);
     }
+  };
+
+  // Fetch recent orders
+  const fetchRecentOrders = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/orders?skip=0&limit=5`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const ordersArray = data.data || [];
+        
+        const transformedOrders = ordersArray.map(order => {
+          const orderTime = order.created_at 
+            ? new Date(order.created_at).toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+              })
+            : '--:--';
+          
+          // Calculate time ago
+          const timeAgo = getTimeAgo(order.created_at);
+
+          return {
+            id: order.order_number || `#${order.id}`,
+            type: order.order_type || 'Dine-In',
+            time: timeAgo,
+            amount: parseFloat(order.total || 0)
+          };
+        });
+
+        setRecentOrders(transformedOrders);
+      }
+    } catch (err) {
+      console.error('Error fetching recent orders:', err);
+    }
+  };
+
+  // Fetch customers
+  const fetchCustomers = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/customers?skip=0&limit=10&is_active=true`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const customersArray = data.data || [];
+        
+        const transformedCustomers = customersArray.map(customer => ({
+          id: customer.id,
+          name: `${customer.first_name || ''} ${customer.last_name || ''}`.trim(),
+          phone: customer.phone || '',
+          orders: customer.total_orders || 0,
+          email: customer.email || ''
+        }));
+
+        setCustomers(transformedCustomers);
+      }
+    } catch (err) {
+      console.error('Error fetching customers:', err);
+    }
+  };
+
+  // Fetch offers/coupons
+  const fetchOffers = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/coupons?skip=0&limit=10&active_only=true`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        const transformedOffers = data.map(offer => ({
+          id: offer.id,
+          code: offer.code,
+          type: offer.discount_type === 'percentage' ? 'Percentage' : 'Flat',
+          value: offer.discount_type === 'percentage' 
+            ? `${offer.discount_value}%` 
+            : `₹${offer.discount_value}`,
+          category: offer.description || 'General'
+        }));
+
+        setOffers(transformedOffers);
+      }
+    } catch (err) {
+      console.error('Error fetching offers:', err);
+    }
+  };
+
+  // Fetch staff
+  const fetchStaff = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/staff?skip=0&limit=10`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        const transformedStaff = data.map(member => ({
+          id: member.id,
+          name: member.name,
+          role: member.role,
+          payscale: `₹${member.salary?.toLocaleString() || 0}`,
+          joined: new Date(member.joined).toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+          })
+        }));
+
+        setStaff(transformedStaff);
+      }
+    } catch (err) {
+      console.error('Error fetching staff:', err);
+    }
+  };
+
+  // Fetch expenses
+  const fetchExpenses = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/expenses/?skip=0&limit=10`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        
+        const transformedExpenses = data.map(expense => ({
+          id: expense.id,
+          title: expense.title,
+          amount: `₹ ${expense.amount?.toLocaleString() || 0}`,
+          date: new Date(expense.date).toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+          }),
+          source: expense.type === 'manual' ? 'Manual' : 'Auto'
+        }));
+
+        setExpenses(transformedExpenses);
+      }
+    } catch (err) {
+      console.error('Error fetching expenses:', err);
+    }
+  };
+
+  // Helper function to calculate time ago
+  const getTimeAgo = (dateString) => {
+    if (!dateString) return '--';
     
-    return {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-    };
-};
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  };
 
-const StaffManagement = () => {
-    const [searchQuery, setSearchQuery] = useState('');
-    const [roleFilter, setRoleFilter] = useState('All');
-    const [statusFilter, setStatusFilter] = useState('Active');
-    const [showSearch, setShowSearch] = useState(false);
-    const [showNewStaffModal, setShowNewStaffModal] = useState(false);
-    const [showEditModal, setShowEditModal] = useState(false);
-    const [editingStaff, setEditingStaff] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
+  // Add customer
+  const addCustomer = async () => {
+    if (!newCustomer.first_name || !newCustomer.phone) {
+      alert('Please fill in first name and phone');
+      return;
+    }
 
-    const [newStaff, setNewStaff] = useState({
-        name: '',
-        phone: '',
-        role: 'Cashier',
-        salary: '',
-        joined: new Date().toISOString().split('T')[0],
-        aadhar: '',
-    });
+    try {
+      const response = await fetch(`${API_BASE_URL}/customers/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newCustomer),
+      });
 
-    const [staff, setStaff] = useState([]);
-    const [upcomingSalaries, setUpcomingSalaries] = useState([]);
+      if (response.ok) {
+        const data = await response.json();
+        alert('Customer added successfully!');
+        setNewCustomer({ first_name: '', last_name: '', phone: '', email: '' });
+        setShowCustomerModal(false);
+        fetchCustomers();
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to add customer: ${errorData.detail || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error adding customer:', err);
+      alert('Failed to add customer. Please try again.');
+    }
+  };
 
-    const colors = [
-        '#E74C3C',
-        '#3498DB',
-        '#2ECC71',
-        '#F39C12',
-        '#9B59B6',
-        '#1ABC9C',
-        '#E67E22',
-        '#95A5A6',
-        '#D4A574',
-        '#34495E',
-    ];
+  // Add offer/coupon
+  const addOffer = async () => {
+    if (!newOffer.code || !newOffer.discount_value) {
+      alert('Please fill in code and discount value');
+      return;
+    }
 
-    const getRandomColor = () => colors[Math.floor(Math.random() * colors.length)];
+    try {
+      const offerData = {
+        code: newOffer.code.toUpperCase(),
+        discount_type: newOffer.discount_type,
+        discount_value: parseFloat(newOffer.discount_value),
+        min_order_amount: newOffer.min_order_amount || 0,
+        max_uses: 0,
+        valid_from: new Date().toISOString(),
+        valid_until: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        description: newOffer.description || ''
+      };
 
-    useEffect(() => {
+      const response = await fetch(`${API_BASE_URL}/coupons/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(offerData),
+      });
+
+      if (response.ok) {
+        alert('Offer created successfully!');
+        setNewOffer({ code: '', discount_type: 'percentage', discount_value: '', min_order_amount: 0, description: '' });
+        setShowOfferModal(false);
+        fetchOffers();
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to create offer: ${errorData.detail || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error creating offer:', err);
+      alert('Failed to create offer. Please try again.');
+    }
+  };
+
+  // Add staff
+  const addStaff = async () => {
+    if (!newStaff.name || !newStaff.salary) {
+      alert('Please fill in name and salary');
+      return;
+    }
+
+    try {
+      const staffData = {
+        name: newStaff.name,
+        phone: '0000000000', // Default phone if not provided
+        role: newStaff.role,
+        salary: parseFloat(newStaff.salary),
+        joined: newStaff.joined || new Date().toISOString().split('T')[0],
+        aadhar: ''
+      };
+
+      const response = await fetch(`${API_BASE_URL}/staff/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(staffData),
+      });
+
+      if (response.ok) {
+        alert('Staff member added successfully!');
+        setNewStaff({ name: '', role: 'Cashier', salary: '', joined: '' });
+        setShowStaffModal(false);
         fetchStaff();
-        fetchUpcomingSalaries();
-    }, []);
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to add staff: ${errorData.detail || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error adding staff:', err);
+      alert('Failed to add staff. Please try again.');
+    }
+  };
 
-    const fetchStaff = useCallback(async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            
-            const params = new URLSearchParams();
-            
-            const trimmedSearch = searchQuery?.trim() || '';
-            if (trimmedSearch) {
-                params.append('search', trimmedSearch);
-            }
-            
-            if (roleFilter && roleFilter !== 'All') {
-                params.append('role', roleFilter);
-            }
-            
-            if (statusFilter) {
-                params.append('status', statusFilter);
-            }
-            
-            const queryString = params.toString();
-            const url = `${API_BASE_URL}/staff${queryString ? '?' + queryString : ''}`;
-            
-            console.log('📡 Fetching from:', url);
-            
-            const headers = getAuthHeaders();
-            
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: headers,
-            });
-            
-            console.log('📥 Response:', response.status, response.statusText);
-            
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('❌ API Error:', response.status, errorText);
-                
-                if (response.status === 401 || response.status === 403) {
-                    console.error('🔒 Auth failed - Status:', response.status);
-                    setError(`Authentication failed (${response.status}). Please check if you're logged in.`);
-                    setStaff([]);
-                    setLoading(false);
-                    return;
-                }
-                
-                throw new Error(`API failed (${response.status}): ${errorText}`);
-            }
-            
-            const data = await response.json();
-            console.log('✅ Received staff data:', data);
-            
-            const staffArray = Array.isArray(data) ? data : (data.data || []);
-            
-            if (!Array.isArray(staffArray)) {
-                console.error('⚠️ Unexpected data format:', data);
-                setStaff([]);
-                return;
-            }
-            
-            const transformedStaff = staffArray.map(member => ({
-                id: member.id,
-                name: member.name,
-                phone: member.phone,
-                role: member.role,
-                salary: `₹${member.salary.toLocaleString('en-IN')} / month`,
-                salaryAmount: member.salary,
-                joined: new Date(member.joined).toLocaleDateString('en-GB', {
-                    day: '2-digit',
-                    month: 'short',
-                    year: 'numeric',
-                }),
-                joinedDate: member.joined.split('T')[0],
-                avatar: member.name.charAt(0).toUpperCase(),
-                color: getRandomColor(),
-                status: member.status,
-                aadhar: member.aadhar || '',
-            }));
-            
-            console.log('✅ Transformed staff:', transformedStaff.length, 'members');
-            setStaff(transformedStaff);
-        } catch (err) {
-            console.error('❌ Error fetching staff:', err);
-            setError(err.message);
-            setStaff([]);
-        } finally {
-            setLoading(false);
-        }
-    }, [searchQuery, roleFilter, statusFilter]);
-
-    const fetchUpcomingSalaries = async () => {
-        try {
-            console.log('📡 Fetching upcoming salaries...');
-            const response = await fetch(`${API_BASE_URL}/staff/upcoming-salaries`, {
-                method: 'GET',
-                headers: getAuthHeaders(),
-            });
-            
-            if (!response.ok) {
-                if (response.status === 401 || response.status === 403) {
-                    console.warn('⚠️ Auth failed for upcoming salaries');
-                    return;
-                }
-                throw new Error('Failed to fetch upcoming salaries');
-            }
-            
-            const data = await response.json();
-            console.log('✅ Upcoming salaries data:', data);
-            
-            const transformedSalaries = data.map(entry => ({
-                id: entry.id,
-                staffId: entry.staff_id || entry.id,
-                name: entry.name,
-                role: entry.role,
-                avatar: entry.name.charAt(0).toUpperCase(),
-                color: getRandomColor(),
-                amount: `₹${entry.salary.toLocaleString('en-IN')}`,
-                amountRaw: entry.salary,
-                dueDate: entry.due_date || entry.dueDate,
-                category: 'Salaries & Wages',
-            }));
-            
-            setUpcomingSalaries(transformedSalaries);
-        } catch (err) {
-            console.error('❌ Error fetching upcoming salaries:', err);
-        }
-    };
-
-    const formatAadhar = (value) => {
-        const numbers = value.replace(/\D/g, '');
-        const limited = numbers.slice(0, 12);
-        const formatted = limited.replace(/(\d{4})(\d{4})?(\d{4})?/, (match, p1, p2, p3) => {
-            let result = p1;
-            if (p2) result += ' ' + p2;
-            if (p3) result += ' ' + p3;
-            return result;
-        });
-        return formatted;
-    };
-
-    const handleExport = () => {
-        const headers = ['Name', 'Phone', 'Role', 'Salary', 'Joined', 'Status', 'Aadhar'];
-        const rows = staff.map((s) => [
-            s.name,
-            s.phone,
-            s.role,
-            s.salaryAmount,
-            s.joinedDate,
-            s.status,
-            s.aadhar,
-        ]);
-
-        let csvContent = 'data:text/csv;charset=utf-8,';
-        csvContent += headers.join(',') + '\n';
-        rows.forEach((row) => {
-            csvContent += row.join(',') + '\n';
-        });
-
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement('a');
-        link.setAttribute('href', encodedUri);
-        link.setAttribute('download', 'staff_export.csv');
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
-    const handleAddStaff = async () => {
-        if (!newStaff.name || !newStaff.phone || !newStaff.salary) {
-            alert('Please fill all required fields');
-            return;
-        }
-
-        if (newStaff.aadhar && newStaff.aadhar.replace(/\s/g, '').length !== 12) {
-            alert('Please enter a valid 12-digit Aadhar number');
-            return;
-        }
-
-        try {
-            setLoading(true);
-            const salaryNum = parseFloat(newStaff.salary.replace(/[^0-9]/g, '')) || 0;
-            
-            const requestBody = {
-                name: newStaff.name,
-                phone: newStaff.phone,
-                role: newStaff.role,
-                salary: salaryNum,
-                joined: new Date(newStaff.joined).toISOString(),
-                aadhar: newStaff.aadhar.replace(/\s/g, '') || null,
-            };
-
-            console.log('➕ Adding staff:', requestBody);
-
-            const response = await fetch(`${API_BASE_URL}/staff`, {
-                method: 'POST',
-                headers: getAuthHeaders(),
-                body: JSON.stringify(requestBody),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-                console.error('❌ Server response:', errorData);
-                
-                if (response.status === 401 || response.status === 403) {
-                    throw new Error('Authentication failed. Please login again.');
-                }
-                
-                if (response.status === 422) {
-                    const errorMsg = typeof errorData.detail === 'string' 
-                        ? errorData.detail 
-                        : JSON.stringify(errorData.detail);
-                    throw new Error(`Validation error: ${errorMsg}`);
-                }
-                
-                throw new Error(errorData.detail || 'Failed to add staff');
-            }
-
-            const data = await response.json();
-            console.log('✅ Staff added:', data);
-            
-            setNewStaff({
-                name: '',
-                phone: '',
-                role: 'Cashier',
-                salary: '',
-                joined: new Date().toISOString().split('T')[0],
-                aadhar: '',
-            });
-            setShowNewStaffModal(false);
-            alert('Staff member added successfully!');
-            
-            fetchStaff();
-            fetchUpcomingSalaries();
-        } catch (err) {
-            alert(`Error adding staff: ${err.message}`);
-            console.error('Error adding staff:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleEdit = (id) => {
-        const member = staff.find((s) => s.id === id);
-        if (member) {
-            setEditingStaff({
-                ...member,
-                salary: member.salaryAmount.toString(),
-            });
-            setShowEditModal(true);
-        }
-    };
-
-    const handleUpdateStaff = async () => {
-        if (!editingStaff.name || !editingStaff.phone || !editingStaff.salary) {
-            alert('Please fill all required fields');
-            return;
-        }
-
-        if (editingStaff.aadhar && editingStaff.aadhar.replace(/\s/g, '').length !== 12) {
-            alert('Please enter a valid 12-digit Aadhar number');
-            return;
-        }
-
-        try {
-            setLoading(true);
-            const salaryNum = parseFloat(editingStaff.salary.replace(/[^0-9]/g, ''));
-
-            const requestBody = {
-                name: editingStaff.name,
-                phone: editingStaff.phone,
-                role: editingStaff.role,
-                salary: salaryNum,
-                aadhar: editingStaff.aadhar.replace(/\s/g, '') || null,
-                status: editingStaff.status,
-            };
-
-            console.log('✏️ Updating staff:', requestBody);
-
-            const response = await fetch(`${API_BASE_URL}/staff/${editingStaff.id}`, {
-                method: 'PUT',
-                headers: getAuthHeaders(),
-                body: JSON.stringify(requestBody),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-                
-                if (response.status === 401 || response.status === 403) {
-                    throw new Error('Authentication failed. Please login again.');
-                }
-                
-                if (response.status === 422) {
-                    const errorMsg = typeof errorData.detail === 'string' 
-                        ? errorData.detail 
-                        : JSON.stringify(errorData.detail);
-                    throw new Error(`Validation error: ${errorMsg}`);
-                }
-                
-                throw new Error(errorData.detail || 'Failed to update staff');
-            }
-
-            setShowEditModal(false);
-            setEditingStaff(null);
-            alert('Staff member updated successfully!');
-            
-            fetchStaff();
-        } catch (err) {
-            alert(`Error updating staff: ${err.message}`);
-            console.error('Error updating staff:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleDelete = async (id) => {
-        if (window.confirm('Are you sure you want to delete this staff member?')) {
-            try {
-                setLoading(true);
-                
-                const response = await fetch(`${API_BASE_URL}/staff/${id}`, {
-                    method: 'DELETE',
-                    headers: getAuthHeaders(),
-                });
-
-                if (!response.ok) {
-                    if (response.status === 401 || response.status === 403) {
-                        throw new Error('Authentication failed. Please login again.');
-                    }
-                    throw new Error('Failed to delete staff');
-                }
-
-                alert('Staff member deleted successfully!');
-                
-                fetchStaff();
-                fetchUpcomingSalaries();
-            } catch (err) {
-                alert(`Error deleting staff: ${err.message}`);
-                console.error('Error deleting staff:', err);
-            } finally {
-                setLoading(false);
-            }
-        }
-    };
-
-    const handleAddSalary = async (staffId) => {
-        try {
-            setLoading(true);
-            
-            const response = await fetch(`${API_BASE_URL}/staff/salaries/${staffId}/add`, {
-                method: 'POST',
-                headers: getAuthHeaders(),
-            });
-
-            if (!response.ok) {
-                if (response.status === 401 || response.status === 403) {
-                    throw new Error('Authentication failed. Please login again.');
-                }
-                throw new Error('Failed to add salary entry');
-            }
-
-            const message = await response.json();
-            alert(typeof message === 'string' ? message : 'Salary entry added successfully!');
-            
-            // IMMEDIATELY remove from UI
-            setUpcomingSalaries(prevSalaries => 
-                prevSalaries.filter(salary => salary.staffId !== staffId)
-            );
-            
-            // Then refresh from server to get updated list
-            await fetchUpcomingSalaries();
-            
-        } catch (err) {
-            alert(`Error adding salary: ${err.message}`);
-            console.error('Error adding salary:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleResetFilters = () => {
-        setSearchQuery('');
-        setRoleFilter('All');
-        setStatusFilter('Active');
-        setTimeout(() => fetchStaff(), 0);
-    };
-
-    useEffect(() => {
-        const timeoutId = setTimeout(() => {
-            fetchStaff();
-        }, 500);
-
-        return () => clearTimeout(timeoutId);
-    }, [fetchStaff]);
-
-    const filteredStaff = staff;
-    const hasActiveFilters = searchQuery.trim() || roleFilter !== 'All' || statusFilter !== 'Active';
-    const showNoResults = !loading && filteredStaff.length === 0 && !error;
-
-    if (loading && staff.length === 0) {
-        return (
-            <div className="min-h-screen bg-background flex items-center justify-center">
-                <div className="text-center">
-                    <RotateCw className="animate-spin h-12 w-12 text-primary mx-auto mb-4" />
-                    <p className="text-lg text-foreground">Loading staff...</p>
-                </div>
-            </div>
-        );
+  // Add expense
+  const addExpense = async () => {
+    if (!newExpense.title || !newExpense.amount) {
+      alert('Please fill in title and amount');
+      return;
     }
 
-    if (error && staff.length === 0) {
-        return (
-            <div className="min-h-screen bg-background flex items-center justify-center p-4">
-                <div className="max-w-md w-full bg-card border border-border rounded-lg p-6 text-center">
-                    <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-                    <h2 className="text-xl font-bold text-foreground mb-2">Error Loading Staff</h2>
-                    <p className="text-muted-foreground mb-4">{error}</p>
-                    <div className="flex gap-2 justify-center">
-                        <button
-                            onClick={() => fetchStaff()}
-                            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-                        >
-                            Try Again
-                        </button>
-                        <button
-                            onClick={() => window.location.href = '/login'}
-                            className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/90 transition-colors"
-                        >
-                            Go to Login
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+    try {
+      const expenseData = {
+        title: newExpense.title,
+        category: newExpense.category,
+        amount: parseFloat(newExpense.amount),
+        date: newExpense.date || new Date().toISOString().split('T')[0],
+        subtitle: 'Manual entry',
+        type: 'manual',
+        account: 'Cashbook',
+        tax: 0,
+        payment_mode: 'Cash',
+        notes: ''
+      };
 
+      const response = await fetch(`${API_BASE_URL}/expenses/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(expenseData),
+      });
+
+      if (response.ok) {
+        alert('Expense added successfully!');
+        setNewExpense({ title: '', amount: '', date: '', category: 'Supplies' });
+        setShowExpenseModal(false);
+        fetchExpenses();
+        fetchDailySummary();
+      } else {
+        const errorData = await response.json();
+        alert(`Failed to add expense: ${errorData.detail || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('Error adding expense:', err);
+      alert('Failed to add expense. Please try again.');
+    }
+  };
+
+  // Navigation handlers
+  const handleNavigateToPOS = () => {
+    if (onNavigate) {
+      onNavigate('pos');
+    }
+  };
+
+  const handleNavigateToMenu = () => {
+    if (onNavigate) {
+      onNavigate('menu');
+    }
+  };
+
+  const handleNavigateToReports = () => {
+    if (onNavigate) {
+      onNavigate('reports');
+    }
+  };
+
+  const handleNavigateToPastOrders = () => {
+    if (onNavigate) {
+      onNavigate('past-orders');
+    }
+  };
+
+  const handleSeeAllOrders = () => {
+    handleNavigateToPastOrders();
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchAllData();
+    setIsRefreshing(false);
+  };
+
+  // Computed values
+  const displayedOrders = showAllOrders ? recentOrders : recentOrders.slice(0, 3);
+
+  if (loading) {
     return (
-        <div className="min-h-screen bg-background">
-            <div className="p-3 sm:p-4 lg:p-6 xl:p-8 max-w-[1400px] mx-auto">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 sm:mb-6">
-                    <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-foreground">Staff</h1>
-                    <div className="flex gap-2 flex-wrap w-full sm:w-auto">
-                        <button
-                            onClick={handleExport}
-                            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 text-xs sm:text-sm"
-                        >
-                            <Download size={14} className="sm:w-4 sm:h-4" />
-                            <span>Export</span>
-                        </button>
-                        <button
-                            onClick={() => alert('Import functionality triggered!')}
-                            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 text-xs sm:text-sm"
-                        >
-                            <Upload size={14} className="sm:w-4 sm:h-4" />
-                            <span>Import</span>
-                        </button>
-                        <button
-                            onClick={() => setShowNewStaffModal(true)}
-                            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 text-xs sm:text-sm"
-                        >
-                            <UserPlus size={14} className="sm:w-4 sm:h-4" />
-                            <span>New Staff</span>
-                        </button>
-                    </div>
-                </div>
-
-                {/* Filters */}
-                <div className="bg-card rounded-xl border border-border p-3 sm:p-4 lg:p-5 mb-4 sm:mb-6">
-                    <div className="flex flex-col lg:flex-row gap-3 lg:gap-4 items-start lg:items-center justify-between">
-                        <div className="flex-1 w-full">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                                <input
-                                    type="text"
-                                    placeholder="Search staff by name or phone"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full bg-muted border border-border rounded-lg py-2.5 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                />
-                            </div>
-                            <button
-                                onClick={() => setShowSearch(!showSearch)}
-                                className="mt-2 inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                            >
-                                <Filter className="w-3 h-3" />
-                                <span>{showSearch ? 'Hide advanced filters' : 'Show advanced filters'}</span>
-                            </button>
-                        </div>
-
-                        {showSearch && (
-                            <div className="w-full lg:w-auto flex flex-wrap gap-2 lg:gap-3">
-                                <select
-                                    value={roleFilter}
-                                    onChange={(e) => setRoleFilter(e.target.value)}
-                                    className="bg-muted border border-border rounded-lg px-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                >
-                                    <option value="All">All Roles</option>
-                                    <option value="Cashier">Cashier</option>
-                                    <option value="Waiter">Waiter</option>
-                                    <option value="Chef">Chef</option>
-                                </select>
-
-                                <select
-                                    value={statusFilter}
-                                    onChange={(e) => setStatusFilter(e.target.value)}
-                                    className="bg-muted border border-border rounded-lg px-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                >
-                                    <option value="Active">Active</option>
-                                    <option value="Inactive">Inactive</option>
-                                </select>
-
-                                <button
-                                    onClick={handleResetFilters}
-                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-muted text-xs sm:text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                                >
-                                    <RotateCw className="w-3 h-3" />
-                                    <span>Reset</span>
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Staff List */}
-                <div className="bg-card rounded-xl border border-border p-3 sm:p-4 lg:p-5 mb-4 sm:mb-6">
-                    <div className="flex items-center justify-between mb-3 sm:mb-4">
-                        <h2 className="text-sm sm:text-base lg:text-lg font-semibold text-card-foreground">
-                            Staff List
-                        </h2>
-                        <span className="text-xs sm:text-sm text-muted-foreground">
-                            {filteredStaff.length} staff members
-                        </span>
-                    </div>
-
-                    <div className="hidden md:grid grid-cols-[2fr,1.5fr,1.5fr,1.5fr,1fr,1fr] gap-3 px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
-                        <span>Name</span>
-                        <span>Role</span>
-                        <span>Salary</span>
-                        <span>Joined</span>
-                        <span>Status</span>
-                        <span className="text-right">Actions</span>
-                    </div>
-
-                    <div className="divide-y divide-border">
-                        {filteredStaff.map((member) => (
-                            <div
-                                key={member.id}
-                                className="grid md:grid-cols-[2fr,1.5fr,1.5fr,1.5fr,1fr,1fr] gap-3 px-3 py-3 items-center hover:bg-muted/60 transition-colors"
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div
-                                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white"
-                                        style={{ backgroundColor: member.color }}
-                                    >
-                                        {member.avatar}
-                                    </div>
-                                    <div>
-                                        <div className="text-sm font-medium text-card-foreground">
-                                            {member.name}
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                            {member.phone}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="text-sm text-card-foreground md:text-left text-right">
-                                    {member.role}
-                                </div>
-
-                                <div className="text-sm text-card-foreground md:text-left text-right">
-                                    {member.salary}
-                                </div>
-
-                                <div className="text-sm text-card-foreground md:text-left text-right">
-                                    {member.joined}
-                                </div>
-
-                                <div className="flex items-center md:justify-start justify-end">
-                                    <span
-                                        className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-medium ${
-                                            member.status === 'Active'
-                                                ? 'bg-emerald-100 text-emerald-700'
-                                                : 'bg-red-100 text-red-700'
-                                        }`}
-                                    >
-                                        {member.status}
-                                    </span>
-                                </div>
-
-                                <div className="flex items-center justify-end gap-2">
-                                    <button
-                                        onClick={() => handleEdit(member.id)}
-                                        className="p-1.5 rounded-lg bg-muted hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-                                    >
-                                        <Edit2 className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => handleDelete(member.id)}
-                                        className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 hover:text-red-600 transition-colors"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-
-                        {showNoResults && (
-                            <div className="py-8 text-center">
-                                <div className="text-muted-foreground mb-2">
-                                    <Search className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                                </div>
-                                <p className="text-sm font-medium text-card-foreground mb-1">
-                                    No staff matching filters
-                                </p>
-                                <p className="text-xs text-muted-foreground mb-4">
-                                    {hasActiveFilters 
-                                        ? 'Try adjusting your search criteria or filters'
-                                        : 'Click "New Staff" to add your first team member'
-                                    }
-                                </p>
-                                {hasActiveFilters && (
-                                    <button
-                                        onClick={handleResetFilters}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                                    >
-                                        <RotateCw className="w-3 h-3" />
-                                        <span>Clear filters</span>
-                                    </button>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Upcoming Salary Entries */}
-                <div className="mt-6">
-                    <div className="bg-card rounded-xl border border-border p-4 lg:p-6 w-full">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-semibold text-card-foreground">
-                                Upcoming Salary Entries
-                            </h2>
-                        </div>
-
-                        <div className="space-y-3">
-                            {upcomingSalaries.map((entry) => (
-                                <div
-                                    key={entry.id}
-                                    className="flex items-center justify-between bg-muted rounded-lg px-3 py-3"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div
-                                            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold text-white"
-                                            style={{ backgroundColor: entry.color }}
-                                        >
-                                            {entry.avatar}
-</div>
-<div>
-<div className="text-sm font-medium text-card-foreground">
-{entry.name}
-</div>
-<div className="text-xs text-muted-foreground">
-{entry.role} • {entry.category}
-</div>
-</div>
-</div>
-                                <div className="hidden sm:block text-sm text-card-foreground">
-                                    {entry.amount}
-                                </div>
-
-                                <div className="hidden sm:block text-xs text-muted-foreground">
-                                    Due on {entry.dueDate}
-                                </div>
-
-                                <button
-                                    onClick={() => handleAddSalary(entry.staffId)}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-600 text-white text-xs sm:text-sm font-medium hover:bg-teal-700 transition-colors"
-                                >
-                                    <PlusCircle className="w-4 h-4" />
-                                    <span>Add Now</span>
-                                </button>
-                            </div>
-                        ))}
-
-                        {upcomingSalaries.length === 0 && !loading && (
-                            <div className="py-4 text-center text-sm text-muted-foreground">
-                                No upcoming salary entries.
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="animate-spin h-12 w-12 text-primary mx-auto mb-4" />
+          <p className="text-lg text-foreground">Loading dashboard...</p>
         </div>
+      </div>
+    );
+  }
 
-        {/* New Staff Modal */}
-        {showNewStaffModal && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-2">
-                <div className="bg-card rounded-xl border border-border w-full max-w-md p-4 sm:p-5">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
-                            Add New Staff
-                        </h2>
-                        <button
-                            onClick={() => setShowNewStaffModal(false)}
-                            className="text-muted-foreground hover:text-foreground"
-                        >
-                            <X className="w-4 h-4" />
-                        </button>
-                    </div>
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-card border border-border rounded-lg p-6 text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-foreground mb-2">Error Loading Dashboard</h2>
+          <p className="text-muted-foreground mb-4">{error}</p>
+          <button
+            onClick={() => fetchAllData()}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-                    <div className="space-y-3">
-                        <div>
-                            <label className="block text-xs text-muted-foreground mb-1.5">
-                                Name *
-                            </label>
-                            <input
-                                type="text"
-                                value={newStaff.name}
-                                onChange={(e) =>
-                                    setNewStaff({ ...newStaff, name: e.target.value })
-                                }
-                                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-xs text-muted-foreground mb-1.5">
-                                Phone *
-                            </label>
-                            <input
-                                type="text"
-                                value={newStaff.phone}
-                                onChange={(e) =>
-                                    setNewStaff({ ...newStaff, phone: e.target.value })
-                                }
-                                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                            />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
-                                    Role
-                                </label>
-                                <select
-                                    value={newStaff.role}
-                                    onChange={(e) =>
-                                        setNewStaff({ ...newStaff, role: e.target.value })
-                                    }
-                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                >
-                                    <option value="Cashier">Cashier</option>
-                                    <option value="Waiter">Waiter</option>
-                                    <option value="Chef">Chef</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
-                                    Joined On
-                                </label>
-                                <input
-                                    type="date"
-                                    value={newStaff.joined}
-                                    onChange={(e) =>
-                                        setNewStaff({ ...newStaff, joined: e.target.value })
-                                    }
-                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                />
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-xs text-muted-foreground mb-1.5">
-                                Salary (₹ / month) *
-                            </label>
-                            <input
-                                type="number"
-                                value={newStaff.salary}
-                                onChange={(e) =>
-                                    setNewStaff({ ...newStaff, salary: e.target.value })
-                                }
-                                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-xs text-muted-foreground mb-1.5">
-                                Aadhar Number
-                            </label>
-                            <input
-                                type="text"
-                                value={newStaff.aadhar}
-                                onChange={(e) =>
-                                    setNewStaff({
-                                        ...newStaff,
-                                        aadhar: formatAadhar(e.target.value),
-                                    })
-                                }
-                                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                placeholder="1234 5678 9012"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex justify-end gap-2 mt-5">
-                        <button
-                            onClick={() => setShowNewStaffModal(false)}
-                            className="px-3 py-2 rounded-lg text-xs sm:text-sm bg-muted text-foreground hover:bg-accent transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleAddStaff}
-                            disabled={loading}
-                            className="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
-                        >
-                            <Save className="w-4 h-4" />
-                            <span>{loading ? 'Saving...' : 'Save'}</span>
-                        </button>
-                    </div>
-                </div>
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen">
+      {/* Customer Modal */}
+      {showCustomerModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Add Customer</h3>
+            <input 
+              type="text"
+              placeholder="First name"
+              value={newCustomer.first_name}
+              onChange={(e) => setNewCustomer({...newCustomer, first_name: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="Last name"
+              value={newCustomer.last_name}
+              onChange={(e) => setNewCustomer({...newCustomer, last_name: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="+91 Phone number"
+              value={newCustomer.phone}
+              onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="email"
+              placeholder="example@mail.com"
+              value={newCustomer.email}
+              onChange={(e) => setNewCustomer({...newCustomer, email: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <div className="flex gap-2">
+              <button onClick={addCustomer} className="flex-1 py-2 bg-teal-600 text-white rounded-lg">Save</button>
+              <button onClick={() => setShowCustomerModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
             </div>
-        )}
+          </div>
+        </div>
+      )}
 
-        {/* Edit Staff Modal */}
-        {showEditModal && editingStaff && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-2">
-                <div className="bg-card rounded-xl border border-border w-full max-w-md p-4 sm:p-5">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
-                            Edit Staff
-                        </h2>
-                        <button
-                            onClick={() => setShowEditModal(false)}
-                            className="text-muted-foreground hover:text-foreground"
-                        >
-                            <X className="w-4 h-4" />
-                        </button>
-                    </div>
-
-                    <div className="space-y-3">
-                        <div>
-                            <label className="block text-xs text-muted-foreground mb-1.5">
-                                Name *
-                            </label>
-                            <input
-                                type="text"
-                                value={editingStaff.name}
-                                onChange={(e) =>
-                                    setEditingStaff({ ...editingStaff, name: e.target.value })
-                                }
-                                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-xs text-muted-foreground mb-1.5">
-                                Phone *
-                            </label>
-                            <input
-                                type="text"
-                                value={editingStaff.phone}
-                                onChange={(e) =>
-                                    setEditingStaff({
-                                        ...editingStaff,
-                                        phone: e.target.value,
-                                    })
-                                }
-                                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                            />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
-                                    Role
-                                </label>
-                                <select
-                                    value={editingStaff.role}
-                                    onChange={(e) =>
-                                        setEditingStaff({
-                                            ...editingStaff,
-                                            role: e.target.value,
-                                        })
-                                    }
-                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                >
-                                    <option value="Cashier">Cashier</option>
-                                    <option value="Waiter">Waiter</option>
-                                    <option value="Chef">Chef</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
-                                    Status
-                                </label>
-                                <select
-                                    value={editingStaff.status}
-                                    onChange={(e) =>
-                                        setEditingStaff({
-                                            ...editingStaff,
-                                            status: e.target.value,
-                                        })
-                                    }
-                                    className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                >
-                                    <option value="Active">Active</option>
-                                    <option value="Inactive">Inactive</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-xs text-muted-foreground mb-1.5">
-                                Salary (₹ / month) *
-                            </label>
-                            <input
-                                type="number"
-                                value={editingStaff.salary}
-                                onChange={(e) =>
-                                    setEditingStaff({
-                                        ...editingStaff,
-                                        salary: e.target.value,
-                                    })
-                                }
-                                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-xs text-muted-foreground mb-1.5">
-                                Aadhar Number
-                            </label>
-                            <input
-                                type="text"
-                                value={editingStaff.aadhar}
-                                onChange={(e) =>
-                                    setEditingStaff({
-                                        ...editingStaff,
-                                        aadhar: formatAadhar(e.target.value),
-                                    })
-                                }
-                                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
-                                placeholder="1234 5678 9012"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex justify-end gap-2 mt-5">
-                        <button
-                            onClick={() => {
-                                setShowEditModal(false);
-                                setEditingStaff(null);
-                            }}
-                            className="px-3 py-2 rounded-lg text-xs sm:text-sm bg-muted text-foreground hover:bg-accent transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleUpdateStaff}
-                            disabled={loading}
-                            className="px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm bg-teal-600 text-white hover:bg-teal-700 transition-colors flex items-center gap-1.5 disabled:opacity-50"
-                        >
-                            <Save className="w-4 h-4" />
-                            <span>{loading ? 'Saving...' : 'Save Changes'}</span>
-                        </button>
-                    </div>
-                </div>
+      {/* Offer Modal */}
+      {showOfferModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Create Offer</h3>
+            <input 
+              type="text"
+              placeholder="Coupon code (e.g. SAVE10)"
+              value={newOffer.code}
+              onChange={(e) => setNewOffer({...newOffer, code: e.target.value.toUpperCase()})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <select 
+              value={newOffer.discount_type}
+              onChange={(e) => setNewOffer({...newOffer, discount_type: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            >
+              <option value="percentage">Percentage</option>
+              <option value="fixed">Flat Amount</option>
+            </select>
+            <input 
+              type="number"
+              placeholder={newOffer.discount_type === 'percentage' ? "Percentage (e.g. 10)" : "Amount (e.g. 50)"}
+              value={newOffer.discount_value}
+              onChange={(e) => setNewOffer({...newOffer, discount_value: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="number"
+              placeholder="Minimum order amount (optional)"
+              value={newOffer.min_order_amount}
+              onChange={(e) => setNewOffer({...newOffer, min_order_amount: parseFloat(e.target.value) || 0})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="text"
+              placeholder="Description (optional)"
+              value={newOffer.description}
+              onChange={(e) => setNewOffer({...newOffer, description: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <div className="flex gap-2">
+              <button onClick={addOffer} className="flex-1 py-2 bg-teal-600 text-white rounded-lg">Create</button>
+              <button onClick={() => setShowOfferModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
             </div>
-        )}
+          </div>
+        </div>
+      )}
+
+      {/* Staff Modal */}
+      {showStaffModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Add Staff</h3>
+            <input 
+              type="text"
+              placeholder="Full name"
+              value={newStaff.name}
+              onChange={(e) => setNewStaff({...newStaff, name: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <select 
+              value={newStaff.role}
+              onChange={(e) => setNewStaff({...newStaff, role: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            >
+              <option value="Cashier">Cashier</option>
+              <option value="Chef">Chef</option>
+              <option value="Waiter">Waiter</option>
+              <option value="Manager">Manager</option>
+            </select>
+            <input 
+              type="number"
+              placeholder="Monthly salary (e.g. 15000)"
+              value={newStaff.salary}
+              onChange={(e) => setNewStaff({...newStaff, salary: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="date"
+              value={newStaff.joined}
+              onChange={(e) => setNewStaff({...newStaff, joined: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <div className="flex gap-2">
+              <button onClick={addStaff} className="flex-1 py-2 bg-teal-600 text-white rounded-lg">Save</button>
+              <button onClick={() => setShowStaffModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Expense Modal */}
+      {showExpenseModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Add Expense</h3>
+            <input 
+              type="text"
+              placeholder="Expense title (e.g. Milk purchase)"
+              value={newExpense.title}
+              onChange={(e) => setNewExpense({...newExpense, title: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="number"
+              placeholder="Amount (e.g. 2150)"
+              value={newExpense.amount}
+              onChange={(e) => setNewExpense({...newExpense, amount: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <input 
+              type="date"
+              value={newExpense.date}
+              onChange={(e) => setNewExpense({...newExpense, date: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            />
+            <select 
+              value={newExpense.category}
+              onChange={(e) => setNewExpense({...newExpense, category: e.target.value})}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+            >
+              <option value="Supplies">Supplies</option>
+              <option value="Utilities">Utilities</option>
+              <option value="Salary">Salary</option>
+              <option value="Maintenance">Maintenance</option>
+            </select>
+            <div className="flex gap-2">
+              <button onClick={addExpense} className="flex-1 py-2 bg-teal-600 text-white rounded-lg">Save</button>
+              <button onClick={() => setShowExpenseModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-4">
+        <h2 className="text-2xl font-semibold text-foreground">Dashboard</h2>
+        <button
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="flex items-center gap-2 px-4 py-2 rounded-md font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
+          <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+        </button>
+      </div>
+
+      {/* Stats Cards - Updated with enhanced hover effects */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
+        <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <p className="text-muted-foreground text-xs sm:text-sm">Today Sales</p>
+            <DollarSign className="text-teal-400" size={18} />
+          </div>
+          <p className="text-xl sm:text-3xl font-bold text-card-foreground">₹{dailySummary.todaySales.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+        </div>
+        <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
+          <div className="flex items-center justify-between mb-2 sm:mb-3">
+            <p className="text-muted-foreground text-xs sm:text-sm">Orders</p>
+            <ShoppingBag className="text-teal-400" size={18} />
+          </div>
+          <p className="text-xl sm:text-3xl font-bold text-card-foreground">{dailySummary.ordersCount}</p>
+        </div>
+        <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300cursor-pointer">
+<div className="flex items-center justify-between mb-2 sm:mb-3">
+<p className="text-muted-foreground text-xs sm:text-sm">Avg Ticket</p>
+<TrendingUp className="text-teal-400" size={18} />
+</div>
+<p className="text-xl sm:text-3xl font-bold text-card-foreground">₹{dailySummary.avgTicket.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+</div>
+<div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
+<div className="flex items-center justify-between mb-2 sm:mb-3">
+<p className="text-muted-foreground text-xs sm:text-sm">Expenses</p>
+<Wallet className="text-teal-400" size={18} />
+</div>
+<p className="text-xl sm:text-3xl font-bold text-card-foreground">₹{dailySummary.totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+</div>
+</div>
+  {/* Quick Links, Recent Orders, Activity */}
+  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+    {/* Quick Links */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-4">Quick Links</h3>
+      <div className="space-y-3">
+        <button 
+          onClick={handleNavigateToPOS}
+          className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
+        >
+          <div className="text-left">
+            <p className="font-medium text-sm sm:text-base">Open POS</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Start billing and print KOT</p>
+          </div>
+          <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Open</span>
+        </button>
+        <button 
+          onClick={handleNavigateToMenu}
+          className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
+        >
+          <div className="text-left">
+            <p className="font-medium text-sm sm:text-base">Manage Menu</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Categories, items and prices</p>
+          </div>
+          <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Menu</span>
+        </button>
+        <button 
+          onClick={handleNavigateToReports}
+          className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
+        >
+          <div className="text-left">
+            <p className="font-medium text-sm sm:text-base">View Reports</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">Sales and orders</p>
+          </div>
+          <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Reports</span>
+        </button>
+      </div>
     </div>
+
+    {/* Recent Orders */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Recent Orders</h3>
+        <button 
+          onClick={handleSeeAllOrders}
+          className="text-teal-400 text-xs sm:text-sm hover:underline"
+        >
+          See all
+        </button>
+      </div>
+      <div className="space-y-3">
+        {displayedOrders.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">No recent orders</p>
+        ) : (
+          displayedOrders.map(order => (
+            <div key={order.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+              <div className="text-foreground">
+                <p className="font-medium text-xs sm:text-sm">{order.id} • {order.type}</p>
+                <p className="text-xs text-muted-foreground">{order.time}</p>
+              </div>
+              <p className="font-semibold text-foreground text-sm sm:text-base">₹ {order.amount.toLocaleString()}</p>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+
+    {/* Activity - Updated with card design for each activity */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-4">Activity</h3>
+      <div className="space-y-3">
+        {activities.map((activity, idx) => (
+          <div key={idx} className="flex items-center justify-between p-3 bg-muted rounded-lg hover:bg-secondary transition-colors">
+            <p className="text-foreground text-sm sm:text-base">{activity.action}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">{activity.time}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+
+  {/* Customers, Offers */}
+  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
+    {/* Customers */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Customers</h3>
+        <button 
+          onClick={() => setShowCustomerModal(true)}
+          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
+        >
+          Add
+        </button>
+      </div>
+      <div className="space-y-2 mb-4">
+        {customers.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">No customers yet</p>
+        ) : (
+          customers.slice(0, 5).map((cust, idx) => (
+            <div key={idx} className="p-3 bg-muted rounded-lg">
+              <p className="font-medium text-foreground text-sm sm:text-base">{cust.name}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">{cust.phone} • {cust.orders} orders</p>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+
+    {/* Offers */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Offers</h3>
+        <button 
+          onClick={() => setShowOfferModal(true)}
+          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
+        >
+          Create
+        </button>
+      </div>
+      <div className="space-y-2">
+        {offers.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">No active offers</p>
+        ) : (
+          offers.map((offer, idx) => (
+            <div key={idx} className="p-3 bg-muted rounded-lg">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-medium text-foreground text-sm sm:text-base">{offer.code}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">{offer.type} • {offer.value} • {offer.category}</p>
+                </div>
+                <button 
+                  onClick={() => alert(`Offer ${offer.code} disabled`)}
+                  className="text-xs text-red-400 hover:text-red-500"
+                >
+                  Disable
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  </div>
+
+  {/* Staff, Expenses */}
+  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+    {/* Staff */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Staff</h3>
+        <button 
+          onClick={() => setShowStaffModal(true)}
+          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
+        >
+          Add
+        </button>
+      </div>
+      <div className="space-y-2">
+        {staff.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">No staff members yet</p>
+        ) : (
+          staff.map((member, idx) => (
+            <div key={idx} className="p-3 bg-muted rounded-lg">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="font-medium text-foreground text-sm sm:text-base">{member.name}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">{member.role} • {member.payscale}</p>
+                </div>
+                <button 
+                  onClick={() => alert(`Edit ${member.name}`)}
+                  className="text-xs text-teal-400 hover:text-teal-500"
+                >
+                  Edit
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+
+    {/* Expenses */}
+    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Expenses</h3>
+        <button 
+          onClick={() => setShowExpenseModal(true)}
+          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
+        >
+          Add
+        </button>
+      </div>
+      <div className="space-y-2">
+        {expenses.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">No expenses recorded</p>
+        ) : (
+          expenses.slice(0, 5).map((exp, idx) => (
+            <div key={idx} className="p-3 bg-muted rounded-lg">
+              <p className="font-medium text-sm text-foreground">{exp.title}</p>
+              <div className="flex justify-between items-center mt-1">
+                <p className="text-xs sm:text-sm text-muted-foreground">{exp.date}</p>
+                <p className="font-semibold text-foreground text-sm sm:text-base">{exp.amount}</p>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  </div>
+</div>
 );
 };
-export default StaffManagement;
+export default Dashboard;
