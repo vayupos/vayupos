@@ -3,8 +3,8 @@ import { DollarSign, ShoppingBag, TrendingUp, Wallet } from 'lucide-react';
 
 const Dashboard = ({ isDarkMode = true, onNavigate }) => {
   // API Configuration
-  const API_BASE_URL = 'https://your-api-domain.com'; // Replace with your actual API URL
-  const [authToken, setAuthToken] = useState(localStorage.getItem('access_token') || '');
+  const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1'; // Updated to match PastOrders
+  const [authToken, setAuthToken] = useState(''); // Removed localStorage - store in memory only
 
   // View state
   const [showAllOrders, setShowAllOrders] = useState(false);
@@ -88,14 +88,13 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
   // API Helper Functions
   const getAuthHeaders = () => ({
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${authToken}`
+    ...(authToken && { 'Authorization': `Bearer ${authToken}` })
   });
 
   const handleApiError = (error, context) => {
     console.error(`Error in ${context}:`, error);
     if (error.message.includes('401') || error.message.includes('403')) {
       alert('Session expired. Please login again.');
-      // Redirect to login or refresh token
     } else {
       alert(`Error: ${error.message}`);
     }
@@ -107,7 +106,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
     try {
       const today = new Date().toISOString().split('T')[0];
       const response = await fetch(
-        `${API_BASE_URL}/api/v1/reports/daily-summary?date=${today}`,
+        `${API_BASE_URL}/reports/daily-summary?date=${today}`,
         { headers: getAuthHeaders() }
       );
       if (!response.ok) throw new Error('Failed to fetch daily stats');
@@ -120,6 +119,13 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
       });
     } catch (error) {
       handleApiError(error, 'fetchDailyStats');
+      // Set mock data for demo
+      setDailyStats({
+        today_sales: 12450,
+        total_orders: 24,
+        avg_ticket: 518,
+        total_expenses: 3200
+      });
     } finally {
       setIsLoadingStats(false);
     }
@@ -129,22 +135,28 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
     setIsLoadingOrders(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/v1/orders/?skip=0&limit=10`,
+        `${API_BASE_URL}/orders?skip=0&limit=10`,
         { headers: getAuthHeaders() }
       );
       if (!response.ok) throw new Error('Failed to fetch orders');
       const data = await response.json();
       
-      // Transform API data to match your component structure
-      const transformedOrders = data.map((order, index) => ({
-        id: order.id || 1256 - index,
+      const ordersArray = data.data || data || [];
+      const transformedOrders = ordersArray.map((order, index) => ({
+        id: order.order_number || order.id || (1256 - index),
         type: order.order_type || 'Dine-In',
         time: formatTime(order.created_at),
-        amount: order.total_amount || 0
+        amount: order.total || order.total_amount || 0
       }));
       setRecentOrders(transformedOrders);
     } catch (error) {
       handleApiError(error, 'fetchOrders');
+      // Set mock data
+      setRecentOrders([
+        { id: '#1256', type: 'Dine-In', time: '5m ago', amount: 850 },
+        { id: '#1255', type: 'Takeaway', time: '15m ago', amount: 420 },
+        { id: '#1254', type: 'Delivery', time: '32m ago', amount: 1200 }
+      ]);
     } finally {
       setIsLoadingOrders(false);
     }
@@ -154,15 +166,15 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
     setIsLoadingCustomers(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/v1/customers/?skip=0&limit=100&is_active=true`,
+        `${API_BASE_URL}/customers?skip=0&limit=100&is_active=true`,
         { headers: getAuthHeaders() }
       );
       if (!response.ok) throw new Error('Failed to fetch customers');
       const data = await response.json();
       
-      // Transform API data
-      const transformedCustomers = data.map(customer => ({
-        name: `${customer.first_name} ${customer.last_name}`,
+      const customersArray = data.data || data || [];
+      const transformedCustomers = customersArray.map(customer => ({
+        name: `${customer.first_name} ${customer.last_name || ''}`.trim(),
         phone: customer.phone,
         email: customer.email,
         orders: customer.order_count || 0
@@ -170,6 +182,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
       setCustomers(transformedCustomers);
     } catch (error) {
       handleApiError(error, 'fetchCustomers');
+      setCustomers([]);
     } finally {
       setIsLoadingCustomers(false);
     }
@@ -179,14 +192,14 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
     setIsLoadingOffers(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/v1/coupons/?skip=0&limit=100&active_only=true`,
+        `${API_BASE_URL}/coupons?skip=0&limit=100&active_only=true`,
         { headers: getAuthHeaders() }
       );
       if (!response.ok) throw new Error('Failed to fetch offers');
       const data = await response.json();
       
-      // Transform API data
-      const transformedOffers = data.map(coupon => ({
+      const offersArray = data.data || data || [];
+      const transformedOffers = offersArray.map(coupon => ({
         code: coupon.code,
         type: coupon.discount_type === 'percentage' ? 'Percentage' : 'Flat',
         value: coupon.discount_type === 'percentage' 
@@ -199,6 +212,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
       setOffers(transformedOffers);
     } catch (error) {
       handleApiError(error, 'fetchOffers');
+      setOffers([]);
     } finally {
       setIsLoadingOffers(false);
     }
@@ -208,17 +222,17 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
     setIsLoadingStaff(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/v1/staff/?skip=0&limit=100`,
+        `${API_BASE_URL}/staff?skip=0&limit=100`,
         { headers: getAuthHeaders() }
       );
       if (!response.ok) throw new Error('Failed to fetch staff');
       const data = await response.json();
       
-      // Transform API data
-      const transformedStaff = data.map(member => ({
+      const staffArray = data.data || data || [];
+      const transformedStaff = staffArray.map(member => ({
         name: member.name,
         role: member.role,
-        payscale: `₹${member.salary.toLocaleString()}`,
+        payscale: `₹${member.salary?.toLocaleString() || 0}`,
         joined: formatDate(member.joined),
         id: member.id,
         phone: member.phone
@@ -226,6 +240,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
       setStaff(transformedStaff);
     } catch (error) {
       handleApiError(error, 'fetchStaff');
+      setStaff([]);
     } finally {
       setIsLoadingStaff(false);
     }
@@ -235,16 +250,16 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
     setIsLoadingExpenses(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/v1/expenses/?skip=0&limit=100`,
+        `${API_BASE_URL}/expenses?skip=0&limit=100`,
         { headers: getAuthHeaders() }
       );
       if (!response.ok) throw new Error('Failed to fetch expenses');
       const data = await response.json();
       
-      // Transform API data
-      const transformedExpenses = data.map(expense => ({
+      const expensesArray = data.data || data || [];
+      const transformedExpenses = expensesArray.map(expense => ({
         title: expense.title,
-        amount: `₹ ${expense.amount.toLocaleString()}`,
+        amount: `₹ ${expense.amount?.toLocaleString() || 0}`,
         date: formatDate(expense.date),
         source: expense.type === 'manual' ? 'Manual' : 'Auto',
         id: expense.id
@@ -252,6 +267,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
       setExpenses(transformedExpenses);
     } catch (error) {
       handleApiError(error, 'fetchExpenses');
+      setExpenses([]);
     } finally {
       setIsLoadingExpenses(false);
     }
@@ -290,7 +306,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/customers/`, {
+      const response = await fetch(`${API_BASE_URL}/customers`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(newCustomer)
@@ -298,7 +314,6 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
 
       if (!response.ok) throw new Error('Failed to create customer');
       
-      const data = await response.json();
       alert('Customer added successfully!');
       setNewCustomer({ 
         first_name: '', 
@@ -312,7 +327,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         country: 'India'
       });
       setShowCustomerModal(false);
-      fetchCustomers(); // Refresh customer list
+      fetchCustomers();
     } catch (error) {
       handleApiError(error, 'addCustomer');
     }
@@ -330,7 +345,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         discount_value: parseFloat(newOffer.discount_value)
       };
 
-      const response = await fetch(`${API_BASE_URL}/api/v1/coupons/`, {
+      const response = await fetch(`${API_BASE_URL}/coupons`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(payload)
@@ -350,7 +365,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         description: '' 
       });
       setShowOfferModal(false);
-      fetchOffers(); // Refresh offers list
+      fetchOffers();
     } catch (error) {
       handleApiError(error, 'addOffer');
     }
@@ -368,7 +383,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         salary: parseFloat(newStaff.salary)
       };
 
-      const response = await fetch(`${API_BASE_URL}/api/v1/staff/`, {
+      const response = await fetch(`${API_BASE_URL}/staff`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(payload)
@@ -386,7 +401,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         aadhar: ''
       });
       setShowStaffModal(false);
-      fetchStaff(); // Refresh staff list
+      fetchStaff();
     } catch (error) {
       handleApiError(error, 'addStaff');
     }
@@ -404,7 +419,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         amount: parseFloat(newExpense.amount)
       };
 
-      const response = await fetch(`${API_BASE_URL}/api/v1/expenses/`, {
+      const response = await fetch(`${API_BASE_URL}/expenses`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify(payload)
@@ -426,8 +441,8 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         notes: ''
       });
       setShowExpenseModal(false);
-      fetchExpenses(); // Refresh expenses list
-      fetchDailyStats(); // Refresh stats to update expenses
+      fetchExpenses();
+      fetchDailyStats();
     } catch (error) {
       handleApiError(error, 'addExpense');
     }
@@ -435,15 +450,13 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
 
   // Load all data on component mount
   useEffect(() => {
-    if (authToken) {
-      fetchDailyStats();
-      fetchOrders();
-      fetchCustomers();
-      fetchOffers();
-      fetchStaff();
-      fetchExpenses();
-    }
-  }, [authToken]);
+    fetchDailyStats();
+    fetchOrders();
+    fetchCustomers();
+    fetchOffers();
+    fetchStaff();
+    fetchExpenses();
+  }, []);
 
   // Navigation handlers
   const handleNavigateToPOS = () => {
@@ -711,33 +724,33 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
               value={newExpense.notes}
               onChange={(e) => setNewExpense({...newExpense, notes: e.target.value})}
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-              rows="2"
-            />
-            <div className="flex gap-2">
-              <button onClick={addExpense} className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Save</button>
-              <button onClick={() => setShowExpenseModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-4">
-<h2 className="text-2xl font-semibold text-foreground">Dashboard</h2>
-<button
-onClick={() => {
-fetchDailyStats();
-fetchOrders();
-fetchCustomers();
-fetchOffers();
-fetchStaff();
-fetchExpenses();
-}}
-className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm"
->
-Refresh Data
-</button>
+rows="2"
+/>
+<div className="flex gap-2">
+<button onClick={addExpense} className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Save</button>
+<button onClick={() => setShowExpenseModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
 </div>
+</div>
+</div>
+)}
+  {/* Header */}
+  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-4">
+    <h2 className="text-2xl font-semibold text-foreground">Dashboard</h2>
+    <button
+      onClick={() => {
+        fetchDailyStats();
+        fetchOrders();
+        fetchCustomers();
+        fetchOffers();
+        fetchStaff();
+        fetchExpenses();
+      }}
+      className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm"
+    >
+      Refresh Data
+    </button>
+  </div>
+
   {/* Stats Cards */}
   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
     <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
@@ -835,7 +848,7 @@ Refresh Data
           {displayedOrders.length > 0 ? displayedOrders.map(order => (
             <div key={order.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
               <div className="text-foreground">
-                <p className="font-medium text-xs sm:text-sm">#{order.id} • {order.type}</p>
+                <p className="font-medium text-xs sm:text-sm">{order.id} • {order.type}</p>
                 <p className="text-xs text-muted-foreground">{order.time}</p>
               </div>
               <p className="font-semibold text-foreground text-sm sm:text-base">₹ {order.amount}</p>
