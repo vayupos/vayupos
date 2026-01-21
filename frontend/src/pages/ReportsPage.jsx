@@ -1061,11 +1061,11 @@ const ReportsPage = () => {
                   <table className="min-w-full">
                     <thead>
                       <tr className="bg-muted border-b border-border">
-                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Method</th>
-                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
-                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Share</th>
-                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Revenue</th>
-                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap w-[25%]">Method</th>
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap w-[15%]">Orders</th>
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap w-[15%]">Share</th>
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap w-[30%]">Revenue</th>
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap w-[15%]">Rank</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1078,20 +1078,20 @@ const ReportsPage = () => {
                       ) : (
                         ordersData.bySource.map((row, index) => (
                           <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                            <td className="py-2 px-2">
-                              <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.source}</span>
+                            <td className="py-2 px-2 w-[25%]">
+                              <span className="text-xs font-medium text-white whitespace-normal break-words">{row.source}</span>
                             </td>
-                            <td className="py-2 px-2">
-                              <span className="text-xs text-foreground">{row.orders}</span>
+                            <td className="py-2 px-2 w-[15%]">
+                              <span className="text-xs text-white">{row.orders}</span>
                             </td>
-                            <td className="py-2 px-2">
-                              <span className="text-xs text-foreground">{row.share}</span>
+                            <td className="py-2 px-2 w-[15%]">
+                              <span className="text-xs text-white">{row.share}</span>
                             </td>
-                            <td className="py-2 px-2">
-                              <span className="text-xs text-foreground whitespace-nowrap">{row.revenue}</span>
+                            <td className="py-2 px-2 w-[30%]">
+                              <span className="text-xs text-white whitespace-nowrap">{row.revenue}</span>
                             </td>
-                            <td className="py-2 px-2">
-                              <span className="text-xs text-foreground">{row.rank}</span>
+                            <td className="py-2 px-2 w-[15%]">
+                              <span className="text-xs text-white">{row.rank}</span>
                             </td>
                           </tr>
                         ))
@@ -1113,11 +1113,11 @@ const ReportsPage = () => {
                   <table className="min-w-full">
                     <thead>
                       <tr className="bg-muted border-b border-border">
-                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Mode</th>
-                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Count</th>
-                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Share</th>
-                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Amount</th>
-                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap w-[25%]">Mode</th>
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap w-[15%]">Count</th>
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap w-[15%]">Share</th>
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap w-[30%]">Amount</th>
+                        <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap w-[15%]">Rank</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1130,20 +1130,20 @@ const ReportsPage = () => {
                       ) : (
                         ordersData.byPayment.map((row, index) => (
                           <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                            <td className="py-2 px-2">
-                              <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.mode}</span>
+                            <td className="py-2 px-2 w-[25%]">
+                              <span className="text-xs font-medium text-white whitespace-normal break-words">{row.mode}</span>
                             </td>
-                            <td className="py-2 px-2">
-                              <span className="text-xs text-foreground">{row.count}</span>
+                            <td className="py-2 px-2 w-[15%]">
+                              <span className="text-xs text-white">{row.count}</span>
                             </td>
-                            <td className="py-2 px-2">
-                              <span className="text-xs text-foreground">{row.share}</span>
+                            <td className="py-2 px-2 w-[15%]">
+                              <span className="text-xs text-white">{row.share}</span>
                             </td>
-                            <td className="py-2 px-2">
-                              <span className="text-xs text-foreground whitespace-nowrap">{row.amount}</span>
+                            <td className="py-2 px-2 w-[30%]">
+                              <span className="text-xs text-white whitespace-nowrap">{row.amount}</span>
                             </td>
-                            <td className="py-2 px-2">
-                              <span className="text-xs text-foreground">{row.rank}</span>
+                            <td className="py-2 px-2 w-[15%]">
+                              <span className="text-xs text-white">{row.rank}</span>
                             </td>
                           </tr>
                         ))
