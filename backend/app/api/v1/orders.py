@@ -5,10 +5,12 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user, get_db
 from app.services import OrderService
 from app.schemas import OrderCreate, OrderUpdate, OrderResponse
-import traceback  # ← ADD THIS LINE
+# 🔥 NEW IMPORTS FOR NOTIFICATIONS
+from app.services.notification_service import create_notification
+from app.schemas.notification import NotificationCreate
+import traceback
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
-
 
 @router.post("/", response_model=OrderResponse)
 @router.post("", response_model=OrderResponse)
@@ -18,11 +20,21 @@ def create_order(
     db: Session = Depends(get_db),
 ):
     """Create a new order"""
-    try:  # ← ADD TRY-CATCH BLOCK
+    try:
         print(f"📦 Creating order with data: {order_create.dict()}")
         print(f"👤 Current user: {current_user}")
         order = OrderService.create_order(db, order_create, int(current_user["sub"]))
         print(f"✅ Order created successfully: {order.id}")
+        
+        # 🔥 NOTIFICATION: New order created
+        notification = NotificationCreate(
+            title=f"New order #{order.id}",
+            description=f"Table {getattr(order, 'table_number', 'N/A')} - ₹{getattr(order, 'total_amount', 0)}",
+            category="order"
+        )
+        create_notification(db, notification)
+        print(f"🔔 Notification sent for new order #{order.id}")
+        
         return OrderResponse.from_orm(order)
     except Exception as e:
         print(f"❌ Error creating order: {str(e)}")
@@ -31,7 +43,6 @@ def create_order(
             status_code=500, 
             detail=f"Error creating order: {str(e)}"
         )
-
 
 @router.get("/", response_model=dict)
 @router.get("", response_model=dict)
@@ -51,7 +62,6 @@ def list_orders(
         "data": [OrderResponse.from_orm(order) for order in orders],
     }
 
-
 @router.get("/{order_id}", response_model=OrderResponse)
 def get_order(order_id: int, db: Session = Depends(get_db)):
     """Get order by ID"""
@@ -59,7 +69,6 @@ def get_order(order_id: int, db: Session = Depends(get_db)):
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     return OrderResponse.from_orm(order)
-
 
 @router.put("/{order_id}", response_model=OrderResponse)
 def update_order(
@@ -70,8 +79,16 @@ def update_order(
 ):
     """Update order"""
     order = OrderService.update_order(db, order_id, order_update)
+    
+    # 🔥 NOTIFICATION: Order updated
+    notification = NotificationCreate(
+        title=f"Order #{order_id} updated",
+        description=f"Status changed to {order_update.status or 'modified'}",
+        category="order"
+    )
+    create_notification(db, notification)
+    
     return OrderResponse.from_orm(order)
-
 
 @router.post("/{order_id}/cancel")
 def cancel_order(
@@ -81,11 +98,20 @@ def cancel_order(
 ):
     """Cancel an order"""
     order = OrderService.cancel_order(db, order_id, int(current_user["sub"]))
+    
+    # 🔥 NOTIFICATION: Order cancelled
+    notification = NotificationCreate(
+        title=f"Order #{order_id} cancelled",
+        description=f"Table {getattr(order, 'table_number', 'N/A')} was cancelled by staff",
+        category="order"
+    )
+    create_notification(db, notification)
+    print(f"🔔 Cancellation notification sent for order #{order_id}")
+    
     return {
         "message": "Order cancelled successfully",
         "order": OrderResponse.from_orm(order),
     }
-
 
 @router.get("/number/{order_number}", response_model=OrderResponse)
 def get_order_by_number(order_number: str, db: Session = Depends(get_db)):
@@ -94,7 +120,6 @@ def get_order_by_number(order_number: str, db: Session = Depends(get_db)):
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     return OrderResponse.from_orm(order)
-
 
 @router.get("/customer/{customer_id}", response_model=List[OrderResponse])
 def get_customer_orders(

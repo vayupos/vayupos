@@ -1,68 +1,98 @@
-import { useState } from 'react';
-import { Bell, Clock, Filter, CheckCheck, Trash2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Bell, Clock, Filter, CheckCheck, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
+
+// API Configuration
+const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
 
 const Notifications = () => {
   const [filter, setFilter] = useState('all'); // all, read, unread
+  const [allNotifications, setAllNotifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Sample notifications - replace with your actual data
-  const [allNotifications, setAllNotifications] = useState([
-    {
-      id: 1,
-      title: 'New order received',
-      description: 'Order #1256 has been placed by John Doe',
-      time: '2 minutes ago',
-      isRead: false,
-      category: 'order',
-    },
-    {
-      id: 2,
-      title: 'Table 5 requested service',
-      description: 'Customer needs assistance at Table 5',
-      time: '15 minutes ago',
-      isRead: false,
-      category: 'service',
-    },
-    {
-      id: 3,
-      title: 'Low stock alert: Tomatoes',
-      description: 'Only 5 kg remaining in inventory',
-      time: '1 hour ago',
-      isRead: false,
-      category: 'inventory',
-    },
-    {
-      id: 4,
-      title: 'Payment received for Order #1234',
-      description: '₹450 received via UPI',
-      time: '2 hours ago',
-      isRead: true,
-      category: 'payment',
-    },
-    {
-      id: 5,
-      title: 'New customer registered',
-      description: 'Sarah Williams joined as a new customer',
-      time: '3 hours ago',
-      isRead: true,
-      category: 'customer',
-    },
-    {
-      id: 6,
-      title: 'Staff shift ended',
-      description: 'Rajesh Kumar has clocked out',
-      time: '4 hours ago',
-      isRead: true,
-      category: 'staff',
-    },
-    {
-      id: 7,
-      title: 'Daily sales report ready',
-      description: 'View your sales performance for today',
-      time: '5 hours ago',
-      isRead: true,
-      category: 'report',
-    },
-  ]);
+  // Fetch notifications from API
+  const fetchNotifications = async (showLoader = true) => {
+    if (showLoader) setLoading(true);
+    setError(null);
+
+    try {
+      const params = new URLSearchParams({
+        skip: '0',
+        limit: '100'
+      });
+
+      console.log('Fetching notifications...');
+
+      const response = await fetch(`${API_BASE_URL}/notifications?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          // Add auth header if needed
+          // 'Authorization': `Bearer ${token}`
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API Error:', response.status, errorText);
+        throw new Error(`API failed (${response.status}): ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('Fetched notifications:', data);
+
+      // Transform API data to match component structure
+      const transformedNotifications = Array.isArray(data) ? data.map(notif => ({
+        id: notif.id,
+        title: notif.title,
+        description: notif.description,
+        time: formatTime(notif.created_at),
+        isRead: notif.is_read,
+        category: notif.category,
+        created_at: notif.created_at
+      })) : [];
+
+      setAllNotifications(transformedNotifications);
+
+    } catch (err) {
+      console.error('Fetch error:', err);
+      setError(err.message || 'Failed to load notifications');
+    } finally {
+      if (showLoader) setLoading(false);
+    }
+  };
+
+  // Helper function to format time
+  const formatTime = (timestamp) => {
+    if (!timestamp) return 'Just now';
+    
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString();
+  };
+
+  // 🔥 FIXED: Initial fetch + AUTO-POLLING every 5 seconds
+  useEffect(() => {
+    fetchNotifications(); // Initial load
+    
+    // POLLING: Check for new notifications every 5 seconds
+    const interval = setInterval(() => {
+      console.log('🔄 Auto-polling for new notifications...');
+      fetchNotifications(false); // Silent refresh (no loading spinner)
+    }, 5000);
+    
+    return () => clearInterval(interval); // Cleanup on unmount
+  }, []);
 
   const filteredNotifications = allNotifications.filter((notif) => {
     if (filter === 'read') return notif.isRead;
@@ -72,31 +102,136 @@ const Notifications = () => {
 
   const unreadCount = allNotifications.filter((n) => !n.isRead).length;
 
-  const handleMarkAllRead = () => {
-    setAllNotifications(prevNotifications =>
-      prevNotifications.map(notif => ({ ...notif, isRead: true }))
-    );
-  };
+  // 🔥 FIXED: Use PATCH /mark-all-read endpoint
+  const handleMarkAllRead = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/notifications/`, {
+        method: 'PATCH', // Backend mark_all_read endpoint
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-  const handleDeleteAll = () => {
-    if (window.confirm('Are you sure you want to clear all notifications?')) {
-      setAllNotifications([]);
+      if (!response.ok) {
+        throw new Error('Failed to mark all as read');
+      }
+
+      // Refresh from API
+      await fetchNotifications(false);
+    } catch (err) {
+      console.error('Error marking all as read:', err);
+      alert('Failed to mark all notifications as read');
     }
   };
 
-  const handleMarkAsRead = (id) => {
-    setAllNotifications(prevNotifications =>
-      prevNotifications.map(notif =>
-        notif.id === id ? { ...notif, isRead: true } : notif
-      )
-    );
+  // 🔥 FIXED: Use DELETE / endpoint
+  const handleDeleteAll = async () => {
+    if (!window.confirm('Are you sure you want to clear all notifications?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/notifications/`, {
+        method: 'DELETE', // Backend delete_all endpoint
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete all notifications');
+      }
+
+      setAllNotifications([]);
+    } catch (err) {
+      console.error('Error deleting all notifications:', err);
+      alert('Failed to delete all notifications');
+    }
   };
 
-  const handleDelete = (id) => {
-    setAllNotifications(prevNotifications =>
-      prevNotifications.filter(notif => notif.id !== id)
-    );
+  // 🔥 FIXED: Use PATCH /{id}/read endpoint
+  const handleMarkAsRead = async (id) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to mark as read');
+      }
+
+      // Update local state optimistically
+      setAllNotifications(prevNotifications =>
+        prevNotifications.map(notif =>
+          notif.id === id ? { ...notif, isRead: true } : notif
+        )
+      );
+    } catch (err) {
+      console.error('Error marking as read:', err);
+      alert('Failed to mark notification as read');
+    }
   };
+
+  // 🔥 FIXED: Use DELETE /{id} endpoint
+  const handleDelete = async (id) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/notifications/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete notification');
+      }
+
+      // Update local state optimistically
+      setAllNotifications(prevNotifications =>
+        prevNotifications.filter(notif => notif.id !== id)
+      );
+    } catch (err) {
+      console.error('Error deleting notification:', err);
+      alert('Failed to delete notification');
+    }
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchNotifications(false);
+    setIsRefreshing(false);
+  };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="animate-spin h-12 w-12 text-primary mx-auto mb-4" />
+          <p className="text-lg text-foreground">Loading notifications...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-card border border-border rounded-lg p-6 text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-foreground mb-2">Error Loading Notifications</h2>
+          <p className="text-muted-foreground mb-4">{error}</p>
+          <button
+            onClick={() => fetchNotifications()}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-3 sm:p-4 md:p-5 lg:p-6 xl:p-8">
@@ -116,6 +251,14 @@ const Notifications = () => {
 
             {/* Action Buttons */}
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="flex items-center gap-1 sm:gap-1.5 md:gap-2 px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors text-foreground hover:bg-secondary bg-card border border-border disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3 w-3 sm:h-3.5 sm:w-3.5 md:h-4 md:w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Refresh</span>
+              </button>
               <button
                 onClick={handleMarkAllRead}
                 disabled={unreadCount === 0}

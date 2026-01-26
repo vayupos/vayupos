@@ -722,5 +722,6 @@ Thank you for your visit!`;
     </div>
   </div>
 </div>);
+
 };
 export default PastOrders;
