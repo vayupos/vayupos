@@ -29,7 +29,7 @@ def create_order(
         # 🔥 NOTIFICATION: New order created
         notification = NotificationCreate(
             title=f"New order #{order.id}",
-            description=f"Table {getattr(order, 'table_number', 'N/A')} - ₹{getattr(order, 'total_amount', 0)}",
+            description=f"Order #{order.order_number} received - ₹{getattr(order, 'total', 0)}",
             category="order"
         )
         create_notification(db, notification)
