@@ -22,7 +22,12 @@ def read_notifications(
     db: Session = Depends(get_db)
 ):
     """Get notifications with pagination and filters"""
-    return get_notifications(db, skip, limit, unread_only)
+    try:
+        notifications = get_notifications(db, skip, limit, unread_only)
+        return notifications if notifications else []
+    except Exception as e:
+        print(f"Error fetching notifications: {str(e)}")
+        return []
 
 @router.post("/", response_model=Notification)
 def create_notification_endpoint(notification: NotificationCreate, db: Session = Depends(get_db)):

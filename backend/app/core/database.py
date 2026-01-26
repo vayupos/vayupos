@@ -34,6 +34,13 @@ from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.payment import Payment
 from app.models.inventory_log import InventoryLog
+from app.models.notification import Notification
+from app.models.coupon import Coupon
+from app.models.coupon_category import CouponCategory
+from app.models.dish_template import DishTemplate
+from app.models.expense import Expense
+from app.models.order_coupon import OrderCoupon
+from app.models.staff import Staff
 
 # Dependency to get DB session
 def get_db():
