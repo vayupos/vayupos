@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Bell, Clock, Filter, CheckCheck, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
 
 // API Configuration
-const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://restaurant-vayupos.onrender.com/api/v1';
 
 const Notifications = () => {
   const [filter, setFilter] = useState('all'); // all, read, unread
