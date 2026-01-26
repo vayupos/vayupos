@@ -87,6 +87,24 @@ async def test_endpoint():
     """Test endpoint to verify API is working"""
     return {"message": "API is working", "timestamp": str(__import__('datetime').datetime.now())}
 
+@app.get("/api/v1/notifications-health")
+async def notifications_health():
+    """Health check for notifications module"""
+    try:
+        from app.api.v1 import notification
+        return {
+            "status": "healthy",
+            "notification_module": str(notification),
+            "notification_router": str(notification.router),
+            "router_routes": len(notification.router.routes) if hasattr(notification, 'router') else 0
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "trace": __import__('traceback').format_exc()
+        }
+
 # -------------------- HEALTH CHECK --------------------
 @app.get("/health")
 async def health(db: Session = Depends(get_db)):
