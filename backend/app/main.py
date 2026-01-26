@@ -13,7 +13,7 @@ from app.core.database import init_db, get_db
 from app.api.v1 import (
     auth, users, products, categories,
     customers, orders, inventory, payment, reports,
-    coupons, dish_templates, upload, staff, expense
+    coupons, dish_templates, upload, staff, expense, notification
 )
 
 settings = get_settings()
@@ -112,3 +112,4 @@ app.include_router(dish_templates.router, prefix="/api/v1", tags=["DishTemplates
 app.include_router(upload.router, prefix="/api/v1", tags=["Upload"])
 app.include_router(staff.router, prefix="/api/v1", tags=["Staff"])
 app.include_router(expense.router, prefix="/api/v1", tags=["Expense"])
+app.include_router(notification.router, prefix="/api/v1", tags=["Notifications"])

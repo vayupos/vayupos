@@ -10,6 +10,7 @@ from app.models.inventory_log import InventoryLog, InventoryAction
 from app.models.coupon import Coupon  # ← ADD THIS
 from app.models.dish_template import DishTemplate  
 from app.models.expense import Expense  # ← ADD THIS
+from app.models.notification import Notification  # ← ADD THIS
 
 
 __all__ = [
@@ -28,5 +29,6 @@ __all__ = [
     "InventoryAction",
     "Coupon", 
      "DishTemplate",
-      "Expense" # ← ADD THIS
+      "Expense",
+      "Notification" # ← ADD THIS
 ]

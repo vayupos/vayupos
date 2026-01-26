@@ -11,7 +11,6 @@ from app.schemas import (
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
-
 def product_to_dict(product, include_category=True):
     """Convert Product ORM to dict"""
     result = {
