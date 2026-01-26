@@ -7,6 +7,7 @@ from sqlalchemy import text
 from pathlib import Path
 import subprocess
 import os
+import traceback
 
 from app.core.config import get_settings
 from app.core.database import init_db, get_db
@@ -104,18 +105,100 @@ async def health(db: Session = Depends(get_db)):
         )
 
 # -------------------- ROUTERS --------------------
-app.include_router(auth.router, prefix="/api/v1", tags=["Auth"])
-app.include_router(users.router, prefix="/api/v1", tags=["Users"])
-app.include_router(products.router, prefix="/api/v1", tags=["Products"])
-app.include_router(categories.router, prefix="/api/v1", tags=["Categories"])
-app.include_router(customers.router, prefix="/api/v1", tags=["Customers"])
-app.include_router(orders.router, prefix="/api/v1", tags=["Orders"])
-app.include_router(inventory.router, prefix="/api/v1", tags=["Inventory"])
-app.include_router(payment.router, prefix="/api/v1", tags=["Payment"])
-app.include_router(reports.router, prefix="/api/v1", tags=["Reports"])
-app.include_router(coupons.router, prefix="/api/v1", tags=["Coupons"])
-app.include_router(dish_templates.router, prefix="/api/v1", tags=["DishTemplates"])
-app.include_router(upload.router, prefix="/api/v1", tags=["Upload"])
-app.include_router(staff.router, prefix="/api/v1", tags=["Staff"])
-app.include_router(expense.router, prefix="/api/v1", tags=["Expense"])
-app.include_router(notification.router, prefix="/api/v1", tags=["Notifications"])
+print("📋 Including routers...")
+try:
+    app.include_router(auth.router, prefix="/api/v1", tags=["Auth"])
+    print("✓ Auth router included")
+except Exception as e:
+    print(f"✗ Failed to include auth router: {e}")
+    traceback.print_exc()
+
+try:
+    app.include_router(users.router, prefix="/api/v1", tags=["Users"])
+    print("✓ Users router included")
+except Exception as e:
+    print(f"✗ Failed to include users router: {e}")
+
+try:
+    app.include_router(products.router, prefix="/api/v1", tags=["Products"])
+    print("✓ Products router included")
+except Exception as e:
+    print(f"✗ Failed to include products router: {e}")
+
+try:
+    app.include_router(categories.router, prefix="/api/v1", tags=["Categories"])
+    print("✓ Categories router included")
+except Exception as e:
+    print(f"✗ Failed to include categories router: {e}")
+
+try:
+    app.include_router(customers.router, prefix="/api/v1", tags=["Customers"])
+    print("✓ Customers router included")
+except Exception as e:
+    print(f"✗ Failed to include customers router: {e}")
+
+try:
+    app.include_router(orders.router, prefix="/api/v1", tags=["Orders"])
+    print("✓ Orders router included")
+except Exception as e:
+    print(f"✗ Failed to include orders router: {e}")
+
+try:
+    app.include_router(inventory.router, prefix="/api/v1", tags=["Inventory"])
+    print("✓ Inventory router included")
+except Exception as e:
+    print(f"✗ Failed to include inventory router: {e}")
+
+try:
+    app.include_router(payment.router, prefix="/api/v1", tags=["Payment"])
+    print("✓ Payment router included")
+except Exception as e:
+    print(f"✗ Failed to include payment router: {e}")
+
+try:
+    app.include_router(reports.router, prefix="/api/v1", tags=["Reports"])
+    print("✓ Reports router included")
+except Exception as e:
+    print(f"✗ Failed to include reports router: {e}")
+
+try:
+    app.include_router(coupons.router, prefix="/api/v1", tags=["Coupons"])
+    print("✓ Coupons router included")
+except Exception as e:
+    print(f"✗ Failed to include coupons router: {e}")
+
+try:
+    app.include_router(dish_templates.router, prefix="/api/v1", tags=["DishTemplates"])
+    print("✓ DishTemplates router included")
+except Exception as e:
+    print(f"✗ Failed to include dish_templates router: {e}")
+
+try:
+    app.include_router(upload.router, prefix="/api/v1", tags=["Upload"])
+    print("✓ Upload router included")
+except Exception as e:
+    print(f"✗ Failed to include upload router: {e}")
+
+try:
+    app.include_router(staff.router, prefix="/api/v1", tags=["Staff"])
+    print("✓ Staff router included")
+except Exception as e:
+    print(f"✗ Failed to include staff router: {e}")
+
+try:
+    app.include_router(expense.router, prefix="/api/v1", tags=["Expense"])
+    print("✓ Expense router included")
+except Exception as e:
+    print(f"✗ Failed to include expense router: {e}")
+
+try:
+    print("🔔 Including notification router...")
+    print(f"Notification module object: {notification}")
+    print(f"Notification router object: {notification.router}")
+    app.include_router(notification.router, prefix="/api/v1", tags=["Notifications"])
+    print("✓ Notification router included successfully!")
+except Exception as e:
+    print(f"✗ CRITICAL: Failed to include notification router: {e}")
+    traceback.print_exc()
+
+print("✓ All routers included")
