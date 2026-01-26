@@ -105,7 +105,7 @@ const Notifications = () => {
   // 🔥 FIXED: Use PATCH /mark-all-read endpoint
   const handleMarkAllRead = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/notifications/`, {
+      const response = await fetch(`${API_BASE_URL}/notifications/mark-all-read`, {
         method: 'PATCH', // Backend mark_all_read endpoint
         headers: {
           'Content-Type': 'application/json',
@@ -124,14 +124,14 @@ const Notifications = () => {
     }
   };
 
-  // 🔥 FIXED: Use DELETE / endpoint
+  // 🔥 FIXED: Use DELETE /all endpoint
   const handleDeleteAll = async () => {
     if (!window.confirm('Are you sure you want to clear all notifications?')) {
       return;
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/notifications/`, {
+      const response = await fetch(`${API_BASE_URL}/notifications/all`, {
         method: 'DELETE', // Backend delete_all endpoint
       });
 

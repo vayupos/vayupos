@@ -14,11 +14,6 @@ from app.services.notification_service import (
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
-@router.post("/", response_model=Notification)
-def create_notification_endpoint(notification: NotificationCreate, db: Session = Depends(get_db)):
-    """Create a new notification"""
-    return create_notification(db, notification)
-
 @router.get("/", response_model=List[Notification])
 def read_notifications(
     skip: int = Query(0, ge=0),
@@ -29,29 +24,34 @@ def read_notifications(
     """Get notifications with pagination and filters"""
     return get_notifications(db, skip, limit, unread_only)
 
+@router.post("/", response_model=Notification)
+def create_notification_endpoint(notification: NotificationCreate, db: Session = Depends(get_db)):
+    """Create a new notification"""
+    return create_notification(db, notification)
+
+@router.patch("/mark-all-read", response_model=dict)
+def mark_all_read_endpoint(db: Session = Depends(get_db)):
+    """Mark ALL unread notifications as read"""
+    count = mark_all_read(db)
+    return {"marked_as_read": count}
+
 @router.patch("/{notification_id}/read", response_model=Notification)
 def mark_read(notification_id: int, db: Session = Depends(get_db)):
     """Mark single notification as read"""
     notif = mark_notification_read(db, notification_id)
     if notif is None:
-        raise HTTPException(status_code=404, detail="Notification not found")  # ✅ Now works
+        raise HTTPException(status_code=404, detail="Notification not found")
     return notif
-
-@router.patch("/", response_model=dict)
-def mark_all_read_endpoint(db: Session = Depends(get_db)):
-    """Mark ALL unread notifications as read"""
-    count = mark_all_read(db)
-    return {"marked_as_read": count}
 
 @router.delete("/{notification_id}", response_model=dict)
 def delete_notification_endpoint(notification_id: int, db: Session = Depends(get_db)):
     """Delete single notification"""
     success = delete_notification(db, notification_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Notification not found")  # ✅ Now works
+        raise HTTPException(status_code=404, detail="Notification not found")
     return {"success": True}
 
-@router.delete("/", response_model=dict)
+@router.delete("/all", response_model=dict)
 def delete_all_endpoint(db: Session = Depends(get_db)):
     """Delete ALL notifications"""
     count = delete_all(db)
