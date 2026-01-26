@@ -33,6 +33,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:5173",
         "https://restaurant-vayu-pos.vercel.app",
+        "https://restaurant-vayupos.onrender.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -79,6 +80,11 @@ def startup_event():
 @app.get("/")
 async def root():
     return {"status": "VayuPOS Backend Live"}
+
+@app.get("/api/v1/test")
+async def test_endpoint():
+    """Test endpoint to verify API is working"""
+    return {"message": "API is working", "timestamp": str(__import__('datetime').datetime.now())}
 
 # -------------------- HEALTH CHECK --------------------
 @app.get("/health")
