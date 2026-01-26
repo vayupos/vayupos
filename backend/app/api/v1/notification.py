@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException  # ← FIXED: Added HTTPException
 from sqlalchemy.orm import Session
 from typing import List
-from app.core.database import get_db  # ✅ CORRECT IMPORT
+from app.core.database import get_db
 from app.schemas.notification import Notification, NotificationCreate
 from app.services.notification_service import (
     create_notification,
@@ -34,8 +34,7 @@ def mark_read(notification_id: int, db: Session = Depends(get_db)):
     """Mark single notification as read"""
     notif = mark_notification_read(db, notification_id)
     if notif is None:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="Notification not found")
+        raise HTTPException(status_code=404, detail="Notification not found")  # ✅ Now works
     return notif
 
 @router.patch("/", response_model=dict)
@@ -49,8 +48,7 @@ def delete_notification_endpoint(notification_id: int, db: Session = Depends(get
     """Delete single notification"""
     success = delete_notification(db, notification_id)
     if not success:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="Notification not found")
+        raise HTTPException(status_code=404, detail="Notification not found")  # ✅ Now works
     return {"success": True}
 
 @router.delete("/", response_model=dict)
