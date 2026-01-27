@@ -1,9 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Bell, Clock, CheckCheck, Trash2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-
-// API Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://restaurant-vayupos.onrender.com/api/v1';
+import api from '../api/axios';
 
 const NotificationsDropdown = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -15,34 +13,22 @@ const NotificationsDropdown = () => {
   // Fetch notifications from API
   const fetchNotifications = async () => {
     try {
-      // Fetch only the latest 5 for the dropdown, but we also need unread count
-      // Ideally backend would give a summary, but for now we fetch a small batch
-      // To get accurate unread count, we might need a separate endpoint or fetch more
-      // For now, let's fetch 10 items
-      const params = new URLSearchParams({ skip: '0', limit: '10' });
+      const response = await api.get('/notifications', {
+        params: { skip: 0, limit: 10 }
+      });
 
-      const response = await fetch(`${API_BASE_URL}/notifications?${params.toString()}`);
-
-      if (!response.ok) return;
-
-      const data = await response.json();
+      const data = response.data;
 
       const transformedNotifications = Array.isArray(data) ? data.map(notif => ({
         id: notif.id,
         title: notif.title,
         description: notif.description,
         time: formatTime(notif.created_at),
-        isRead: notif.is_read || false, // Ensure API returns is_read or handle mapped name
+        isRead: notif.is_read || false,
         created_at: notif.created_at
       })) : [];
 
       setNotifications(transformedNotifications);
-
-      // Calculate unread count from the fetched batch (approximate) or potentially all
-      // If the API supports filtering unread_only=true count, that would be better.
-      // For now, let's calculate based on what we have or add a separate count fetch if needed.
-      // A better approach for unread count is to fetch unread_only=true with a limit just to check count?
-      // Or just count from the latest batch. Let's count from latest batch for simplicity first.
       setUnreadCount(transformedNotifications.filter(n => !n.isRead).length);
 
     } catch (err) {
@@ -50,7 +36,7 @@ const NotificationsDropdown = () => {
     }
   };
 
-  // Helper function to format time (same as in Notifications.jsx)
+  // Helper function to format time
   const formatTime = (timestamp) => {
     if (!timestamp) return 'Just now';
     const date = new Date(timestamp);
@@ -93,10 +79,7 @@ const NotificationsDropdown = () => {
 
   const handleMarkAsRead = async (id) => {
     try {
-      await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      await api.patch(`/notifications/${id}/read`);
       // Optimistic update
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
       setUnreadCount(prev => Math.max(0, prev - 1));
@@ -107,7 +90,7 @@ const NotificationsDropdown = () => {
 
   const handleDelete = async (id) => {
     try {
-      await fetch(`${API_BASE_URL}/notifications/${id}`, { method: 'DELETE' });
+      await api.delete(`/notifications/${id}`);
       // Optimistic update
       const notif = notifications.find(n => n.id === id);
       if (notif && !notif.isRead) {
@@ -121,10 +104,7 @@ const NotificationsDropdown = () => {
 
   const handleMarkAllRead = async () => {
     try {
-      await fetch(`${API_BASE_URL}/notifications/mark-all-read`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      await api.patch('/notifications/mark-all-read');
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
       setUnreadCount(0);
     } catch (err) {

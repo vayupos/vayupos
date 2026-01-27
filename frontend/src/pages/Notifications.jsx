@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Bell, Clock, Filter, CheckCheck, Trash2, RefreshCw, AlertCircle } from 'lucide-react';
-
-// API Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://restaurant-vayupos.onrender.com/api/v1';
+import api from '../api/axios';
 
 const Notifications = () => {
   const [filter, setFilter] = useState('all'); // all, read, unread
@@ -17,29 +15,16 @@ const Notifications = () => {
     setError(null);
 
     try {
-      const params = new URLSearchParams({
-        skip: '0',
-        limit: '100'
-      });
-
       console.log('Fetching notifications...');
 
-      const response = await fetch(`${API_BASE_URL}/notifications?${params.toString()}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          // Add auth header if needed
-          // 'Authorization': `Bearer ${token}`
-        },
+      const response = await api.get('/notifications', {
+        params: {
+          skip: 0,
+          limit: 100
+        }
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('API Error:', response.status, errorText);
-        throw new Error(`API failed (${response.status}): ${errorText}`);
-      }
-
-      const data = await response.json();
+      const data = response.data;
       console.log('Fetched notifications:', data);
 
       // Transform API data to match component structure
@@ -66,7 +51,7 @@ const Notifications = () => {
   // Helper function to format time
   const formatTime = (timestamp) => {
     if (!timestamp) return 'Just now';
-    
+
     const date = new Date(timestamp);
     const now = new Date();
     const diffMs = now - date;
@@ -84,13 +69,13 @@ const Notifications = () => {
   // 🔥 FIXED: Initial fetch + AUTO-POLLING every 5 seconds
   useEffect(() => {
     fetchNotifications(); // Initial load
-    
+
     // POLLING: Check for new notifications every 5 seconds
     const interval = setInterval(() => {
       console.log('🔄 Auto-polling for new notifications...');
       fetchNotifications(false); // Silent refresh (no loading spinner)
     }, 5000);
-    
+
     return () => clearInterval(interval); // Cleanup on unmount
   }, []);
 
@@ -105,16 +90,7 @@ const Notifications = () => {
   // 🔥 FIXED: Use PATCH /mark-all-read endpoint
   const handleMarkAllRead = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/notifications/mark-all-read`, {
-        method: 'PATCH', // Backend mark_all_read endpoint
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to mark all as read');
-      }
+      await api.patch('/notifications/mark-all-read');
 
       // Refresh from API
       await fetchNotifications(false);
@@ -131,14 +107,7 @@ const Notifications = () => {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/notifications/all`, {
-        method: 'DELETE', // Backend delete_all endpoint
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete all notifications');
-      }
-
+      await api.delete('/notifications/all');
       setAllNotifications([]);
     } catch (err) {
       console.error('Error deleting all notifications:', err);
@@ -149,16 +118,7 @@ const Notifications = () => {
   // 🔥 FIXED: Use PATCH /{id}/read endpoint
   const handleMarkAsRead = async (id) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to mark as read');
-      }
+      await api.patch(`/notifications/${id}/read`);
 
       // Update local state optimistically
       setAllNotifications(prevNotifications =>
@@ -175,16 +135,7 @@ const Notifications = () => {
   // 🔥 FIXED: Use DELETE /{id} endpoint
   const handleDelete = async (id) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/notifications/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete notification');
-      }
+      await api.delete(`/notifications/${id}`);
 
       // Update local state optimistically
       setAllNotifications(prevNotifications =>
@@ -262,11 +213,10 @@ const Notifications = () => {
               <button
                 onClick={handleMarkAllRead}
                 disabled={unreadCount === 0}
-                className={`flex items-center gap-1 sm:gap-1.5 md:gap-2 px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors ${
-                  unreadCount === 0
+                className={`flex items-center gap-1 sm:gap-1.5 md:gap-2 px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors ${unreadCount === 0
                     ? 'text-muted-foreground bg-secondary/50 cursor-not-allowed opacity-50'
                     : 'text-foreground hover:bg-secondary bg-card border border-border'
-                }`}
+                  }`}
               >
                 <CheckCheck className="h-3 w-3 sm:h-3.5 sm:w-3.5 md:h-4 md:w-4" />
                 <span className="hidden xs:inline sm:hidden md:inline">Mark all read</span>
@@ -275,11 +225,10 @@ const Notifications = () => {
               <button
                 onClick={handleDeleteAll}
                 disabled={allNotifications.length === 0}
-                className={`flex items-center gap-1 sm:gap-1.5 md:gap-2 px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors ${
-                  allNotifications.length === 0
+                className={`flex items-center gap-1 sm:gap-1.5 md:gap-2 px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors ${allNotifications.length === 0
                     ? 'text-muted-foreground bg-secondary/50 cursor-not-allowed opacity-50'
                     : 'text-destructive hover:bg-destructive/10 bg-card border border-border'
-                }`}
+                  }`}
               >
                 <Trash2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 md:h-4 md:w-4" />
                 <span className="hidden xs:inline sm:hidden md:inline">Clear all</span>
@@ -294,21 +243,19 @@ const Notifications = () => {
             <div className="flex gap-2">
               <button
                 onClick={() => setFilter('all')}
-                className={`px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors ${
-                  filter === 'all'
+                className={`px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors ${filter === 'all'
                     ? 'bg-teal-600 text-white'
                     : 'bg-secondary text-foreground hover:bg-secondary/80'
-                }`}
+                  }`}
               >
                 All
               </button>
               <button
                 onClick={() => setFilter('unread')}
-                className={`px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors ${
-                  filter === 'unread'
+                className={`px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors ${filter === 'unread'
                     ? 'bg-teal-600 text-white'
                     : 'bg-secondary text-foreground hover:bg-secondary/80'
-                }`}
+                  }`}
               >
                 Unread
                 {unreadCount > 0 && (
@@ -319,11 +266,10 @@ const Notifications = () => {
               </button>
               <button
                 onClick={() => setFilter('read')}
-                className={`px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors ${
-                  filter === 'read'
+                className={`px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors ${filter === 'read'
                     ? 'bg-teal-600 text-white'
                     : 'bg-secondary text-foreground hover:bg-secondary/80'
-                }`}
+                  }`}
               >
                 Read
               </button>
@@ -337,9 +283,8 @@ const Notifications = () => {
             filteredNotifications.map((notification) => (
               <div
                 key={notification.id}
-                className={`bg-card border border-border rounded-lg p-3 sm:p-3.5 md:p-4 hover:shadow-md transition-all ${
-                  !notification.isRead ? 'border-l-4 border-l-teal-600' : ''
-                }`}
+                className={`bg-card border border-border rounded-lg p-3 sm:p-3.5 md:p-4 hover:shadow-md transition-all ${!notification.isRead ? 'border-l-4 border-l-teal-600' : ''
+                  }`}
               >
                 <div className="flex items-start gap-2 sm:gap-2.5 md:gap-3 lg:gap-4">
                   {/* Status Indicator */}
@@ -352,9 +297,8 @@ const Notifications = () => {
                   {/* Content */}
                   <div className="flex-1 min-w-0">
                     <h3
-                      className={`text-xs sm:text-sm md:text-base font-semibold ${
-                        !notification.isRead ? 'text-foreground' : 'text-muted-foreground'
-                      }`}
+                      className={`text-xs sm:text-sm md:text-base font-semibold ${!notification.isRead ? 'text-foreground' : 'text-muted-foreground'
+                        }`}
                     >
                       {notification.title}
                     </h3>
