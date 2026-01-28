@@ -24,16 +24,18 @@ def create_order(
         print(f"📦 Creating order with data: {order_create.dict()}")
         print(f"👤 Current user: {current_user}")
         order = OrderService.create_order(db, order_create, int(current_user["sub"]))
+        db.refresh(order) # Ensure we have the calculated total and ID
         print(f"✅ Order created successfully: {order.id}")
         
         # 🔥 NOTIFICATION: New order created
         notification = NotificationCreate(
             title=f"New order #{order.id}",
-            description=f"Order #{order.order_number} received - ₹{getattr(order, 'total', 0)}",
+            description=f"Order #{order.order_number} received - ₹{float(order.total)}",
             category="order"
         )
+        print(f"🔔 Attempting to create notification with data: {notification.dict()}")
         create_notification(db, notification)
-        print(f"🔔 Notification sent for new order #{order.id}")
+        print(f"🔔 Notification sent successfully for order #{order.id}")
         
         return OrderResponse.from_orm(order)
     except Exception as e:

@@ -39,24 +39,30 @@ const NotificationsDropdown = () => {
   // Helper function to format time
   const formatTime = (timestamp) => {
     if (!timestamp) return 'Just now';
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+    try {
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) return 'Just now';
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
-    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    return date.toLocaleDateString();
+      const now = new Date();
+      const diffMs = now - date;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      return date.toLocaleDateString();
+    } catch (e) {
+      return 'Just now';
+    }
   };
 
   // Initial fetch + Polling
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 10000); // Poll every 10s for dropdown
+    const interval = setInterval(fetchNotifications, 5000); // Poll every 5s for dropdown
     return () => clearInterval(interval);
   }, []);
 

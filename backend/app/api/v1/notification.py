@@ -18,14 +18,18 @@ def read_notifications(
     print(f"🔔 GET /notifications called with skip={skip}, limit={limit}, unread_only={unread_only}")
     try:
         from app.services.notification_service import get_notifications
+        from app.schemas.notification import Notification as NotificationSchema
+        
         notifications = get_notifications(db, skip, limit, unread_only)
-        print(f"✓ Returning {len(notifications) if notifications else 0} notifications")
-        return notifications if notifications else []
+        print(f"✓ Found {len(notifications)} notifications in DB")
+        
+        # Manually convert to dict to ensure datetime serialization if needed
+        # but FastAPI's response_model=List[dict] or ideally List[NotificationSchema] handles this.
+        return notifications
     except Exception as e:
         print(f"✗ Error in read_notifications: {e}")
         import traceback
         traceback.print_exc()
-        # Return empty list instead of erroring
         return []
 
 @router.post("", response_model=dict, status_code=status.HTTP_201_CREATED)
