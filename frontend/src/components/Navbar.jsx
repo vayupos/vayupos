@@ -10,11 +10,17 @@ const Navbar = ({ onMenuClick, onSearch }) => {
   const profileDropdownRef = useRef(null);
   const navigate = useNavigate();
 
-  const handleSearch = (value) => {
-    setSearchQuery(value);
-    if (onSearch) {
-      onSearch(value);
+  const handleSearch = (e) => {
+    if (e.key === 'Enter') {
+      const value = e.target.value;
+      if (onSearch && value.trim()) {
+        onSearch(value.trim());
+      }
     }
+  };
+
+  const handleInputChange = (e) => {
+    setSearchQuery(e.target.value);
   };
 
   const clearSearch = () => {
@@ -74,7 +80,7 @@ const Navbar = ({ onMenuClick, onSearch }) => {
           >
             <Menu className="h-5 w-5 text-foreground" />
           </button>
-          
+
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 bg-[#17232C] rounded-lg flex items-center justify-center">
               <LayoutDashboard className="h-6 w-6 text-white" />
@@ -90,7 +96,8 @@ const Navbar = ({ onMenuClick, onSearch }) => {
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => handleSearch(e.target.value)}
+              onChange={handleInputChange}
+              onKeyDown={handleSearch}
               placeholder="Search menu, customers, orders"
               className="w-full pl-10 pr-10 py-2 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground placeholder:text-muted-foreground"
             />
@@ -108,7 +115,7 @@ const Navbar = ({ onMenuClick, onSearch }) => {
         {/* Right: Actions */}
         <div className="flex items-center gap-3">
           <ThemeToggle />
-          
+
           {/* Notifications Dropdown */}
           <NotificationsDropdown />
 
@@ -163,7 +170,8 @@ const Navbar = ({ onMenuClick, onSearch }) => {
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => handleSearch(e.target.value)}
+            onChange={handleInputChange}
+            onKeyDown={handleSearch}
             placeholder="Search menu, customers, orders"
             className="w-full pl-10 pr-10 py-2 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground placeholder:text-muted-foreground"
           />

@@ -20,6 +20,7 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import NotFound from './pages/NotFound';
 import Notifications from "./pages/Notifications";
+import SearchResults from "./pages/SearchResults";
 import Profile from './pages/Profile';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from '@/components/ui/sonner';
@@ -67,7 +68,7 @@ const AppContent = () => {
   }, [dispatch]);
 
   // Navigation handler function
-  const handleNavigate = (page) => {
+  const handleNavigate = (page, pageData) => {
     const routeMap = {
       'pos': '/pos',
       'menu': '/menu',
@@ -79,19 +80,24 @@ const AppContent = () => {
       'staff': '/staffmanagement',
       'expenses': '/expensesmanagement',
       'notifications': '/notifications',
+      'search': '/search',
       'dashboard': '/'
     };
 
     const route = routeMap[page];
     if (route) {
-      navigate(route);
+      if (page === 'search' && typeof pageData === 'string') {
+        navigate(`${route}?q=${encodeURIComponent(pageData)}`);
+      } else {
+        navigate(route);
+      }
     }
   };
 
   return (
     <div className="min-h-screen bg-background">
       {/* Only show Navbar and Sidebar if not on auth routes */}
-      {!isAuthRoute && <Navbar onMenuClick={() => setSidebarOpen(true)} />}
+      {!isAuthRoute && <Navbar onMenuClick={() => setSidebarOpen(true)} onSearch={(q) => handleNavigate('search', q)} />}
 
       <div className="flex w-full">
         {!isAuthRoute && <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />}
@@ -218,6 +224,14 @@ const AppContent = () => {
               element={
                 <ProtectedRoute>
                   <Profile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/search"
+              element={
+                <ProtectedRoute>
+                  <SearchResults />
                 </ProtectedRoute>
               }
             />

@@ -14,7 +14,7 @@ from app.core.database import init_db, get_db
 from app.api.v1 import (
     auth, users, products, categories,
     customers, orders, inventory, payment, reports,
-    coupons, dish_templates, upload, staff, expense, notification
+    coupons, dish_templates, upload, staff, expense, notification, search
 )
 
 settings = get_settings()
@@ -205,13 +205,15 @@ except Exception as e:
     print(f"✗ Failed to include expense router: {e}")
 
 try:
-    print("🔔 Including notification router...")
-    print(f"Notification module object: {notification}")
-    print(f"Notification router object: {notification.router}")
     app.include_router(notification.router, prefix="/api/v1", tags=["Notifications"])
-    print("✓ Notification router included successfully!")
+    print("✓ Notification router included")
 except Exception as e:
-    print(f"✗ CRITICAL: Failed to include notification router: {e}")
-    traceback.print_exc()
+    print(f"✗ Failed to include notification router: {e}")
+
+try:
+    app.include_router(search.router, prefix="/api/v1", tags=["Search"])
+    print("✓ Search router included")
+except Exception as e:
+    print(f"✗ Failed to include search router: {e}")
 
 print("✓ All routers included")
