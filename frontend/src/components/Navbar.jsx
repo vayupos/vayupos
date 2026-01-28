@@ -91,14 +91,19 @@ const Navbar = ({ onMenuClick, onSearch }) => {
 
         {/* Center: Search */}
         <div className="hidden md:flex flex-1 max-w-md mx-8">
-          <div className="relative w-full">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="relative w-full group">
+            <button
+              onClick={() => searchQuery.trim() && onSearch && onSearch(searchQuery.trim())}
+              className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground hover:text-primary transition-colors z-10"
+            >
+              <Search className="h-4 w-4" />
+            </button>
             <input
               type="text"
               value={searchQuery}
               onChange={handleInputChange}
               onKeyDown={handleSearch}
-              placeholder="Search menu, customers, orders"
+              placeholder="Search menu, customers, orders..."
               className="w-full pl-10 pr-10 py-2 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground placeholder:text-muted-foreground"
             />
             {searchQuery && (
@@ -166,13 +171,18 @@ const Navbar = ({ onMenuClick, onSearch }) => {
       {/* Mobile Search */}
       <div className="md:hidden px-4 pb-3">
         <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <button
+            onClick={() => searchQuery.trim() && onSearch && onSearch(searchQuery.trim())}
+            className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10"
+          >
+            <Search className="h-4 w-4" />
+          </button>
           <input
             type="text"
             value={searchQuery}
             onChange={handleInputChange}
             onKeyDown={handleSearch}
-            placeholder="Search menu, customers, orders"
+            placeholder="Search..."
             className="w-full pl-10 pr-10 py-2 bg-secondary border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground placeholder:text-muted-foreground"
           />
           {searchQuery && (
