@@ -15,19 +15,20 @@ def read_notifications(
     db: Session = Depends(get_db)
 ):
     """Get notifications with pagination and filters"""
-    print(f"🔔 GET /notifications called with skip={skip}, limit={limit}, unread_only={unread_only}")
+    print(f"🔔 GET /notifications called (skip={skip}, limit={limit})")
     try:
         from app.services.notification_service import get_notifications
         from app.schemas.notification import Notification as NotificationSchema
         
         notifications = get_notifications(db, skip, limit, unread_only)
-        print(f"✓ Found {len(notifications)} notifications in DB")
         
-        # Manually convert to dict to ensure datetime serialization if needed
-        # but FastAPI's response_model=List[dict] or ideally List[NotificationSchema] handles this.
-        return notifications
+        # Explicitly convert SQLAlchemy models to Pydantic schemas for clean JSON
+        result = [NotificationSchema.from_orm(n).dict() for n in notifications]
+        
+        print(f"✓ Returning {len(result)} notifications to frontend")
+        return result
     except Exception as e:
-        print(f"✗ Error in read_notifications: {e}")
+        print(f"✗ Error fetching notifications: {str(e)}")
         import traceback
         traceback.print_exc()
         return []

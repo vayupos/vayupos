@@ -18,6 +18,7 @@ const NotificationsDropdown = () => {
       });
 
       const data = response.data;
+      console.log('🔔 Notifications API Response:', data);
 
       const transformedNotifications = Array.isArray(data) ? data.map(notif => ({
         id: notif.id,
