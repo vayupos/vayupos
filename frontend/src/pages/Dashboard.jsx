@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, ShoppingBag, TrendingUp, Wallet, RefreshCw, AlertCircle } from 'lucide-react';
+import { DollarSign, ShoppingBag, TrendingUp, Wallet, RefreshCw, AlertCircle, Lock } from 'lucide-react';
 
 // API Configuration
 const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
@@ -21,10 +21,11 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
     totalExpenses: 0
   });
 
-  // Loading and error states
+  // Error states
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [staffAccessDenied, setStaffAccessDenied] = useState(false);
 
   const activities = [
     { action: 'Staff login', time: 'just now' },
@@ -98,14 +99,6 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         const ordersArray = data.data || [];
         
         const transformedOrders = ordersArray.map(order => {
-          const orderTime = order.created_at 
-            ? new Date(order.created_at).toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
-                minute: '2-digit' 
-              })
-            : '--:--';
-          
-          // Calculate time ago
           const timeAgo = getTimeAgo(order.created_at);
 
           return {
@@ -123,19 +116,21 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
     }
   };
 
-  // Fetch customers
+  // Fetch customers - FIXED with trailing slash
   const fetchCustomers = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/customers?skip=0&limit=10&is_active=true`, {
+      const response = await fetch(`${API_BASE_URL}/customers/?skip=0&limit=10`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
       });
 
+      console.log('Customers API Response Status:', response.status);
+
       if (response.ok) {
         const data = await response.json();
-        console.log('Customers API Response:', data); // Debug log
+        console.log('Customers API Response:', data);
         
         // Handle different possible response structures
         let customersArray = [];
@@ -146,6 +141,8 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
           customersArray = data.data;
         } else if (data.customers && Array.isArray(data.customers)) {
           customersArray = data.customers;
+        } else if (data.items && Array.isArray(data.items)) {
+          customersArray = data.items;
         }
         
         const transformedCustomers = customersArray.map(customer => ({
@@ -156,13 +153,15 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
           email: customer.email || ''
         }));
 
-        console.log('Transformed Customers:', transformedCustomers); // Debug log
+        console.log('Transformed Customers:', transformedCustomers);
         setCustomers(transformedCustomers);
       } else {
         console.error('Customers API Error:', response.status, response.statusText);
+        setCustomers([]);
       }
     } catch (err) {
       console.error('Error fetching customers:', err);
+      setCustomers([]);
     }
   };
 
@@ -178,9 +177,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Offers API Response:', data); // Debug log
         
-        // Handle different possible response structures
         let offersArray = [];
         
         if (Array.isArray(data)) {
@@ -208,21 +205,23 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
     }
   };
 
-  // Fetch staff
+  // Fetch staff - Handles 403 gracefully
   const fetchStaff = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/staff?skip=0&limit=10`, {
+      // Try with trailing slash first
+      const response = await fetch(`${API_BASE_URL}/staff/?skip=0&limit=10`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
       });
 
+      console.log('Staff API Response Status:', response.status);
+
       if (response.ok) {
         const data = await response.json();
-        console.log('Staff API Response:', data); // Debug log
+        console.log('Staff API Response:', data);
         
-        // Handle different possible response structures
         let staffArray = [];
         
         if (Array.isArray(data)) {
@@ -231,6 +230,8 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
           staffArray = data.data;
         } else if (data.staff && Array.isArray(data.staff)) {
           staffArray = data.staff;
+        } else if (data.items && Array.isArray(data.items)) {
+          staffArray = data.items;
         }
         
         const transformedStaff = staffArray.map(member => ({
@@ -245,13 +246,20 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
           })
         }));
 
-        console.log('Transformed Staff:', transformedStaff); // Debug log
+        console.log('Transformed Staff:', transformedStaff);
         setStaff(transformedStaff);
+        setStaffAccessDenied(false);
+      } else if (response.status === 403) {
+        console.warn('Staff endpoint requires authentication/authorization (403)');
+        setStaffAccessDenied(true);
+        setStaff([]);
       } else {
         console.error('Staff API Error:', response.status, response.statusText);
+        setStaff([]);
       }
     } catch (err) {
       console.error('Error fetching staff:', err);
+      setStaff([]);
     }
   };
 
@@ -267,9 +275,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Expenses API Response:', data); // Debug log
         
-        // Handle different possible response structures
         let expensesArray = [];
         
         if (Array.isArray(data)) {
@@ -320,51 +326,35 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
 
   // Navigation handlers
   const handleNavigateToPOS = () => {
-    if (onNavigate) {
-      onNavigate('pos');
-    }
+    if (onNavigate) onNavigate('pos');
   };
 
   const handleNavigateToMenu = () => {
-    if (onNavigate) {
-      onNavigate('menu');
-    }
+    if (onNavigate) onNavigate('menu');
   };
 
   const handleNavigateToReports = () => {
-    if (onNavigate) {
-      onNavigate('reports');
-    }
+    if (onNavigate) onNavigate('reports');
   };
 
   const handleNavigateToPastOrders = () => {
-    if (onNavigate) {
-      onNavigate('past-orders');
-    }
+    if (onNavigate) onNavigate('past-orders');
   };
 
   const handleNavigateToCustomers = () => {
-    if (onNavigate) {
-      onNavigate('customers');
-    }
+    if (onNavigate) onNavigate('customers');
   };
 
   const handleNavigateToOffers = () => {
-    if (onNavigate) {
-      onNavigate('offers');
-    }
+    if (onNavigate) onNavigate('offers');
   };
 
   const handleNavigateToStaff = () => {
-    if (onNavigate) {
-      onNavigate('staff');
-    }
+    if (onNavigate) onNavigate('staff');
   };
 
   const handleNavigateToExpenses = () => {
-    if (onNavigate) {
-      onNavigate('expenses');
-    }
+    if (onNavigate) onNavigate('expenses');
   };
 
   const handleSeeAllOrders = () => {
@@ -424,7 +414,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         </button>
       </div>
 
-      {/* Stats Cards - Updated with enhanced hover effects */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
         <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
           <div className="flex items-center justify-between mb-2 sm:mb-3">
@@ -523,7 +513,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
           </div>
         </div>
 
-        {/* Activity - Updated with card design for each activity */}
+        {/* Activity */}
         <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
           <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-4">Activity</h3>
           <div className="space-y-3">
@@ -608,7 +598,13 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
             </button>
           </div>
           <div className="space-y-2">
-            {staff.length === 0 ? (
+            {staffAccessDenied ? (
+              <div className="text-center py-6">
+                <Lock className="h-8 w-8 text-amber-500 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Staff data requires authentication</p>
+                <p className="text-xs text-muted-foreground mt-1">Please contact your administrator</p>
+              </div>
+            ) : staff.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">No staff members yet</p>
             ) : (
               staff.map((member, idx) => (
