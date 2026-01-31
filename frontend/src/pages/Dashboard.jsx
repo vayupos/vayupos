@@ -135,17 +135,31 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
 
       if (response.ok) {
         const data = await response.json();
-        const customersArray = data.data || [];
+        console.log('Customers API Response:', data); // Debug log
+        
+        // Handle different possible response structures
+        let customersArray = [];
+        
+        if (Array.isArray(data)) {
+          customersArray = data;
+        } else if (data.data && Array.isArray(data.data)) {
+          customersArray = data.data;
+        } else if (data.customers && Array.isArray(data.customers)) {
+          customersArray = data.customers;
+        }
         
         const transformedCustomers = customersArray.map(customer => ({
           id: customer.id,
-          name: `${customer.first_name || ''} ${customer.last_name || ''}`.trim(),
+          name: `${customer.first_name || ''} ${customer.last_name || ''}`.trim() || 'No Name',
           phone: customer.phone || '',
           orders: customer.total_orders || 0,
           email: customer.email || ''
         }));
 
+        console.log('Transformed Customers:', transformedCustomers); // Debug log
         setCustomers(transformedCustomers);
+      } else {
+        console.error('Customers API Error:', response.status, response.statusText);
       }
     } catch (err) {
       console.error('Error fetching customers:', err);
@@ -164,8 +178,20 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('Offers API Response:', data); // Debug log
         
-        const transformedOffers = data.map(offer => ({
+        // Handle different possible response structures
+        let offersArray = [];
+        
+        if (Array.isArray(data)) {
+          offersArray = data;
+        } else if (data.data && Array.isArray(data.data)) {
+          offersArray = data.data;
+        } else if (data.coupons && Array.isArray(data.coupons)) {
+          offersArray = data.coupons;
+        }
+        
+        const transformedOffers = offersArray.map(offer => ({
           id: offer.id,
           code: offer.code,
           type: offer.discount_type === 'percentage' ? 'Percentage' : 'Flat',
@@ -194,8 +220,20 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('Staff API Response:', data); // Debug log
         
-        const transformedStaff = data.map(member => ({
+        // Handle different possible response structures
+        let staffArray = [];
+        
+        if (Array.isArray(data)) {
+          staffArray = data;
+        } else if (data.data && Array.isArray(data.data)) {
+          staffArray = data.data;
+        } else if (data.staff && Array.isArray(data.staff)) {
+          staffArray = data.staff;
+        }
+        
+        const transformedStaff = staffArray.map(member => ({
           id: member.id,
           name: member.name,
           role: member.role,
@@ -207,7 +245,10 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
           })
         }));
 
+        console.log('Transformed Staff:', transformedStaff); // Debug log
         setStaff(transformedStaff);
+      } else {
+        console.error('Staff API Error:', response.status, response.statusText);
       }
     } catch (err) {
       console.error('Error fetching staff:', err);
@@ -226,8 +267,20 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('Expenses API Response:', data); // Debug log
         
-        const transformedExpenses = data.map(expense => ({
+        // Handle different possible response structures
+        let expensesArray = [];
+        
+        if (Array.isArray(data)) {
+          expensesArray = data;
+        } else if (data.data && Array.isArray(data.data)) {
+          expensesArray = data.data;
+        } else if (data.expenses && Array.isArray(data.expenses)) {
+          expensesArray = data.expenses;
+        }
+        
+        const transformedExpenses = expensesArray.map(expense => ({
           id: expense.id,
           title: expense.title,
           amount: `₹ ${expense.amount?.toLocaleString() || 0}`,
