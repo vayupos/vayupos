@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Search, Calendar, RefreshCw, Printer, Download, Eye, X, AlertCircle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-// API Configuration
-const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
+// API Configuration - Using environment variables
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
 
 const PastOrders = () => {
   const [searchQuery, setSearchQuery] = useState('');

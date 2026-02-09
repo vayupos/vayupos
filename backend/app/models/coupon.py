@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text
 from sqlalchemy.sql import func
-from app.core.database import Base
+from app.models.user import Base
 
 class Coupon(Base):
     __tablename__ = "coupons"

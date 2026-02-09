@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Float, Date, Boolean, DateTime
 from sqlalchemy.sql import func
-from app.core.database import Base
+from app.models.user import Base
 
 
 class Staff(Base):

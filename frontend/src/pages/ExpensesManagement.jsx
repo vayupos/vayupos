@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Plus, Filter, Eye, Edit2, Trash2, RotateCw, FileText, Flame, Droplet, Zap, Wifi, Paperclip, X, Search } from 'lucide-react';
 
-const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
 
 // API Helper Functions
 const api = {

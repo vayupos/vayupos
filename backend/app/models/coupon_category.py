@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, ForeignKey
-from app.core.database import Base
+from app.models.user import Base
 
 class CouponCategory(Base):
     __tablename__ = "coupon_categories"

@@ -63,14 +63,21 @@ def startup_event():
 
         if result.returncode == 0:
             print("✓ Database migrations completed")
+        elif "already exists" in result.stderr:
+            # Tables already exist (e.g., in production database)
+            print("✓ Database schema already exists, skipping migrations")
         else:
             print(f"⚠ Migration warning: {result.stderr}")
 
     except Exception as e:
         print(f"⚠ Could not run migrations: {str(e)}")
 
-    init_db()
-    print("✓ Database initialized")
+    try:
+        init_db()
+        print("✓ Database initialized")
+    except Exception as e:
+        print(f"⚠ Could not initialize database: {str(e)}")
+        print("✓ Starting application anyway (tables may already exist)")
 
 # -------------------- ROOT --------------------
 @app.get("/")

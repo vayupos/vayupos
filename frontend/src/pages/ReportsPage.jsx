@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Download, Printer, Calendar, Filter, RotateCw, ChevronDown, AlertCircle } from 'lucide-react';
 import { LineChart, Line, PieChart, Pie, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 
-// API Configuration - Using your actual backend URL
-const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
+// API Configuration - Using environment variables
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
 
 const ReportsPage = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);

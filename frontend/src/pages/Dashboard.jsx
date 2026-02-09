@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DollarSign, ShoppingBag, TrendingUp, Wallet, RefreshCw, AlertCircle, Lock } from 'lucide-react';
 
 // API Configuration
-const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
 
 const Dashboard = ({ isDarkMode = true, onNavigate }) => {
   // View state

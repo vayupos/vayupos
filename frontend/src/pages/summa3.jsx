@@ -3,7 +3,7 @@ import { DollarSign, ShoppingBag, TrendingUp, Wallet } from 'lucide-react';
 
 const Dashboard = ({ isDarkMode = true, onNavigate }) => {
   // API Configuration
-  const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1'; // Updated to match PastOrders
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1'; // Updated to use env variables
   const [authToken, setAuthToken] = useState(''); // Removed localStorage - store in memory only
 
   // View state

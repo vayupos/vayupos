@@ -1,8 +1,11 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, Text
 from sqlalchemy.orm import relationship
-from app.core.database import Base
+from sqlalchemy.orm import declarative_base
 import enum
 from datetime import datetime
+
+# Use declarative_base directly to avoid circular import
+Base = declarative_base()
 
 
 class UserRole(str, enum.Enum):

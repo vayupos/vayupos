@@ -3,7 +3,7 @@ from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, EmailStr, validator, condecimal
+from pydantic import BaseModel, Field, EmailStr, validator, field_validator, condecimal
 
 from app.models.user import UserRole
 from app.models.order import OrderStatus
@@ -27,11 +27,16 @@ class UserCreate(UserBase):
     """User creation schema"""
     password: str = Field(..., min_length=8, max_length=72)
 
-    @validator("password")
-    def validate_password_length(cls, v: str) -> str:
+    @field_validator("password")
+    @classmethod
+    def validate_password_bytes(cls, v: str) -> str:
         """Ensure password is not longer than 72 bytes (bcrypt limit)"""
-        if len(v.encode("utf-8")) > 72:
-            raise ValueError("Password cannot exceed 72 bytes when encoded as UTF-8")
+        password_bytes = v.encode("utf-8")
+        if len(password_bytes) > 72:
+            raise ValueError(
+                f"Password is too long ({len(password_bytes)} bytes). "
+                "Must be 72 bytes or less when UTF-8 encoded."
+            )
         return v
 
 

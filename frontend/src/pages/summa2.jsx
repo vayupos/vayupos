@@ -3,7 +3,7 @@ import { DollarSign, ShoppingBag, TrendingUp, Wallet } from 'lucide-react';
 
 const Dashboard = ({ isDarkMode = true, onNavigate }) => {
   // API Configuration
-  const API_BASE_URL = 'https://restaurant-vayupos.onrender.com/api/v1';
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
   const [authToken, setAuthToken] = useState('');
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [credentials, setCredentials] = useState({ username: '', password: '' });

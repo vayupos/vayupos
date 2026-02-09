@@ -21,12 +21,8 @@ engine = create_engine(
 # Create SessionLocal class
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Create Base class
-Base = declarative_base()
-
-# Import all models to register them with Base
-# This must be done before create_all()
-from app.models.user import User
+# Import Base from models (models.user creates it to avoid circular dependency)
+from app.models.user import Base, User
 from app.models.category import Category
 from app.models.product import Product
 from app.models.customer import Customer
