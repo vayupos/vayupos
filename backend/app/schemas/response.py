@@ -129,7 +129,6 @@ class ProductResponse(ProductBase):
     id: int
     stock_quantity: int
     is_active: bool
-    category: Optional["CategoryResponse"] = None
     created_at: datetime
     updated_at: datetime
 

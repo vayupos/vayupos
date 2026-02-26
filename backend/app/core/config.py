@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     cors_origins: list = ["*"]
     
+     # ✅ ADD THESE 4 LINES HERE
+    AWS_ACCESS_KEY_ID: str
+    AWS_SECRET_ACCESS_KEY: str
+    AWS_REGION: str
+    AWS_BUCKET_NAME: str
+    
     class Config:
         env_file = ".env"
         case_sensitive = True
