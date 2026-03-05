@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
     Search,
     UserPlus,
-    Upload,
     Edit2,
     Trash2,
     RotateCw,
@@ -12,7 +11,12 @@ import {
     X,
     Download,
     AlertCircle,
+    FileText,
+    ChevronDown,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
 
@@ -20,7 +24,7 @@ const getAuthHeaders = () => {
     const tokenKeys = ['access_token', 'acces_Token', 'token', 'authToken', 'jwt', 'bearer', 'Token'];
     let token = null;
     let tokenKey = null;
-    
+
     for (const key of tokenKeys) {
         const value = localStorage.getItem(key);
         if (value && value.length > 10) {
@@ -29,14 +33,14 @@ const getAuthHeaders = () => {
             break;
         }
     }
-    
+
     console.log('🔑 Auth Check:', {
         found: !!token,
         key: tokenKey,
         length: token ? token.length : 0,
         preview: token ? token.substring(0, 20) + '...' : 'none'
     });
-    
+
     if (!token) {
         console.error('❌ No authentication token found');
         console.log('📦 Available localStorage keys:', Object.keys(localStorage));
@@ -44,7 +48,7 @@ const getAuthHeaders = () => {
             'Content-Type': 'application/json',
         };
     }
-    
+
     return {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
@@ -57,6 +61,23 @@ const StaffManagement = () => {
     const [statusFilter, setStatusFilter] = useState('Active');
     const [showSearch, setShowSearch] = useState(false);
     const [showNewStaffModal, setShowNewStaffModal] = useState(false);
+    const [isExportOpen, setIsExportOpen] = useState(false);
+    const exportRef = React.useRef(null);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (exportRef.current && !exportRef.current.contains(event.target)) {
+                setIsExportOpen(false);
+            }
+        };
+        if (isExportOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isExportOpen]);
     const [showEditModal, setShowEditModal] = useState(false);
     const [editingStaff, setEditingStaff] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -99,40 +120,40 @@ const StaffManagement = () => {
         try {
             setLoading(true);
             setError(null);
-            
+
             const params = new URLSearchParams();
-            
+
             const trimmedSearch = searchQuery?.trim() || '';
             if (trimmedSearch) {
                 params.append('search', trimmedSearch);
             }
-            
+
             if (roleFilter && roleFilter !== 'All') {
                 params.append('role', roleFilter);
             }
-            
+
             if (statusFilter) {
                 params.append('status', statusFilter);
             }
-            
+
             const queryString = params.toString();
             const url = `${API_BASE_URL}/staff${queryString ? '?' + queryString : ''}`;
-            
+
             console.log('📡 Fetching from:', url);
-            
+
             const headers = getAuthHeaders();
-            
+
             const response = await fetch(url, {
                 method: 'GET',
                 headers: headers,
             });
-            
+
             console.log('📥 Response:', response.status, response.statusText);
-            
+
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error('❌ API Error:', response.status, errorText);
-                
+
                 if (response.status === 401 || response.status === 403) {
                     console.error('🔒 Auth failed - Status:', response.status);
                     setError(`Authentication failed (${response.status}). Please check if you're logged in.`);
@@ -140,21 +161,21 @@ const StaffManagement = () => {
                     setLoading(false);
                     return;
                 }
-                
+
                 throw new Error(`API failed (${response.status}): ${errorText}`);
             }
-            
+
             const data = await response.json();
             console.log('✅ Received staff data:', data);
-            
+
             const staffArray = Array.isArray(data) ? data : (data.data || []);
-            
+
             if (!Array.isArray(staffArray)) {
                 console.error('⚠️ Unexpected data format:', data);
                 setStaff([]);
                 return;
             }
-            
+
             const transformedStaff = staffArray.map(member => ({
                 id: member.id,
                 name: member.name,
@@ -173,7 +194,7 @@ const StaffManagement = () => {
                 status: member.status,
                 aadhar: member.aadhar || '',
             }));
-            
+
             console.log('✅ Transformed staff:', transformedStaff.length, 'members');
             setStaff(transformedStaff);
         } catch (err) {
@@ -192,7 +213,7 @@ const StaffManagement = () => {
                 method: 'GET',
                 headers: getAuthHeaders(),
             });
-            
+
             if (!response.ok) {
                 if (response.status === 401 || response.status === 403) {
                     console.warn('⚠️ Auth failed for upcoming salaries');
@@ -200,10 +221,10 @@ const StaffManagement = () => {
                 }
                 throw new Error('Failed to fetch upcoming salaries');
             }
-            
+
             const data = await response.json();
             console.log('✅ Upcoming salaries data:', data);
-            
+
             const transformedSalaries = data.map(entry => ({
                 id: entry.id,
                 staffId: entry.staff_id || entry.id,
@@ -216,9 +237,9 @@ const StaffManagement = () => {
                 dueDate: entry.due_date || entry.dueDate,
                 category: 'Salaries & Wages',
             }));
-            
+
             setUpcomingSalaries(transformedSalaries);
-            
+
             // ✅ Smart cleanup: only keep removingIds that are still in the new data
             // If an ID is not in the new data, it was successfully removed, so clean it up
             setRemovingIds(prev => {
@@ -249,31 +270,83 @@ const StaffManagement = () => {
         return formatted;
     };
 
-    const handleExport = () => {
-        const headers = ['Name', 'Phone', 'Role', 'Salary', 'Joined', 'Status', 'Aadhar'];
-        const rows = staff.map((s) => [
+    const handleExportExcel = () => {
+        // Prepare data for Excel
+        const data = staff.map((s, index) => ({
+            '#': index + 1,
+            'Name': s.name,
+            'Phone': s.phone,
+            'Role': s.role,
+            'Salary': s.salaryAmount,
+            'Joined Date': s.joinedDate,
+            'Status': s.status,
+            'Aadhar': s.aadhar || '-'
+        }));
+
+        // Create worksheet
+        const ws = XLSX.utils.json_to_sheet(data);
+
+        // Create workbook
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'StaffMembers');
+
+        // Save file
+        XLSX.writeFile(wb, `staff_report_${new Date().toISOString().split('T')[0]}.xlsx`);
+        setIsExportOpen(false);
+    };
+
+    const handleExportPDF = () => {
+        const doc = new jsPDF();
+
+        // Add header
+        doc.setFontSize(22);
+        doc.setTextColor(13, 148, 136); // Teal-600
+        doc.text('VayuPOS - Staff Directory', 14, 22);
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
+        doc.text(`Total Staff Members: ${staff.length}`, 14, 35);
+
+        // Define table columns
+        const tableColumn = ["#", "Name", "Phone", "Role", "Salary", "Joined", "Status"];
+        const tableRows = staff.map((s, index) => [
+            index + 1,
             s.name,
             s.phone,
             s.role,
-            s.salaryAmount,
+            `Rs. ${s.salaryAmount.toLocaleString('en-IN')}`,
             s.joinedDate,
-            s.status,
-            s.aadhar,
+            s.status
         ]);
 
-        let csvContent = 'data:text/csv;charset=utf-8,';
-        csvContent += headers.join(',') + '\n';
-        rows.forEach((row) => {
-            csvContent += row.join(',') + '\n';
+        autoTable(doc, {
+            head: [tableColumn],
+            body: tableRows,
+            startY: 45,
+            theme: 'grid',
+            headStyles: {
+                fillColor: [13, 148, 136],
+                textColor: [255, 255, 255],
+                fontSize: 11,
+                fontStyle: 'bold'
+            },
+            styles: { fontSize: 10, cellPadding: 3 },
+            alternateRowStyles: { fillColor: [240, 253, 250] },
+            margin: { top: 45 },
         });
 
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement('a');
-        link.setAttribute('href', encodedUri);
-        link.setAttribute('download', 'staff_export.csv');
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        // Add footer
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(150);
+            doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.width / 2, doc.internal.pageSize.height - 10, { align: 'center' });
+        }
+
+        doc.save(`staff_report_${new Date().toISOString().split('T')[0]}.pdf`);
+        setIsExportOpen(false);
     };
 
     const handleAddStaff = async () => {
@@ -290,7 +363,7 @@ const StaffManagement = () => {
         try {
             setLoading(true);
             const salaryNum = parseFloat(newStaff.salary.replace(/[^0-9]/g, '')) || 0;
-            
+
             const requestBody = {
                 name: newStaff.name,
                 phone: newStaff.phone,
@@ -311,24 +384,24 @@ const StaffManagement = () => {
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
                 console.error('❌ Server response:', errorData);
-                
+
                 if (response.status === 401 || response.status === 403) {
                     throw new Error('Authentication failed. Please login again.');
                 }
-                
+
                 if (response.status === 422) {
-                    const errorMsg = typeof errorData.detail === 'string' 
-                        ? errorData.detail 
+                    const errorMsg = typeof errorData.detail === 'string'
+                        ? errorData.detail
                         : JSON.stringify(errorData.detail);
                     throw new Error(`Validation error: ${errorMsg}`);
                 }
-                
+
                 throw new Error(errorData.detail || 'Failed to add staff');
             }
 
             const data = await response.json();
             console.log('✅ Staff added:', data);
-            
+
             setNewStaff({
                 name: '',
                 phone: '',
@@ -339,7 +412,7 @@ const StaffManagement = () => {
             });
             setShowNewStaffModal(false);
             alert('Staff member added successfully!');
-            
+
             fetchStaff();
             fetchUpcomingSalaries();
         } catch (err) {
@@ -395,25 +468,25 @@ const StaffManagement = () => {
 
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-                
+
                 if (response.status === 401 || response.status === 403) {
                     throw new Error('Authentication failed. Please login again.');
                 }
-                
+
                 if (response.status === 422) {
-                    const errorMsg = typeof errorData.detail === 'string' 
-                        ? errorData.detail 
+                    const errorMsg = typeof errorData.detail === 'string'
+                        ? errorData.detail
                         : JSON.stringify(errorData.detail);
                     throw new Error(`Validation error: ${errorMsg}`);
                 }
-                
+
                 throw new Error(errorData.detail || 'Failed to update staff');
             }
 
             setShowEditModal(false);
             setEditingStaff(null);
             alert('Staff member updated successfully!');
-            
+
             fetchStaff();
         } catch (err) {
             alert(`Error updating staff: ${err.message}`);
@@ -427,7 +500,7 @@ const StaffManagement = () => {
         if (window.confirm('Are you sure you want to delete this staff member?')) {
             try {
                 setLoading(true);
-                
+
                 const response = await fetch(`${API_BASE_URL}/staff/${id}`, {
                     method: 'DELETE',
                     headers: getAuthHeaders(),
@@ -441,7 +514,7 @@ const StaffManagement = () => {
                 }
 
                 alert('Staff member deleted successfully!');
-                
+
                 fetchStaff();
                 fetchUpcomingSalaries();
             } catch (err) {
@@ -479,10 +552,10 @@ const StaffManagement = () => {
             const message = await response.json();
             console.log('✅ Salary added successfully');
             alert(typeof message === 'string' ? message : 'Salary entry added successfully!');
-            
+
             // Refresh from server to get updated list
             await fetchUpcomingSalaries();
-            
+
         } catch (err) {
             console.error('❌ Error adding salary:', err);
             // ✅ If error, remove from removing set to show it again
@@ -513,7 +586,7 @@ const StaffManagement = () => {
     const filteredStaff = staff;
     const hasActiveFilters = searchQuery.trim() || roleFilter !== 'All' || statusFilter !== 'Active';
     const showNoResults = !loading && filteredStaff.length === 0 && !error;
-    
+
     // ✅ Filter out salaries that are being removed
     const visibleUpcomingSalaries = upcomingSalaries.filter(s => !removingIds.has(s.staffId));
 
@@ -561,20 +634,37 @@ const StaffManagement = () => {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 sm:mb-6">
                     <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-foreground">Staff</h1>
                     <div className="flex gap-2 flex-wrap w-full sm:w-auto">
-                        <button
-                            onClick={handleExport}
-                            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 text-xs sm:text-sm"
-                        >
-                            <Download size={14} className="sm:w-4 sm:h-4" />
-                            <span>Export</span>
-                        </button>
-                        <button
-                            onClick={() => alert('Import functionality triggered!')}
-                            className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 text-xs sm:text-sm"
-                        >
-                            <Upload size={14} className="sm:w-4 sm:h-4" />
-                            <span>Import</span>
-                        </button>
+                        <div className="relative flex-1 sm:flex-none" ref={exportRef}>
+                            <button
+                                onClick={() => setIsExportOpen(!isExportOpen)}
+                                className="w-full flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 text-xs sm:text-sm"
+                            >
+                                <Download size={14} className="sm:w-4 sm:h-4" />
+                                <span>Export</span>
+                                <ChevronDown size={14} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {isExportOpen && (
+                                <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-lg shadow-xl z-50 animate-in fade-in zoom-in-95 duration-200">
+                                    <div className="p-1">
+                                        <button
+                                            onClick={handleExportPDF}
+                                            className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-foreground hover:bg-muted transition-colors"
+                                        >
+                                            <FileText size={16} className="text-red-500" />
+                                            <span>Export as PDF</span>
+                                        </button>
+                                        <button
+                                            onClick={handleExportExcel}
+                                            className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-foreground hover:bg-muted transition-colors"
+                                        >
+                                            <Download size={16} className="text-green-500" />
+                                            <span>Export as Excel</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                         <button
                             onClick={() => setShowNewStaffModal(true)}
                             className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 text-xs sm:text-sm"
@@ -653,7 +743,7 @@ const StaffManagement = () => {
                         </span>
                     </div>
 
-                    <div className="hidden md:grid grid-cols-[2fr,1.5fr,1.5fr,1.5fr,1fr,1fr] gap-3 px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
+                    <div className="hidden md:grid grid-cols-[2fr,1.5fr,1.5fr,1.5fr,1fr,1fr] gap-3 px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border bg-primary/10 dark:bg-transparent">
                         <span>Name</span>
                         <span>Role</span>
                         <span>Salary</span>
@@ -699,11 +789,10 @@ const StaffManagement = () => {
 
                                 <div className="flex items-center md:justify-start justify-end">
                                     <span
-                                        className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-medium ${
-                                            member.status === 'Active'
-                                                ? 'bg-emerald-100 text-emerald-700'
-                                                : 'bg-red-100 text-red-700'
-                                        }`}
+                                        className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-medium ${member.status === 'Active'
+                                            ? 'bg-emerald-100 text-emerald-700'
+                                            : 'bg-red-100 text-red-700'
+                                            }`}
                                     >
                                         {member.status}
                                     </span>
@@ -735,7 +824,7 @@ const StaffManagement = () => {
                                     No staff matching filters
                                 </p>
                                 <p className="text-xs text-muted-foreground mb-4">
-                                    {hasActiveFilters 
+                                    {hasActiveFilters
                                         ? 'Try adjusting your search criteria or filters'
                                         : 'Click "New Staff" to add your first team member'
                                     }

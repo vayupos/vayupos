@@ -9,6 +9,7 @@ from app.models import Order, OrderItem, OrderStatus, Product, Customer, Invento
 from app.schemas import OrderCreate, OrderUpdate
 from app.core.exceptions import not_found_exception, bad_request_exception
 from app.services.inventory_service import InventoryService
+from app.services.print_service import PrintService
 
 
 class OrderService:
@@ -75,6 +76,16 @@ class OrderService:
         db.add(db_order)
         db.flush()  # Flush to get the order ID
 
+        # Update customer stats if provided
+        if db_order.customer_id:
+            customer = db.query(Customer).filter(Customer.id == db_order.customer_id).first()
+            if customer:
+                customer.total_spent += total
+                # ₹1 = 1 loyalty point (as per requirement)
+                customer.loyalty_points += int(total)
+
+
+
         # Create order items and reduce inventory
         for item_data in order_items_data:
             product = item_data["product"]
@@ -111,6 +122,9 @@ class OrderService:
                 reference_number=db_order.order_number,
                 notes=f"Sold via order {db_order.order_number}",
             )
+
+        # Create Print Jobs for KOT (Splits by printer if needed)
+        PrintService.create_print_jobs(db=db, order=db_order)
 
         db.commit()
         db.refresh(db_order)
@@ -179,6 +193,16 @@ class OrderService:
             )
 
         order.status = OrderStatus.CANCELLED
+        
+        # Deduct loyalty points and adjust total_spent if it was a customer order
+        if order.customer_id:
+            customer = db.query(Customer).filter(Customer.id == order.customer_id).first()
+            if customer:
+                # Deduct exactly what was added (int of total)
+                points_to_deduct = int(order.total)
+                customer.loyalty_points = max(0, customer.loyalty_points - points_to_deduct)
+                customer.total_spent = max(Decimal("0"), customer.total_spent - order.total)
+
         db.commit()
         db.refresh(order)
         return order

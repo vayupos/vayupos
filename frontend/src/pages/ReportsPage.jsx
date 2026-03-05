@@ -1,6 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Download, Printer, Calendar, Filter, RotateCw, ChevronDown, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Download, Printer, Calendar, Filter, RotateCw, ChevronDown, AlertCircle, FileText } from 'lucide-react';
 import { LineChart, Line, PieChart, Pie, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // API Configuration - Using environment variables
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
@@ -9,7 +12,24 @@ const ReportsPage = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  const exportRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (exportRef.current && !exportRef.current.contains(event.target)) {
+        setIsExportOpen(false);
+      }
+    };
+    if (isExportOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isExportOpen]);
+
   // Helper function to get auth token from localStorage
   const getAuthToken = () => {
     return localStorage.getItem('access_token') || '';
@@ -50,7 +70,7 @@ const ReportsPage = () => {
   // Helper function to make authenticated API calls
   const fetchWithAuth = async (url, options = {}) => {
     const token = getAuthToken();
-    
+
     if (!token) {
       throw new Error('No authentication token found. Please login again.');
     }
@@ -78,7 +98,7 @@ const ReportsPage = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await fetchWithAuth(
         `${API_BASE_URL}/reports/sales?days=${filters.days}&group_by=${filters.view}`
       );
@@ -88,7 +108,7 @@ const ReportsPage = () => {
         console.error('Sales API Error:', response.status, errorText);
         throw new Error(`Failed to fetch sales report (${response.status})`);
       }
-      
+
       const data = await response.json();
       console.log('🔍 RAW Sales API Response:', data);
       console.log('🔍 Is Array?', Array.isArray(data));
@@ -96,7 +116,7 @@ const ReportsPage = () => {
       if (data && typeof data === 'object') {
         console.log('🔍 Data Keys:', Object.keys(data));
       }
-      
+
       // Handle different response formats - check all possible structures
       let salesArray = [];
       if (Array.isArray(data)) {
@@ -108,13 +128,13 @@ const ReportsPage = () => {
       } else if (data && data.items && Array.isArray(data.items)) {
         salesArray = data.items;
       }
-      
+
       console.log('🔍 Extracted Sales Array:', salesArray);
       console.log('🔍 Sales Array Length:', salesArray.length);
       if (salesArray.length > 0) {
         console.log('🔍 First Item Structure:', salesArray[0]);
       }
-      
+
       // Transform the API response to match your UI structure
       if (salesArray && salesArray.length > 0) {
         const transformedData = salesArray.map(item => ({
@@ -124,17 +144,17 @@ const ReportsPage = () => {
           discounts: `₹${(item.discounts || 0).toLocaleString('en-IN')}`,
           net: `₹${(item.net_sales || (item.total_sales - item.discounts) || 0).toLocaleString('en-IN')}`
         }));
-        
+
         console.log('✅ Transformed Sales Data:', transformedData);
         setSalesData(transformedData);
-        
+
         // Prepare chart data
         const chartData = salesArray.map(item => ({
           month: item.date || item.period || 'Unknown',
           sales: item.gross_sales || item.total_sales || 0,
           net: item.net_sales || ((item.total_sales || 0) - (item.discounts || 0))
         }));
-        
+
         console.log('✅ Sales Chart Data:', chartData);
         setSalesChartData([...chartData]); // Force new array reference
 
@@ -142,9 +162,9 @@ const ReportsPage = () => {
         const totalSales = salesArray.reduce((sum, item) => sum + (item.gross_sales || item.total_sales || 0), 0);
         const totalOrders = salesArray.reduce((sum, item) => sum + (item.order_count || item.orders || 0), 0);
         const totalDiscounts = salesArray.reduce((sum, item) => sum + (item.discounts || 0), 0);
-        
+
         console.log('✅ Calculated Metrics - Sales:', totalSales, 'Orders:', totalOrders);
-        
+
         setKeyMetrics(prev => ({
           ...prev,
           totalSales: `₹${totalSales.toLocaleString('en-IN')}`,
@@ -154,32 +174,32 @@ const ReportsPage = () => {
       } else {
         console.warn('⚠️ No sales data found in API response');
         console.log('💡 Attempting to calculate sales from orders...');
-        
+
         // Fallback: Calculate sales from orders
         try {
           const ordersResponse = await fetchWithAuth(`${API_BASE_URL}/orders?limit=1000`);
           if (ordersResponse.ok) {
             const ordersData = await ordersResponse.json();
-            const ordersArray = Array.isArray(ordersData) ? ordersData : 
-                               (ordersData.data || ordersData.results || []);
-            
+            const ordersArray = Array.isArray(ordersData) ? ordersData :
+              (ordersData.data || ordersData.results || []);
+
             if (ordersArray.length > 0) {
               // Filter by date range
               const endDate = new Date();
               const startDate = new Date();
               startDate.setDate(startDate.getDate() - filters.days);
-              
+
               const filteredOrders = ordersArray.filter(order => {
                 const orderDate = new Date(order.created_at || order.order_date);
                 return orderDate >= startDate && orderDate <= endDate;
               });
-              
+
               // Group by date/week/month based on filters.view
               const groupedData = {};
               filteredOrders.forEach(order => {
                 const orderDate = new Date(order.created_at || order.order_date);
                 let period;
-                
+
                 if (filters.view === 'day') {
                   period = orderDate.toISOString().split('T')[0];
                 } else if (filters.view === 'week') {
@@ -188,7 +208,7 @@ const ReportsPage = () => {
                 } else {
                   period = orderDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
                 }
-                
+
                 if (!groupedData[period]) {
                   groupedData[period] = {
                     orders: 0,
@@ -196,12 +216,12 @@ const ReportsPage = () => {
                     discounts: 0
                   };
                 }
-                
+
                 groupedData[period].orders += 1;
                 groupedData[period].grossSales += (order.total || order.total_amount || 0);
                 groupedData[period].discounts += (order.discount || 0);
               });
-              
+
               // Convert to array
               const calculatedSalesData = Object.entries(groupedData)
                 .map(([period, data]) => ({
@@ -214,38 +234,38 @@ const ReportsPage = () => {
                   netNum: data.grossSales - data.discounts
                 }))
                 .sort((a, b) => a.period.localeCompare(b.period));
-              
+
               console.log('✅ Calculated Sales Data from Orders:', calculatedSalesData);
               setSalesData(calculatedSalesData);
-              
+
               // Chart data
               const chartData = calculatedSalesData.map(item => ({
                 month: item.period,
                 sales: item.grossSalesNum,
                 net: item.netNum
               }));
-              
+
               console.log('✅ Calculated Chart Data:', chartData);
               setSalesChartData([...chartData]);
-              
+
               // Update metrics
               const totalSales = calculatedSalesData.reduce((sum, item) => sum + item.grossSalesNum, 0);
               const totalOrders = calculatedSalesData.reduce((sum, item) => sum + item.orders, 0);
-              
+
               setKeyMetrics(prev => ({
                 ...prev,
                 totalSales: `₹${totalSales.toLocaleString('en-IN')}`,
                 totalOrders: totalOrders.toString(),
                 avgOrderValue: `₹${totalOrders > 0 ? Math.round(totalSales / totalOrders).toLocaleString('en-IN') : '0'}`
               }));
-              
+
               return; // Exit successfully
             }
           }
         } catch (fallbackErr) {
           console.error('❌ Fallback calculation failed:', fallbackErr);
         }
-        
+
         // If all else fails, show empty
         setSalesData([]);
         setSalesChartData([]);
@@ -269,18 +289,18 @@ const ReportsPage = () => {
         console.error('Payment methods API error:', response.status);
         throw new Error('Failed to fetch payment methods report');
       }
-      
+
       const data = await response.json();
       console.log('🔍 Payment methods data:', data);
-      
+
       // Handle different response formats
-      const paymentsArray = Array.isArray(data) ? data : 
-                           (data.data || data.results || data.items || []);
-      
+      const paymentsArray = Array.isArray(data) ? data :
+        (data.data || data.results || data.items || []);
+
       if (paymentsArray && paymentsArray.length > 0) {
         const totalAmount = paymentsArray.reduce((sum, item) => sum + (item.total_amount || 0), 0);
         const totalCount = paymentsArray.reduce((sum, item) => sum + (item.count || 0), 0);
-        
+
         const transformedData = paymentsArray.map((item, index) => ({
           mode: item.payment_method || item.mode || 'Unknown',
           count: item.count || 0,
@@ -288,9 +308,9 @@ const ReportsPage = () => {
           amount: `₹${(item.total_amount || 0).toLocaleString('en-IN')}`,
           rank: index + 1
         }));
-        
+
         console.log('✅ Transformed payment data:', transformedData);
-        
+
         setOrdersData(prev => ({
           ...prev,
           byPayment: transformedData
@@ -320,11 +340,11 @@ const ReportsPage = () => {
         console.error('Orders API error:', response.status);
         throw new Error('Failed to fetch orders');
       }
-      
+
       const data = await response.json();
       console.log('🔍 RAW Orders API Response:', data);
       console.log('🔍 Orders - Is Array?', Array.isArray(data));
-      
+
       // Handle different response formats
       let ordersArray = [];
       if (Array.isArray(data)) {
@@ -334,12 +354,12 @@ const ReportsPage = () => {
       } else if (data && data.results && Array.isArray(data.results)) {
         ordersArray = data.results;
       }
-      
+
       console.log('🔍 Extracted Orders Array:', ordersArray.length, 'orders');
-      
+
       if (ordersArray.length > 0) {
         console.log('🔍 First Order Structure:', ordersArray[0]);
-        
+
         // Filter orders within date range
         const filteredOrders = ordersArray.filter(order => {
           const orderDate = new Date(order.created_at || order.order_date);
@@ -355,14 +375,14 @@ const ReportsPage = () => {
         filteredOrders.forEach(order => {
           const source = order.payment_method || 'Unknown';
           const orderTotal = order.total || order.total_amount || order.final_amount || 0;
-          
+
           if (!ordersBySource[source]) {
             ordersBySource[source] = {
               orders: 0,
               revenue: 0
             };
           }
-          
+
           ordersBySource[source].orders += 1;
           ordersBySource[source].revenue += orderTotal;
           totalRevenue += orderTotal;
@@ -399,10 +419,10 @@ const ReportsPage = () => {
           name: item.source,
           value: item.orders
         }));
-        
+
         console.log('✅ Pie Chart Data:', pieData);
         setOrderDistributionData([...pieData]); // Force new array reference
-        
+
         // Also populate payment summary table (byPayment)
         const paymentSummary = sourcesArray.map((item, index) => ({
           mode: item.source,
@@ -411,7 +431,7 @@ const ReportsPage = () => {
           amount: item.revenue,
           rank: item.rank
         }));
-        
+
         console.log('✅ Payment Summary Table:', paymentSummary);
         setOrdersData(prev => ({
           ...prev,
@@ -451,19 +471,19 @@ const ReportsPage = () => {
         console.error('Expenses API error:', response.status);
         throw new Error('Failed to fetch expenses');
       }
-      
+
       const data = await response.json();
       console.log('🔍 RAW Expenses data:', data);
-      
+
       // Handle different response formats
-      const expensesArray = Array.isArray(data) ? data : 
-                           (data.data || data.results || data.items || []);
-      
+      const expensesArray = Array.isArray(data) ? data :
+        (data.data || data.results || data.items || []);
+
       console.log('🔍 Expenses Array Length:', expensesArray.length);
-      
+
       if (expensesArray && expensesArray.length > 0) {
         console.log('🔍 First Expense Structure:', expensesArray[0]);
-        
+
         // Filter expenses within date range
         const filteredExpenses = expensesArray.filter(expense => {
           const expenseDate = new Date(expense.date || expense.created_at);
@@ -477,14 +497,14 @@ const ReportsPage = () => {
         filteredExpenses.forEach(expense => {
           const category = expense.category || 'Other';
           const amount = expense.amount || 0;
-          
+
           if (!expensesByCategory[category]) {
             expensesByCategory[category] = {
               transactions: 0,
               amount: 0
             };
           }
-          
+
           expensesByCategory[category].transactions += 1;
           expensesByCategory[category].amount += amount;
           totalExpenses += amount;
@@ -513,7 +533,7 @@ const ReportsPage = () => {
           category: item.category.length > 15 ? item.category.substring(0, 15) + '...' : item.category,
           amount: item.amountNum
         }));
-        
+
         console.log('✅ Expenses Chart Data:', chartData);
         setExpensesChartData([...chartData]); // Force new array reference
 
@@ -555,16 +575,16 @@ const ReportsPage = () => {
         console.error('Product sales API error:', response.status);
         throw new Error('Failed to fetch product sales report');
       }
-      
+
       const data = await response.json();
       console.log('Product sales data:', data);
-      
-      const productsArray = Array.isArray(data) ? data : 
-                           (data.data || data.results || data.items || []);
-      
+
+      const productsArray = Array.isArray(data) ? data :
+        (data.data || data.results || data.items || []);
+
       if (productsArray && productsArray.length > 0) {
         setProductSalesData(productsArray);
-        
+
         // Get top category if available
         if (productsArray[0].category) {
           setKeyMetrics(prev => ({
@@ -590,10 +610,10 @@ const ReportsPage = () => {
         console.error('Daily summary API error:', response.status);
         return;
       }
-      
+
       const data = await response.json();
       console.log('Daily summary data:', data);
-      
+
       if (data && data.gross_margin) {
         setKeyMetrics(prev => ({
           ...prev,
@@ -609,7 +629,7 @@ const ReportsPage = () => {
   const fetchAllReports = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       await Promise.all([
         fetchSalesReport(),
@@ -640,7 +660,7 @@ const ReportsPage = () => {
   useEffect(() => {
     const salesAmount = parseFloat(keyMetrics.totalSales.replace(/[₹,]/g, '')) || 0;
     const expensesAmount = parseFloat(keyMetrics.totalExpenses.replace(/[₹,]/g, '')) || 0;
-    
+
     if (salesAmount > 0 && expensesAmount > 0) {
       const margin = ((salesAmount - expensesAmount) / salesAmount * 100).toFixed(1);
       setKeyMetrics(prev => ({
@@ -650,17 +670,83 @@ const ReportsPage = () => {
     }
   }, [keyMetrics.totalSales, keyMetrics.totalExpenses]);
 
-  const handleExportCSV = () => {
-    const csv = salesData.map(row => 
-      `${row.period},${row.orders},${row.grossSales},${row.discounts},${row.net}`
-    ).join('\n');
-    const blob = new Blob([`Period,Orders,Gross Sales,Discounts,Net\n${csv}`], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sales_report_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+  const handleExportExcel = () => {
+    if (salesData.length === 0 && expensesData.length === 0) return;
+
+    // Prepare data for Excel based on current view
+    let data = [];
+    let filename = `report_${filters.reportType.toLowerCase()}_${new Date().toISOString().split('T')[0]}`;
+
+    if (filters.reportType === 'Sales') {
+      data = salesData.map(row => ({
+        'Period': row.period,
+        'Orders': row.orders,
+        'Gross Sales': row.grossSales,
+        'Discounts': row.discounts,
+        'Net Sales': row.net
+      }));
+    } else if (filters.reportType === 'Expenses') {
+      data = expensesData.map(row => ({
+        'Date': row.date,
+        'Title': row.title,
+        'Category': row.category,
+        'Payment Mode': row.paymentMode,
+        'Amount': row.amount
+      }));
+    }
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'ReportData');
+    XLSX.writeFile(wb, `${filename}.xlsx`);
+    setIsExportOpen(false);
+  };
+
+  const handleExportPDF = () => {
+    const doc = new jsPDF();
+
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(13, 148, 136); // Teal-600
+    doc.text(`VayuPOS - ${filters.reportType} Report`, 14, 22);
+
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
+    doc.text(`Period: Last ${filters.days} days (View by ${filters.view})`, 14, 35);
+
+    // Metrics Section
+    doc.setFontSize(12);
+    doc.setTextColor(0);
+    doc.text('Key Metrics Summary:', 14, 45);
+    doc.setFontSize(10);
+    doc.text(`Total Sales: ${keyMetrics.totalSales}`, 14, 52);
+    doc.text(`Total Orders: ${keyMetrics.totalOrders}`, 70, 52);
+    doc.text(`Total Expenses: ${keyMetrics.totalExpenses}`, 120, 52);
+
+    // Data Table
+    let tableColumn = [];
+    let tableRows = [];
+
+    if (filters.reportType === 'Sales') {
+      tableColumn = ["Period", "Orders", "Gross Sales", "Discounts", "Net Sales"];
+      tableRows = salesData.map(row => [row.period, row.orders, row.grossSales, row.discounts, row.net]);
+    } else if (filters.reportType === 'Expenses') {
+      tableColumn = ["Date", "Title", "Category", "Mode", "Amount"];
+      tableRows = expensesData.map(row => [row.date, row.title, row.category, row.paymentMode, row.amount]);
+    }
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 60,
+      theme: 'striped',
+      headStyles: { fillColor: [13, 148, 136] },
+      margin: { top: 60 },
+    });
+
+    doc.save(`report_${filters.reportType.toLowerCase()}_${new Date().toISOString().split('T')[0]}.pdf`);
+    setIsExportOpen(false);
   };
 
   const handlePrint = () => {
@@ -693,7 +779,7 @@ const ReportsPage = () => {
     const startDate = new Date(filters.dateRange.start);
     const endDate = new Date(filters.dateRange.end);
     const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
-    
+
     if (daysDiff > 0 && daysDiff !== filters.days) {
       setFilters(prev => ({ ...prev, days: daysDiff }));
     }
@@ -717,15 +803,39 @@ const ReportsPage = () => {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 lg:mb-8 gap-3">
           <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Reports</h1>
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <button 
-              onClick={handleExportCSV}
-              disabled={loading || salesData.length === 0}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Download size={16} />
-              <span>Export</span>
-            </button>
-            <button 
+            <div className="relative flex-1 sm:flex-none" ref={exportRef}>
+              <button
+                onClick={() => setIsExportOpen(!isExportOpen)}
+                disabled={loading || (filters.reportType === 'Sales' ? salesData.length === 0 : expensesData.length === 0)}
+                className="w-full h-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Download size={16} />
+                <span>Export</span>
+                <ChevronDown size={14} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isExportOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-lg shadow-xl z-50 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="p-1">
+                    <button
+                      onClick={handleExportPDF}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-foreground hover:bg-muted transition-colors"
+                    >
+                      <FileText size={16} className="text-red-500" />
+                      <span>Export as PDF</span>
+                    </button>
+                    <button
+                      onClick={handleExportExcel}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-foreground hover:bg-muted transition-colors"
+                    >
+                      <Download size={16} className="text-green-500" />
+                      <span>Export as Excel</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            <button
               onClick={handlePrint}
               disabled={loading}
               className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
@@ -743,7 +853,7 @@ const ReportsPage = () => {
             <div className="flex-1">
               <h3 className="text-sm font-semibold text-red-800 dark:text-red-300 mb-1">Error Loading Reports</h3>
               <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-              <button 
+              <button
                 onClick={fetchAllReports}
                 className="mt-2 text-sm text-red-700 dark:text-red-300 underline hover:text-red-800 dark:hover:text-red-200"
               >
@@ -772,7 +882,7 @@ const ReportsPage = () => {
                   <div className="relative">
                     <select
                       value={filters.reportType}
-                      onChange={(e) => setFilters({...filters, reportType: e.target.value})}
+                      onChange={(e) => setFilters({ ...filters, reportType: e.target.value })}
                       className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
                     >
                       <option>Sales</option>
@@ -787,7 +897,7 @@ const ReportsPage = () => {
                   <div className="relative">
                     <select
                       value={filters.view}
-                      onChange={(e) => setFilters({...filters, view: e.target.value})}
+                      onChange={(e) => setFilters({ ...filters, view: e.target.value })}
                       className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
                     >
                       <option value="day">By Day</option>
@@ -802,7 +912,7 @@ const ReportsPage = () => {
                   <input
                     type="number"
                     value={filters.days}
-                    onChange={(e) => setFilters({...filters, days: parseInt(e.target.value) || 30})}
+                    onChange={(e) => setFilters({ ...filters, days: parseInt(e.target.value) || 30 })}
                     className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500"
                     min="1"
                     max="365"
@@ -817,7 +927,7 @@ const ReportsPage = () => {
                   <div className="relative">
                     <select
                       value={filters.outlet}
-                      onChange={(e) => setFilters({...filters, outlet: e.target.value})}
+                      onChange={(e) => setFilters({ ...filters, outlet: e.target.value })}
                       className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
                     >
                       <option>All</option>
@@ -832,7 +942,7 @@ const ReportsPage = () => {
                   <div className="relative">
                     <select
                       value={filters.paymentMode}
-                      onChange={(e) => setFilters({...filters, paymentMode: e.target.value})}
+                      onChange={(e) => setFilters({ ...filters, paymentMode: e.target.value })}
                       className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
                     >
                       <option>All</option>
@@ -848,7 +958,7 @@ const ReportsPage = () => {
                   <div className="relative">
                     <select
                       value={filters.sort}
-                      onChange={(e) => setFilters({...filters, sort: e.target.value})}
+                      onChange={(e) => setFilters({ ...filters, sort: e.target.value })}
                       className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
                     >
                       <option>Total Desc</option>
@@ -936,13 +1046,13 @@ const ReportsPage = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#6b7280" />
                   <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--card))',
                       border: '1px solid hsl(var(--border))',
                       borderRadius: '8px',
                       fontSize: '12px'
-                    }} 
+                    }}
                   />
                   <Legend wrapperStyle={{ fontSize: '12px' }} />
                   <Line type="monotone" dataKey="sales" stroke="#14b8a6" strokeWidth={2} name="Gross Sales" />
@@ -961,12 +1071,12 @@ const ReportsPage = () => {
             <div className="inline-block min-w-full align-middle">
               <table className="min-w-full">
                 <thead>
-                  <tr className="bg-muted border-b border-border">
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Period</th>
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Gross</th>
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Discount</th>
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Net</th>
+                  <tr className="bg-primary/10 dark:bg-transparent border-b border-border">
+                    <th className="text-left font-bold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Period</th>
+                    <th className="text-left font-bold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
+                    <th className="text-left font-bold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Gross</th>
+                    <th className="text-left font-bold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Discount</th>
+                    <th className="text-left font-bold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Net</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1030,13 +1140,13 @@ const ReportsPage = () => {
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--card))',
                       border: '1px solid hsl(var(--border))',
                       borderRadius: '8px',
                       fontSize: '12px'
-                    }} 
+                    }}
                   />
                   <Legend wrapperStyle={{ fontSize: '12px' }} />
                 </PieChart>
@@ -1060,12 +1170,12 @@ const ReportsPage = () => {
                 <div className="inline-block min-w-full align-middle">
                   <table className="min-w-full">
                     <thead>
-                      <tr className="bg-muted border-b border-border">
-                        <th className="text-left font-semibold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Method</th>
-                        <th className="text-left font-semibold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
-                        <th className="text-left font-semibold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Share</th>
-                        <th className="text-left font-semibold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Revenue</th>
-                        <th className="text-left font-semibold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
+                      <tr className="bg-primary/10 dark:bg-transparent border-b border-border">
+                        <th className="text-left font-bold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Method</th>
+                        <th className="text-left font-bold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
+                        <th className="text-left font-bold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Share</th>
+                        <th className="text-left font-bold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Revenue</th>
+                        <th className="text-left font-bold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1112,12 +1222,12 @@ const ReportsPage = () => {
                 <div className="inline-block min-w-full align-middle">
                   <table className="min-w-full">
                     <thead>
-                      <tr className="bg-muted border-b border-border">
-                        <th className="text-left font-semibold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Mode</th>
-                        <th className="text-left font-semibold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Count</th>
-                        <th className="text-left font-semibold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Share</th>
-                        <th className="text-left font-semibold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Amount</th>
-                        <th className="text-left font-semibold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
+                      <tr className="bg-primary/10 dark:bg-transparent border-b border-border">
+                        <th className="text-left font-bold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Mode</th>
+                        <th className="text-left font-bold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Count</th>
+                        <th className="text-left font-bold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Share</th>
+                        <th className="text-left font-bold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Amount</th>
+                        <th className="text-left font-bold py-2 px-3 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1172,13 +1282,13 @@ const ReportsPage = () => {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="category" tick={{ fontSize: 12 }} stroke="#6b7280" />
                   <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--card))',
                       border: '1px solid hsl(var(--border))',
                       borderRadius: '8px',
                       fontSize: '12px'
-                    }} 
+                    }}
                   />
                   <Legend wrapperStyle={{ fontSize: '12px' }} />
                   <Bar dataKey="amount" fill="#14b8a6" name="Amount (₹)" />
@@ -1196,12 +1306,12 @@ const ReportsPage = () => {
             <div className="inline-block min-w-full align-middle">
               <table className="min-w-full">
                 <thead>
-                  <tr className="bg-muted border-b border-border">
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Category</th>
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Trans.</th>
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Amount</th>
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Share</th>
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
+                  <tr className="bg-primary/10 dark:bg-transparent border-b border-border">
+                    <th className="text-left font-bold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Category</th>
+                    <th className="text-left font-bold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Trans.</th>
+                    <th className="text-left font-bold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Amount</th>
+                    <th className="text-left font-bold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Share</th>
+                    <th className="text-left font-bold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
                   </tr>
                 </thead>
                 <tbody>

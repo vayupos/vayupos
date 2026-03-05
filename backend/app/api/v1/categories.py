@@ -14,6 +14,8 @@ def category_to_dict(category):
         "id": category.id,
         "name": category.name,
         "description": category.description,
+        "icon_name": getattr(category, "icon_name", "Coffee"),
+        "tax_rate": getattr(category, "tax_rate", 5),
         "is_active": category.is_active,
         "created_at": category.created_at.isoformat() if category.created_at else None,
         "updated_at": category.updated_at.isoformat() if category.updated_at else None,

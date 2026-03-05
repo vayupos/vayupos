@@ -1,18 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Calendar, RefreshCw, Printer, Download, Eye, X, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Calendar, RefreshCw, Printer, Download, Eye, AlertCircle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 
 // API Configuration - Using environment variables
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
 
 const PastOrders = () => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   const [paymentFilter, setPaymentFilter] = useState('All');
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showBillModal, setShowBillModal] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState(null);
-  
+  const navigate = useNavigate();
+
   // API States
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,8 +46,8 @@ const PastOrders = () => {
       if (selectedDate) {
         params.append('date', selectedDate);
       }
-      if (searchQuery) {
-        params.append('search', searchQuery);
+      if (debouncedSearch) {
+        params.append('search', debouncedSearch);
       }
 
       console.log('Fetching with params:', params.toString());
@@ -106,10 +109,10 @@ const PastOrders = () => {
     return apiData.map(order => {
       // Extract customer info
       const customer = order.customer || {};
-      const customerName = customer.first_name 
+      const customerName = customer.first_name
         ? `${customer.first_name} ${customer.last_name || ''}`.trim()
         : 'Walk-in';
-      
+
       const avatar = customerName.charAt(0).toUpperCase();
       const colors = ['#F59E0B', '#3B82F6', '#8B5CF6', '#10B981', '#EF4444', '#6B7280'];
       const colorIndex = customerName.length % colors.length;
@@ -121,12 +124,22 @@ const PastOrders = () => {
       const total = parseFloat(order.total || 0);
 
       const orderType = order.order_type || 'Dine-in';
-      const orderTime = order.created_at 
-        ? new Date(order.created_at).toLocaleTimeString('en-US', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
-          })
-        : '--:--';
+      const formatDateTime = (dateStr) => {
+        if (!dateStr) return '--:--';
+        const d = new Date(dateStr);
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        let hours = d.getHours();
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12; // the hour '0' should be '12'
+        const strTime = `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
+        return `${day}-${month}-${year} | ${strTime}`;
+      };
+
+      const orderTime = formatDateTime(order.created_at);
 
       // Normalize status and payment
       let normalizedStatus = (order.status || 'completed').toLowerCase().trim();
@@ -137,7 +150,7 @@ const PastOrders = () => {
       normalizedPayment = normalizedPayment.charAt(0).toUpperCase() + normalizedPayment.slice(1).toLowerCase();
 
       return {
-        id: order.order_number || `#${order.id}`,
+        id: order.order_number || order.id.toString(),
         orderId: order.id,
         type: orderType,
         time: orderTime,
@@ -160,7 +173,7 @@ const PastOrders = () => {
 
   const calculateStatistics = (ordersData) => {
     const today = new Date().toISOString().split('T')[0];
-    
+
     const todaysOrders = ordersData.filter(order => {
       const orderDate = order.createdAt?.split('T')[0];
       return orderDate === today;
@@ -208,19 +221,36 @@ const PastOrders = () => {
     return weekData;
   };
 
-  // useEffect without statusFilter dependency
+  // Debounce search query
   useEffect(() => {
-    fetchOrders();
-  }, [paymentFilter, selectedDate, searchQuery]);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchOrders(true);
+  }, []);
+
+  // Filter updates - fetch silently to avoid full page refresh loader
+  useEffect(() => {
+    if (debouncedSearch || paymentFilter !== 'All' || selectedDate) {
+      fetchOrders(false);
+    } else {
+      fetchOrders(false);
+    }
+  }, [paymentFilter, selectedDate, debouncedSearch]);
 
   // Client-side filtering without status filter
   const filteredOrders = orders.filter(order => {
     const matchesSearch = order.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         order.customer.name.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesPayment = paymentFilter === 'All' || 
-                           order.payment.toLowerCase() === paymentFilter.toLowerCase();
-    
+      order.customer.name.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesPayment = paymentFilter === 'All' ||
+      order.payment.toLowerCase() === paymentFilter.toLowerCase();
+
     const matchesDate = !selectedDate || order.createdAt?.split('T')[0] === selectedDate;
 
     return matchesSearch && matchesPayment && matchesDate;
@@ -232,58 +262,109 @@ const PastOrders = () => {
     setIsRefreshing(false);
   };
 
-  const handlePrintBill = async (order) => {
-    if (order.orderId) {
-      const fullOrderDetails = await fetchOrderDetails(order.orderId);
-      if (fullOrderDetails) {
-        setSelectedOrder({ ...order, ...fullOrderDetails });
-      } else {
-        setSelectedOrder(order);
+  const handlePrintBill = (order) => {
+    // Navigate to dedicated print page in a new tab using the identifier (order_number or ID)
+    window.open(`/print-bill/${order.id}`, '_blank');
+  };
+
+  const handleDownloadBill = async (order) => {
+    try {
+      // Ensure we have order_items if we are downloading from the list
+      let fullOrder = order;
+      if (!order.order_items || order.order_items.length === 0) {
+        const details = await fetchOrderDetails(order.id);
+        if (details) fullOrder = { ...order, ...details };
       }
-    } else {
-      setSelectedOrder(order);
+
+      const doc = new jsPDF({
+        unit: 'mm',
+        format: [80, 150]
+      });
+
+      let y = 10;
+      doc.setFontSize(14);
+      doc.setFont('courier', 'bold');
+      doc.text('VAYUPOS INVOICE', 40, y, { align: 'center' });
+      y += 8;
+
+      doc.setFontSize(8);
+      doc.setFont('courier', 'normal');
+      doc.text(`Order : ${fullOrder.id}`, 5, y); y += 4;
+      doc.text(`Date  : ${fullOrder.time || formatDateTime(new Date())}`, 5, y); y += 4;
+      doc.text(`Cust  : ${fullOrder.customer?.name || fullOrder.customer?.first_name || 'Guest'}`, 5, y); y += 6;
+
+      doc.line(5, y, 75, y); y += 5;
+
+      // Table Headers
+      doc.setFont('courier', 'bold');
+      doc.text('Item', 5, y);
+      doc.text('Qty', 45, y);
+      doc.text('Price', 55, y);
+      doc.text('Total', 75, y, { align: 'right' }); y += 4;
+      doc.line(5, y, 75, y); y += 5;
+
+      doc.setFont('courier', 'normal');
+      if (fullOrder.order_items) {
+        fullOrder.order_items.forEach((item) => {
+          const name = item.product_name || item.name || 'Item';
+          const qty = item.quantity || item.qty || 1;
+          const price = item.unit_price || item.price || 0;
+          const lineTotal = qty * price;
+
+          const splitName = doc.splitTextToSize(name, 35);
+          doc.text(splitName, 5, y);
+          doc.text(qty.toString(), 45, y);
+          doc.text(price.toFixed(2), 55, y);
+          doc.text(lineTotal.toFixed(2), 75, y, { align: 'right' });
+
+          y += (splitName.length * 4);
+          if (y > 130) { doc.addPage(); y = 10; }
+        });
+      }
+
+      y += 2;
+      doc.line(5, y, 75, y); y += 5;
+
+      doc.text('Subtotal:', 5, y);
+      doc.text(`₹${fullOrder.subtotal.toFixed(2)}`, 75, y, { align: 'right' }); y += 4;
+
+      const tax = fullOrder.gst || fullOrder.tax || 0;
+      const cgst = (tax / 2).toFixed(2);
+      const sgst = (tax / 2).toFixed(2);
+      doc.text('CGST (2.5%):', 5, y);
+      doc.text(`₹${cgst}`, 75, y, { align: 'right' }); y += 4;
+      doc.text('SGST (2.5%):', 5, y);
+      doc.text(`₹${sgst}`, 75, y, { align: 'right' }); y += 4;
+
+      if (fullOrder.discount > 0) {
+        doc.text('Discount:', 5, y);
+        doc.text(`- ₹${fullOrder.discount.toFixed(2)}`, 75, y, { align: 'right' }); y += 4;
+      }
+
+      y += 2;
+      doc.setFontSize(10);
+      doc.setFont('courier', 'bold');
+      doc.text('TOTAL:', 5, y);
+      doc.text(`₹${fullOrder.total.toFixed(2)}`, 75, y, { align: 'right' }); y += 6;
+
+      doc.setFontSize(8);
+      doc.setFont('courier', 'normal');
+      doc.text(`Payment: ${fullOrder.payment}`, 5, y); y += 5;
+
+      doc.line(5, y, 75, y); y += 6;
+      doc.text('Thank you for your visit!', 40, y, { align: 'center' });
+
+      doc.save(`Order_${fullOrder.id}.pdf`);
+    } catch (err) {
+      console.error('PDF Generation error:', err);
+      // Fallback
+      alert('Error generating PDF bill.');
     }
-    setShowBillModal(true);
   };
 
-  const handleActualPrint = () => {
-    window.print();
-  };
-
-  const handleDownloadBill = (order) => {
-    const billContent = `Restaurant Bill
-
-Order ID: ${order.id}
-Type: ${order.type}
-Date: ${order.createdAt?.split('T')[0] || selectedDate}
-Time: ${order.time}
-
-Customer: ${order.customer.name}
-
-Items: ${order.items}
-
-Subtotal:     ₹ ${order.subtotal.toFixed(2)}
-GST:          ₹ ${order.gst.toFixed(2)}
-${order.discount ? `Discount:     - ₹ ${order.discount.toFixed(2)}\n` : ''}
-TOTAL:        ₹ ${order.total.toFixed(2)}
-
-Payment Method: ${order.payment}
-
-Thank you for your visit!`;
-    
-    const blob = new Blob([billContent], { type: 'text/plain' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Bill_${order.id}_${order.createdAt?.split('T')[0] || selectedDate}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-  };
-
-  const handleViewBill = async (order) => {
-    await handlePrintBill(order);
+  const handleViewBill = (order) => {
+    // Navigate to full details view using the identifier (order_number or ID)
+    navigate(`/orders/${order.id}`);
   };
 
   const CustomTooltip = ({ active, payload }) => {
@@ -330,95 +411,7 @@ Thank you for your visit!`;
 
   return (
     <div className="min-h-screen bg-background">
-      {showBillModal && selectedOrder && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white dark:bg-card border-b border-border px-6 py-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-foreground">Bill Preview</h3>
-              <button
-                onClick={() => setShowBillModal(false)}
-                className="p-1 hover:bg-muted rounded transition-colors"
-              >
-                <X size={20} className="text-muted-foreground" />
-              </button>
-            </div>
-
-            <div className="p-6" id="bill-content">
-              <div className="font-mono">
-                <h2 className="text-center text-xl font-bold border-b-2 border-foreground pb-3 mb-4 text-foreground">
-                  VAYUPOS RESTAURANT
-                </h2>
-                
-                <div className="space-y-2 mb-4">
-                  <p className="text-foreground"><strong>Order ID:</strong> {selectedOrder.id}</p>
-                  <p className="text-foreground"><strong>Type:</strong> {selectedOrder.type}</p>
-                  <p className="text-foreground"><strong>Date:</strong> {selectedOrder.createdAt?.split('T')[0] || selectedDate}</p>
-                  <p className="text-foreground"><strong>Time:</strong> {selectedOrder.time}</p>
-                </div>
-                
-                <p className="mb-4 text-foreground"><strong>Customer:</strong> {selectedOrder.customer.name}</p>
-                
-                <hr className="border-dashed border-foreground my-4" />
-                
-                <p className="mb-4 text-foreground"><strong>Items:</strong> {selectedOrder.items}</p>
-                
-                <div className="space-y-2 mb-4">
-                  <div className="flex justify-between text-foreground">
-                    <span>Subtotal:</span>
-                    <span>₹ {selectedOrder.subtotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-foreground">
-                    <span>GST:</span>
-                    <span>₹ {selectedOrder.gst.toFixed(2)}</span>
-                  </div>
-                  {selectedOrder.discount && (
-                    <div className="flex justify-between text-foreground">
-                      <span>Discount:</span>
-                      <span>- ₹ {selectedOrder.discount.toFixed(2)}</span>
-                    </div>
-                  )}
-                </div>
-                
-                <hr className="border-2 border-foreground my-4" />
-                
-                <div className="flex justify-between text-lg font-bold mb-4 text-foreground">
-                  <span>TOTAL:</span>
-                  <span>₹ {selectedOrder.total.toFixed(2)}</span>
-                </div>
-                
-                <hr className="border-2 border-foreground my-4" />
-                
-                <p className="mb-4 text-foreground"><strong>Payment Method:</strong> {selectedOrder.payment}</p>
-                
-                <p className="text-center mt-6 text-foreground">Thank you for your visit!</p>
-              </div>
-            </div>
-
-            <div className="sticky bottom-0 bg-white dark:bg-card border-t border-border px-6 py-4 flex gap-3">
-              <button
-                onClick={handleActualPrint}
-                className="flex-1 flex items-center justify-center gap-2 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-              >
-                <Printer size={16} />
-                <span>Print</span>
-              </button>
-              <button
-                onClick={() => handleDownloadBill(selectedOrder)}
-                className="flex-1 flex items-center justify-center gap-2 py-2 bg-muted text-foreground rounded-lg hover:bg-secondary transition-colors"
-              >
-                <Download size={16} />
-                <span>Download</span>
-              </button>
-              <button
-                onClick={() => setShowBillModal(false)}
-                className="flex-1 py-2 bg-muted text-foreground rounded-lg hover:bg-secondary transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Dedicated View/Print pages are now used instead of this modal */}
 
       <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3 sm:gap-4">
@@ -462,26 +455,26 @@ Thank you for your visit!`;
 
           <div className="w-full" style={{ height: '300px' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart 
+              <LineChart
                 data={weeklyRevenueData}
                 margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis 
-                  dataKey="day" 
+                <XAxis
+                  dataKey="day"
                   stroke="hsl(var(--muted-foreground))"
                   style={{ fontSize: '12px' }}
                 />
-                <YAxis 
+                <YAxis
                   stroke="hsl(var(--muted-foreground))"
                   style={{ fontSize: '12px' }}
                   tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
                 />
                 <Tooltip content={<CustomTooltip />} />
-                <Line 
-                  type="monotone" 
-                  dataKey="revenue" 
-                  stroke="hsl(var(--primary))" 
+                <Line
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="hsl(var(--primary))"
                   strokeWidth={3}
                   dot={{ fill: 'hsl(var(--primary))', strokeWidth: 2, r: 4 }}
                   activeDot={{ r: 6 }}
@@ -501,7 +494,7 @@ Thank you for your visit!`;
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4 sm:mb-6">
             <div className="md:col-span-6">
-              <div className="relative">
+              <form onSubmit={(e) => e.preventDefault()} className="relative">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={17} />
                 <input
                   type="text"
@@ -510,7 +503,7 @@ Thank you for your visit!`;
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full text-sm sm:text-[15px] pl-11 pr-4 py-2.5 rounded-md border border-border bg-muted text-foreground placeholder-muted-foreground focus:outline-none"
                 />
-              </div>
+              </form>
             </div>
 
             <div className="md:col-span-3">
@@ -622,106 +615,106 @@ Thank you for your visit!`;
                   </div>
                 </div>
               ))}</div>
-      )}
+          )}
 
-      {/* Desktop Table View */}
-      {filteredOrders.length > 0 && (
-        <div className="hidden lg:block overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Order</th>
-                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Date & Time</th>
-                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Customer</th>
-                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Items</th>
-                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Subtotal</th>
-                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">GST</th>
-                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Discount</th>
-                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Total</th>
-                <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Payment</th>
-                <th className="text-right font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredOrders.map((order) => (
-                <tr key={order.id} className="border-b border-border hover:bg-muted/50 transition-colors">
-                  <td className="py-4 px-3">
-                    <div className="font-semibold text-[15px] text-foreground">{order.id}</div>
-                    <div className="text-[13px] mt-0.5 text-muted-foreground">{order.type}</div>
-                  </td>
-                  <td className="py-4 px-3">
-                    <div className="text-[15px] font-medium text-foreground">{order.time}</div>
-                  </td>
-                  <td className="py-4 px-3">
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-[13px] flex-shrink-0 text-white"
-                        style={{ backgroundColor: order.customer.color }}
-                      >
-                        {order.customer.avatar}
-                      </div>
-                      <span className="text-[15px] text-foreground">{order.customer.name}</span>
-                    </div>
-                  </td>
-                  <td className="py-4 px-3">
-                    <span className="text-[15px] text-foreground">{order.items}</span>
-                  </td>
-                  <td className="py-4 px-3">
-                    <span className="text-[15px] text-foreground">₹ {order.subtotal.toFixed(2)}</span>
-                  </td>
-                  <td className="py-4 px-3">
-                    <span className="text-[15px] text-foreground">₹ {order.gst.toFixed(2)}</span>
-                  </td>
-                  <td className="py-4 px-3">
-                    <span className="text-[15px] text-foreground">
-                      {order.discount ? `- ₹ ${order.discount.toFixed(2)}` : '-'}
-                    </span>
-                  </td>
-                  <td className="py-4 px-3">
-                    <div className="text-[15px] font-semibold text-foreground">
-                      ₹ {order.total.toFixed(2)}
-                    </div>
-                  </td>
-                  <td className="py-4 px-3">
-                    <span className="inline-block px-3.5 py-1.5 rounded-md text-[13px] font-medium bg-primary text-primary-foreground">
-                      {order.payment}
-                    </span>
-                  </td>
-                  <td className="py-4 px-3">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => handlePrintBill(order)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90"
-                        title="Print Bill"
-                      >
-                        <Printer size={16} />
-                        <span>Print Bill</span>
-                      </button>
-                      <button
-                        onClick={() => handleDownloadBill(order)}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-foreground hover:bg-muted"
-                        title="Download Bill"
-                      >
-                        <Download size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleViewBill(order)}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-foreground hover:bg-muted"
-                        title="View Bill"
-                      >
-                        <Eye size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {/* Desktop Table View */}
+          {filteredOrders.length > 0 && (
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-primary/10 dark:bg-transparent border-b border-border">
+                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Order</th>
+                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Date & Time</th>
+                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Customer</th>
+                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Items</th>
+                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Subtotal</th>
+                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">GST</th>
+                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Discount</th>
+                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Total</th>
+                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Payment</th>
+                    <th className="text-right font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredOrders.map((order) => (
+                    <tr key={order.id} className="border-b border-border hover:bg-muted/50 transition-colors">
+                      <td className="py-4 px-3">
+                        <div className="font-semibold text-[15px] text-foreground">{order.id}</div>
+                        <div className="text-[13px] mt-0.5 text-muted-foreground">{order.type}</div>
+                      </td>
+                      <td className="py-4 px-3">
+                        <div className="text-[15px] font-medium text-foreground">{order.time}</div>
+                      </td>
+                      <td className="py-4 px-3">
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-[13px] flex-shrink-0 text-white"
+                            style={{ backgroundColor: order.customer.color }}
+                          >
+                            {order.customer.avatar}
+                          </div>
+                          <span className="text-[15px] text-foreground">{order.customer.name}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-3">
+                        <span className="text-[15px] text-foreground">{order.items}</span>
+                      </td>
+                      <td className="py-4 px-3">
+                        <span className="text-[15px] text-foreground">₹ {order.subtotal.toFixed(2)}</span>
+                      </td>
+                      <td className="py-4 px-3">
+                        <span className="text-[15px] text-foreground">₹ {order.gst.toFixed(2)}</span>
+                      </td>
+                      <td className="py-4 px-3">
+                        <span className="text-[15px] text-foreground">
+                          {order.discount ? `- ₹ ${order.discount.toFixed(2)}` : '-'}
+                        </span>
+                      </td>
+                      <td className="py-4 px-3">
+                        <div className="text-[15px] font-semibold text-foreground">
+                          ₹ {order.total.toFixed(2)}
+                        </div>
+                      </td>
+                      <td className="py-4 px-3">
+                        <span className="inline-block px-3.5 py-1.5 rounded-md text-[13px] font-medium bg-primary text-primary-foreground">
+                          {order.payment}
+                        </span>
+                      </td>
+                      <td className="py-4 px-3">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handlePrintBill(order)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90"
+                            title="Print Bill"
+                          >
+                            <Printer size={16} />
+                            <span>Print Bill</span>
+                          </button>
+                          <button
+                            onClick={() => handleDownloadBill(order)}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-foreground hover:bg-muted"
+                            title="Download Bill"
+                          >
+                            <Download size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleViewBill(order)}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded transition-colors text-foreground hover:bg-muted"
+                            title="View Bill"
+                          >
+                            <Eye size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      )}
-    </div>
-  </div>
-</div>);
+      </div>
+    </div>);
 
 };
 export default PastOrders;

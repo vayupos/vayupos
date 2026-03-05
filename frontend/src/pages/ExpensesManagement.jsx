@@ -1,5 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Download, Plus, Filter, Eye, Edit2, Trash2, RotateCw, FileText, Flame, Droplet, Zap, Wifi, Paperclip, X, Search } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Download, Plus, Filter, Eye, Edit2, Trash2, RotateCw, FileText, Flame, Droplet, Zap, Wifi, Paperclip, X, Search, ChevronDown } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
 
@@ -79,7 +82,7 @@ const api = {
         try {
             const tokenKeys = ['access_token', 'acces_Token', 'token', 'authToken'];
             let token = null;
-            
+
             for (const key of tokenKeys) {
                 const value = localStorage.getItem(key);
                 if (value && value.length > 10) {
@@ -100,7 +103,7 @@ const api = {
                 method: 'GET',
                 headers: headers,
             });
-            
+
             if (!response.ok) {
                 console.warn('Failed to fetch upcoming salaries');
                 return [];
@@ -173,15 +176,32 @@ const ExpensesManagement = () => {
     const [showFilters, setShowFilters] = useState(false);
     const [loading, setLoading] = useState(false);
     const [editingId, setEditingId] = useState(null);
-    
+
     // ✅ Filter states
     const [searchQuery, setSearchQuery] = useState('');
+    const [isExportOpen, setIsExportOpen] = useState(false);
+    const exportRef = useRef(null);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (exportRef.current && !exportRef.current.contains(event.target)) {
+                setIsExportOpen(false);
+            }
+        };
+        if (isExportOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isExportOpen]);
     const [categoryFilter, setCategoryFilter] = useState('All');
     const [paymentModeFilter, setPaymentModeFilter] = useState('All');
     const [dateRangeFilter, setDateRangeFilter] = useState('This Month');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
-    
+
     const [formData, setFormData] = useState({
         title: '',
         date: new Date().toISOString().split('T')[0],
@@ -228,10 +248,10 @@ const ExpensesManagement = () => {
     const loadUpcomingStaffSalaries = async () => {
         try {
             const data = await api.getUpcomingStaffSalaries();
-            
+
             const colors = ['#E74C3C', '#3498DB', '#2ECC71', '#F39C12', '#9B59B6', '#1ABC9C', '#E67E22', '#95A5A6', '#D4A574', '#34495E'];
             const getRandomColor = () => colors[Math.floor(Math.random() * colors.length)];
-            
+
             const transformedSalaries = data.map(entry => ({
                 id: entry.id,
                 staffId: entry.staff_id || entry.id,
@@ -241,14 +261,14 @@ const ExpensesManagement = () => {
                 color: getRandomColor(),
                 amount: `₹${entry.salary.toLocaleString('en-IN')}`,
                 amountRaw: entry.salary,
-                cycle: new Date(entry.due_date || entry.dueDate).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' }),
+                cycle: `Due on ${entry.dueDate || entry.due_date}`,
                 dueDate: entry.due_date || entry.dueDate,
                 status: 'Scheduled',
                 category: 'Salaries & Wages'
             }));
-            
+
             setAutoAddedPayments(transformedSalaries);
-            
+
             // ✅ Smart cleanup: only keep removingIds that are still in the new data
             // If an ID is not in the new data, it was successfully removed, so clean it up
             setRemovingIds(prev => {
@@ -283,7 +303,7 @@ const ExpensesManagement = () => {
         // Search filter
         if (searchQuery.trim()) {
             const query = searchQuery.toLowerCase();
-            filtered = filtered.filter(expense => 
+            filtered = filtered.filter(expense =>
                 expense.title.toLowerCase().includes(query) ||
                 expense.category.toLowerCase().includes(query) ||
                 expense.notes?.toLowerCase().includes(query)
@@ -397,37 +417,21 @@ const ExpensesManagement = () => {
         }
     };
 
-    // ✅ FIXED: Handle adding salary from upcoming payments with proper optimistic update
+    // ✅ FIXED: Handle adding salary from upcoming payments via backend only
     const handleAddNow = async (staffId) => {
         const payment = autoAddedPayments.find(p => p.staffId === staffId);
         if (!payment) return;
 
-        console.log('🔄 Adding salary for staffId:', staffId);
+        console.log('🔄 Triggering backend to add salary for staffId:', staffId);
 
         // ✅ Mark as removing to hide from UI immediately
         setRemovingIds(prev => new Set([...prev, staffId]));
 
         try {
-            // Create expense from salary
-            const expenseData = {
-                title: `Salary: ${payment.name}`,
-                category: 'Salaries & Wages',
-                amount: payment.amountRaw,
-                date: new Date().toISOString().split('T')[0],
-                subtitle: `Auto-added by Staff Payroll - ${payment.role}`,
-                type: 'auto',
-                account: 'Cashbook',
-                tax: 0,
-                payment_mode: 'Cash',
-                notes: `Monthly salary payment for ${payment.name} (${payment.role}) - Cycle: ${payment.cycle}`
-            };
-
-            await api.createExpense(expenseData);
-            
-            // Call backend to mark salary as paid
+            // Call backend to mark salary as paid and CREATE the expense record
             const tokenKeys = ['access_token', 'acces_Token', 'token', 'authToken'];
             let token = null;
-            
+
             for (const key of tokenKeys) {
                 const value = localStorage.getItem(key);
                 if (value && value.length > 10) {
@@ -436,23 +440,25 @@ const ExpensesManagement = () => {
                 }
             }
 
-            if (token) {
-                await fetch(`${API_BASE_URL}/staff/salaries/${staffId}/add`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
+            const response = await fetch(`${API_BASE_URL}/staff/salaries/${staffId}/add`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to process salary entry on backend');
             }
 
-            console.log('✅ Salary added successfully');
-            alert('Salary entry added successfully!');
-            
+            console.log('✅ Salary processed successfully on backend');
+            alert('Salary entry added to expenses successfully!');
+
             // Refresh both lists from server
             await loadExpenses();
             await loadUpcomingStaffSalaries();
-            
+
         } catch (error) {
             console.error('❌ Error adding salary:', error);
             // ✅ If error, remove from removing set to show it again
@@ -537,22 +543,67 @@ const ExpensesManagement = () => {
         });
     };
 
-    const handleExport = () => {
+    const handleExportExcel = () => {
         const filtered = getFilteredExpenses();
-        const csvContent = filtered.map(e =>
-            `${e.title},${e.category},${formatAmount(e.amount)},${formatDate(e.date)}`
-        ).join('\n');
-        const blob = new Blob([`Title,Category,Amount,Date\n${csvContent}`], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `expenses_${new Date().toISOString().split('T')[0]}.csv`;
-        a.click();
+        const data = filtered.map((e, index) => ({
+            '#': index + 1,
+            'Title': e.title,
+            'Category': e.category,
+            'Amount': e.amount,
+            'Date': formatDate(e.date),
+            'Due Date': e.due_date || '-',
+            'Account': e.account || 'Cashbook',
+            'Payment Mode': e.payment_mode || 'Cash',
+            'Notes': e.notes || ''
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(data);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Expenses');
+        XLSX.writeFile(wb, `expenses_report_${new Date().toISOString().split('T')[0]}.xlsx`);
+        setIsExportOpen(false);
+    };
+
+    const handleExportPDF = () => {
+        const filtered = getFilteredExpenses();
+        const doc = new jsPDF();
+
+        // Header
+        doc.setFontSize(22);
+        doc.setTextColor(13, 148, 136); // Teal-600
+        doc.text('VayuPOS - Expenses Report', 14, 22);
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
+        doc.text(`Filter: ${categoryFilter} | ${paymentModeFilter} | ${dateRangeFilter}`, 14, 35);
+
+        const tableColumn = ["#", "Title", "Category", "Amount", "Date", "Mode"];
+        const tableRows = filtered.map((e, index) => [
+            index + 1,
+            e.title,
+            e.category,
+            `Rs. ${e.amount}`,
+            formatDate(e.date),
+            e.payment_mode || 'Cash'
+        ]);
+
+        autoTable(doc, {
+            head: [tableColumn],
+            body: tableRows,
+            startY: 45,
+            theme: 'striped',
+            headStyles: { fillColor: [13, 148, 136] },
+            margin: { top: 45 },
+        });
+
+        doc.save(`expenses_report_${new Date().toISOString().split('T')[0]}.pdf`);
+        setIsExportOpen(false);
     };
 
     const filteredExpenses = getFilteredExpenses();
     const hasActiveFilters = searchQuery.trim() || categoryFilter !== 'All' || paymentModeFilter !== 'All' || dateRangeFilter !== 'This Month';
-    
+
     // ✅ Filter out payments that are being removed
     const visibleAutoAddedPayments = autoAddedPayments.filter(p => !removingIds.has(p.staffId));
 
@@ -563,13 +614,37 @@ const ExpensesManagement = () => {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3">
                     <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-foreground">Expenses</h1>
                     <div className="flex gap-2 w-full sm:w-auto">
-                        <button
-                            onClick={handleExport}
-                            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors bg-transparent text-foreground border border-border hover:bg-muted text-sm"
-                        >
-                            <Download size={16} />
-                            <span className="text-xs sm:text-sm">Export</span>
-                        </button>
+                        <div className="relative flex-1 sm:flex-initial" ref={exportRef}>
+                            <button
+                                onClick={() => setIsExportOpen(!isExportOpen)}
+                                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors bg-primary text-primary-foreground hover:bg-primary/90 text-sm"
+                            >
+                                <Download size={16} />
+                                <span className="text-xs sm:text-sm">Export</span>
+                                <ChevronDown size={14} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {isExportOpen && (
+                                <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-lg shadow-xl z-50 animate-in fade-in zoom-in-95 duration-200">
+                                    <div className="p-1">
+                                        <button
+                                            onClick={handleExportPDF}
+                                            className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-foreground hover:bg-muted transition-colors"
+                                        >
+                                            <FileText size={16} className="text-red-500" />
+                                            <span>Export as PDF</span>
+                                        </button>
+                                        <button
+                                            onClick={handleExportExcel}
+                                            className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-foreground hover:bg-muted transition-colors"
+                                        >
+                                            <Download size={16} className="text-green-500" />
+                                            <span>Export as Excel</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                         <button
                             onClick={() => {
                                 handleReset();
@@ -731,7 +806,12 @@ const ExpensesManagement = () => {
                                     </div>
                                     <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
                                         <span>{expense.category}</span>
-                                        <span>{formatDate(expense.date)}</span>
+                                        <div className="flex flex-col items-end">
+                                            <span>{formatDate(expense.date)}</span>
+                                            {expense.due_date && (
+                                                <span className="text-[10px] text-teal-600 font-medium">Due: {expense.due_date}</span>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
                                         {expense.type === 'auto' ? (
@@ -775,6 +855,7 @@ const ExpensesManagement = () => {
                                         <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Title</th>
                                         <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Category</th>
                                         <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Amount</th>
+                                        <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Due Date</th>
                                         <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground hidden md:table-cell">Date</th>
                                         <th className="text-right font-bold py-3 px-3 text-sm text-muted-foreground">Actions</th>
                                     </tr>
@@ -799,6 +880,11 @@ const ExpensesManagement = () => {
                                             <td className="py-4 px-3">
                                                 <span className="text-sm font-semibold text-foreground whitespace-nowrap">
                                                     {formatAmount(expense.amount)}
+                                                </span>
+                                            </td>
+                                            <td className="py-4 px-3">
+                                                <span className="text-xs font-medium text-teal-600">
+                                                    {expense.due_date ? `Due on ${expense.due_date}` : '-'}
                                                 </span>
                                             </td>
                                             <td className="py-4 px-3 hidden md:table-cell">
@@ -850,7 +936,7 @@ const ExpensesManagement = () => {
                                 <Search className="w-12 h-12 mx-auto mb-3 opacity-30 text-muted-foreground" />
                                 <p className="text-sm font-medium text-foreground mb-1">No expenses found</p>
                                 <p className="text-xs text-muted-foreground mb-4">
-                                    {hasActiveFilters 
+                                    {hasActiveFilters
                                         ? 'Try adjusting your filters or search criteria'
                                         : 'Add your first expense to get started'
                                     }
@@ -924,7 +1010,7 @@ const ExpensesManagement = () => {
                                 <tr className="bg-primary/10 border-b border-border">
                                     <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Staff</th>
                                     <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Amount</th>
-                                    <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground hidden md:table-cell">Cycle</th>
+                                    <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground hidden md:table-cell">Due Date</th>
                                     <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground">Status</th>
                                     <th className="text-left font-bold py-3 px-3 text-sm text-muted-foreground hidden lg:table-cell">Category</th>
                                     <th className="text-right font-bold py-3 px-3 text-sm text-muted-foreground">Action</th>

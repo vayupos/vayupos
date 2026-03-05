@@ -41,7 +41,7 @@ All colors MUST be HSL.
     --sidebar-background: 0 0% 97%;
     --sidebar-foreground: 0 0% 15%;
     --sidebar-border: 0 0% 90%;
-    
+
     --navbar-background: 0 0% 100%;
     --metric-card-bg: 0 0% 100%;
   }
@@ -78,7 +78,7 @@ All colors MUST be HSL.
     --sidebar-background: 200 50% 8%;
     --sidebar-foreground: 0 0% 98%;
     --sidebar-border: 200 45% 15%;
-    
+
     --navbar-background: 200 50% 8%;
     --metric-card-bg: 200 45% 11%;
   }
@@ -93,4 +93,3 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
-

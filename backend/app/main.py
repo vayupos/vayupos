@@ -14,7 +14,7 @@ from app.core.database import init_db, get_db
 from app.api.v1 import (
     auth, users, products, categories,
     customers, orders, inventory, payment, reports,
-    coupons, dish_templates, upload, staff, expense, notification, search
+    coupons, dish_templates, upload, staff, expense, notification, search, print_jobs
 )
 
 settings = get_settings()
@@ -222,5 +222,11 @@ try:
     print("✓ Search router included")
 except Exception as e:
     print(f"✗ Failed to include search router: {e}")
+
+try:
+    app.include_router(print_jobs.router, prefix="/api/v1", tags=["Print Jobs"])
+    print("✓ Print Jobs router included")
+except Exception as e:
+    print(f"✗ Failed to include print jobs router: {e}")
 
 print("✓ All routers included")

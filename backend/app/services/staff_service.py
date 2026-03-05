@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from fastapi import HTTPException
 from app.models.staff import Staff
+from app.models.expense import Expense as ExpenseModel
 from app.schemas.staff import StaffCreate, StaffUpdate, StaffResponse
 
 class StaffService:
@@ -184,5 +185,38 @@ class StaffService:
         staff = db.query(Staff).filter(Staff.id == staff_id).first()
         if not staff:
             return False
-        print(f"✅ Salary marked paid for {staff.name} - ₹{staff.salary}")
+        
+        # Calculate the due date (same logic as in get_upcoming_salaries)
+        today = datetime.now().date()
+        joined_date = staff.joined.date() if isinstance(staff.joined, datetime) else staff.joined
+        months_passed = (today.year - joined_date.year) * 12 + (today.month - joined_date.month)
+        candidate_date = joined_date + relativedelta(months=months_passed)
+        
+        if candidate_date < today:
+            next_due_date = candidate_date + relativedelta(months=1)
+        elif candidate_date == today:
+            next_due_date = candidate_date + relativedelta(months=1)
+        else:
+            next_due_date = candidate_date
+        
+        due_date_str = next_due_date.strftime("%d %b %Y")
+
+        # Create the expense record
+        expense = ExpenseModel(
+            title=f"Salary: {staff.name}",
+            category="Salaries & Wages",
+            amount=float(staff.salary),
+            date=datetime.now().strftime("%Y-%m-%d"),
+            subtitle=f"Auto-added by Staff Payroll - {staff.role}",
+            type="auto",
+            account="Cashbook",
+            tax=0.0,
+            payment_mode="Cash",
+            due_date=due_date_str,
+            notes=f"Monthly salary payment for {staff.name} ({staff.role})"
+        )
+        db.add(expense)
+        db.commit()
+        
+        print(f"✅ Salary marked paid and expense created for {staff.name} - ₹{staff.salary}")
         return True

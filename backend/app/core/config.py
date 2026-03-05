@@ -20,12 +20,16 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     cors_origins: list = ["*"]
     
-     # ✅ ADD THESE 4 LINES HERE
-    AWS_ACCESS_KEY_ID: str
-    AWS_SECRET_ACCESS_KEY: str
-    AWS_REGION: str
-    AWS_BUCKET_NAME: str
-    
+    # AWS Configuration (optional - provide your AWS credentials if using S3)
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
+    AWS_REGION: str = "ap-south-1"
+    AWS_BUCKET_NAME: str = ""
+
+    # Printer Configuration
+    DEFAULT_PRINTER_IP: str = "192.168.1.150"
+    DEFAULT_PRINTER_PORT: int = 9100
+
     class Config:
         env_file = ".env"
         case_sensitive = True

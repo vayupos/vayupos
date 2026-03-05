@@ -22,6 +22,8 @@ import NotFound from './pages/NotFound';
 import Notifications from "./pages/Notifications";
 import SearchResults from "./pages/SearchResults";
 import Profile from './pages/Profile';
+import OrderDetails from './pages/OrderDetails';
+import PrintBill from './pages/PrintBill';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -176,6 +178,22 @@ const AppContent = () => {
               element={
                 <ProtectedRoute>
                   <PastOrders onNavigate={handleNavigate} />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/orders/:orderId"
+              element={
+                <ProtectedRoute>
+                  <OrderDetails />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/print-bill/:orderId"
+              element={
+                <ProtectedRoute>
+                  <PrintBill />
                 </ProtectedRoute>
               }
             />

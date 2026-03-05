@@ -46,6 +46,9 @@ __all__ = [
     "DishTemplateCreate",
     "DishTemplateUpdate",
     "DishTemplateOut",
+    # PrintJob
+    "PrintJobCreate",
+    "PrintJobResponse",
     # Generic
     "ResponseSchema",
     "PaginationParams",

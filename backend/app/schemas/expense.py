@@ -12,6 +12,7 @@ class ExpenseBase(BaseModel):
     account: Optional[str] = "Cashbook"
     tax: Optional[float] = 0.0
     payment_mode: Optional[str] = "Cash"
+    due_date: Optional[str] = None
     notes: Optional[str] = ""
 
 class ExpenseCreate(ExpenseBase):
@@ -27,6 +28,7 @@ class ExpenseUpdate(BaseModel):
     account: Optional[str] = None
     tax: Optional[float] = None
     payment_mode: Optional[str] = None
+    due_date: Optional[str] = None
     notes: Optional[str] = None
 
 class Expense(ExpenseBase):

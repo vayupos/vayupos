@@ -15,5 +15,6 @@ class Expense(Base):
     account = Column(String, default="Cashbook")
     tax = Column(Float, default=0.0)
     payment_mode = Column(String, default="Cash")
+    due_date = Column(String, nullable=True)  # Added to track salary due date
     notes = Column(String, default="")
     created_at = Column(DateTime(timezone=True), server_default=func.now())

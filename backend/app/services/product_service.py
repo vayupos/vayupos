@@ -115,6 +115,8 @@ class CategoryService:
         db_category = Category(
             name=category_create.name,
             description=category_create.description,
+            icon_name=getattr(category_create, 'icon_name', 'Coffee'),
+            tax_rate=getattr(category_create, 'tax_rate', 5),
         )
 
         db.add(db_category)

@@ -11,6 +11,7 @@ from app.models.coupon import Coupon  # ← ADD THIS
 from app.models.dish_template import DishTemplate  
 from app.models.expense import Expense  # ← ADD THIS
 from app.models.notification import Notification  # ← ADD THIS
+from app.models.print_job import PrintJob
 
 
 __all__ = [
@@ -30,5 +31,6 @@ __all__ = [
     "Coupon", 
      "DishTemplate",
       "Expense",
-      "Notification" # ← ADD THIS
+      "Notification",
+      "PrintJob"
 ]

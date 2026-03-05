@@ -66,6 +66,8 @@ class CategoryBase(BaseModel):
     """Base category schema"""
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
+    icon_name: Optional[str] = "Coffee"
+    tax_rate: Optional[int] = 5
 
 
 class CategoryCreate(CategoryBase):
@@ -77,6 +79,8 @@ class CategoryUpdate(BaseModel):
     """Category update schema"""
     name: Optional[str] = None
     description: Optional[str] = None
+    icon_name: Optional[str] = None
+    tax_rate: Optional[int] = None
     is_active: Optional[bool] = None
 
 
@@ -209,6 +213,7 @@ class CustomerResponse(CustomerBase):
     id: int
     loyalty_points: int
     total_spent: Decimal
+    orders_count: int = 0
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -342,6 +347,31 @@ class InventoryLogResponse(BaseModel):
     reference_number: Optional[str] = None
     notes: Optional[str] = None
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ============= Print Job Schemas =============
+class PrintJobBase(BaseModel):
+    """Base print job schema"""
+    order_id: int
+    printer_ip: str = Field(..., max_length=50)
+    printer_port: int = Field(default=9100)
+    content: str
+    is_printed: bool = False
+
+
+class PrintJobCreate(PrintJobBase):
+    """Print job creation schema"""
+    pass
+
+
+class PrintJobResponse(PrintJobBase):
+    """Print job response schema"""
+    id: int
+    created_at: datetime
+    printed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

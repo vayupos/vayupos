@@ -65,11 +65,19 @@ def list_orders(
     }
 
 @router.get("/{order_id}", response_model=OrderResponse)
-def get_order(order_id: int, db: Session = Depends(get_db)):
-    """Get order by ID"""
-    order = OrderService.get_order_by_id(db, order_id)
+def get_order(order_id: str, db: Session = Depends(get_db)):
+    """Get order by ID or order_number"""
+    order = None
+    if order_id.isdigit():
+        order = OrderService.get_order_by_id(db, int(order_id))
+    
+    # If not found by ID or not numeric, try by order_number
     if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+        order = OrderService.get_order_by_number(db, order_id)
+        
+    if not order:
+        raise HTTPException(status_code=404, detail=f"Order '{order_id}' not found")
+        
     return OrderResponse.from_orm(order)
 
 @router.put("/{order_id}", response_model=OrderResponse)

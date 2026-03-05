@@ -18,7 +18,12 @@ import {
   Cake,
   Apple,
   Upload,
+  ChevronDown,
+  FileText,
 } from "lucide-react";
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import api from "../api/axios";
 
 const iconMap = {
@@ -98,6 +103,23 @@ const Menu = () => {
   const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryDescription, setNewCategoryDescription] = useState("");
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  const exportRef = React.useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (exportRef.current && !exportRef.current.contains(event.target)) {
+        setIsExportOpen(false);
+      }
+    };
+    if (isExportOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isExportOpen]);
   const [newCategoryIcon, setNewCategoryIcon] = useState("Coffee");
 
   const [showNewProductModal, setShowNewProductModal] = useState(false);
@@ -114,7 +136,29 @@ const Menu = () => {
   const [showEditProductModal, setShowEditProductModal] = useState(false);
   const [editingRowIndex, setEditingRowIndex] = useState(null);
 
-  const [recentEdits, setRecentEdits] = useState([]);
+  const [recentEdits, setRecentEdits] = useState(() => {
+    try {
+      const stored = localStorage.getItem("menu_recent_edits");
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [showAllEditsModal, setShowAllEditsModal] = useState(false);
+
+  // Tax state
+  const taxOptions = [0, 5, 12, 18, 28];
+  const [selectedTax, setSelectedTax] = useState(5);
+
+  // CONSTANTS for Sizes
+  const AVAILABLE_SIZES = [
+    "Regular",
+    "Medium",
+    "Small",
+    "Large",
+    "Special",
+    "Custom"
+  ];
 
   // NEW STATE FOR DISH LIBRARY
   const [dishTemplates, setDishTemplates] = useState([]);
@@ -238,16 +282,58 @@ const Menu = () => {
   );
 
   const addRecentEdit = (action) => {
-    setRecentEdits((prev) => [
-      { action, time: new Date() },
-      ...prev.slice(0, 9),
-    ]);
+    setRecentEdits((prev) => {
+      const updated = [
+        { action, time: new Date().toISOString() },
+        ...prev,
+      ].slice(0, 20);
+      try {
+        localStorage.setItem("menu_recent_edits", JSON.stringify(updated));
+      } catch { }
+      return updated;
+    });
   };
 
-  // Export functionality
-  const handleExport = () => {
-    const csvRows = [];
-    csvRows.push(["Category", "Product Name", "Size", "Price"].join(","));
+  const handleExportExcel = () => {
+    const data = [];
+    Object.values(categoriesById).forEach((category) => {
+      const categoryProducts = rawProducts.filter(
+        (p) => p.category_id === category.id
+      );
+      categoryProducts.forEach((product) => {
+        const match = product.name.match(/^(.*)\s\(([^)]+)\)$/);
+        const baseName = match ? match[1] : product.name;
+        const size = match ? match[2] : "Regular";
+        data.push({
+          'Category': category.name,
+          'Product Name': baseName,
+          'Size': size,
+          'Price': product.price,
+          'SKU': product.sku || '-'
+        });
+      });
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'MenuData');
+    XLSX.writeFile(wb, `menu_export_${new Date().toISOString().split("T")[0]}.xlsx`);
+    setIsExportOpen(false);
+  };
+
+  const handleExportPDF = () => {
+    const doc = new jsPDF();
+
+    doc.setFontSize(22);
+    doc.setTextColor(13, 148, 136); // Teal-600
+    doc.text('VayuPOS - Restaurant Menu', 14, 22);
+
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
+
+    const tableColumn = ["Category", "Product", "Size", "Price"];
+    const tableRows = [];
 
     Object.values(categoriesById).forEach((category) => {
       const categoryProducts = rawProducts.filter(
@@ -257,35 +343,22 @@ const Menu = () => {
         const match = product.name.match(/^(.*)\s\(([^)]+)\)$/);
         const baseName = match ? match[1] : product.name;
         const size = match ? match[2] : "Regular";
-
-        csvRows.push(
-          [
-            `"${category.name}"`,
-            `"${baseName}"`,
-            `"${size}"`,
-            product.price,
-          ].join(",")
-        );
+        tableRows.push([category.name, baseName, size, `Rs. ${product.price}`]);
       });
     });
 
-    const csvContent = csvRows.join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 40,
+      theme: 'grid',
+      headStyles: { fillColor: [13, 148, 136] },
+      alternateRowStyles: { fillColor: [240, 253, 250] },
+      margin: { top: 40 },
+    });
 
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `menu_export_${new Date().toISOString().split("T")[0]}.csv`
-    );
-    link.style.visibility = "hidden";
-
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-    alert("Menu exported successfully! CSV file downloaded.");
+    doc.save(`menu_report_${new Date().toISOString().split('T')[0]}.pdf`);
+    setIsExportOpen(false);
   };
 
   // HANDLE IMAGE UPLOAD - UPDATED
@@ -727,13 +800,37 @@ const Menu = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-4">
         <h1 className="text-2xl font-semibold">Menu Categories</h1>
         <div className="flex gap-2 sm:gap-3 flex-wrap">
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-2 bg-card border border-teal-500 text-teal-500 hover:bg-muted transition-colors px-3 sm:px-4 py-2 rounded-lg text-sm"
-          >
-            <Download size={16} />
-            <span className="hidden sm:inline">Export</span>
-          </button>
+          <div className="relative flex-1 sm:flex-none" ref={exportRef}>
+            <button
+              onClick={() => setIsExportOpen(!isExportOpen)}
+              className="w-full flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white transition-colors px-3 sm:px-4 py-2 rounded-lg text-sm"
+            >
+              <Download size={16} />
+              <span className="hidden sm:inline">Export</span>
+              <ChevronDown size={14} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isExportOpen && (
+              <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-lg shadow-xl z-50 animate-in fade-in zoom-in-95 duration-200">
+                <div className="p-1">
+                  <button
+                    onClick={handleExportPDF}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-foreground hover:bg-muted transition-colors border-none bg-transparent"
+                  >
+                    <FileText size={16} className="text-red-500" />
+                    <span>Export as PDF</span>
+                  </button>
+                  <button
+                    onClick={handleExportExcel}
+                    className="w-full  flex items-center gap-2 px-3 py-2 rounded-md text-sm text-foreground hover:bg-muted transition-colors border-none bg-transparent"
+                  >
+                    <Download size={16} className="text-green-500" />
+                    <span>Export as Excel</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           <button
             onClick={() => setShowNewCategoryModal(true)}
             className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white transition-colors px-3 sm:px-4 py-2 rounded-lg text-sm"
@@ -830,819 +927,940 @@ const Menu = () => {
           })}
         </div>
         {filteredCategories.length === 0 && (
-<div className="text-center py-8 text-muted-foreground">
-No categories found matching "{categorySearchTerm}"
-</div>
-)}
-</div>{/* Products for selected category */}
-  <div className="bg-card border border-border rounded-xl mb-4 sm:mb-6">
-    <div className="border-b border-border flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 sm:p-5 gap-3">
-      <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
-        Category:{" "}
-        {categoriesById[selectedCategoryId]?.name || "Select a category"}
-      </h2>
-      <button
-        onClick={() => setShowNewProductModal(true)}
-        className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white transition-colors px-3 sm:px-4 py-2 rounded-lg text-sm w-full sm:w-auto justify-center"
-      >
-        <Plus size={16} />
-        Add Product
-      </button>
-    </div>
-
-    <div className="p-4 sm:p-5">
-      {/* search + sort */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-5">
-        <div>
-          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
-            Product search
-          </p>
-          <input
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={`Search in ${
-              categoriesById[selectedCategoryId]?.name || "category"
-            }`}
-            className="w-full bg-muted text-foreground border-none outline-none px-3 py-2 rounded-lg text-sm"
-          />
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
-            Sort
-          </p>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="w-full bg-muted text-foreground border-none outline-none cursor-pointer px-3 py-2 rounded-lg text-sm"
-          >
-            <option value="name">Name</option>
-            <option value="price-low">Price: Low to High</option>
-            <option value="price-high">Price: High to Low</option>
-          </select>
-        </div>
-        <div>
-          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
-            Tax
-          </p>
-          <div className="bg-secondary text-muted-foreground text-center font-medium px-3 py-2 rounded-lg text-sm">
-            GST 5%
+          <div className="text-center py-8 text-muted-foreground">
+            No categories found matching "{categorySearchTerm}"
           </div>
+        )}
+      </div>{/* Products for selected category */}
+      <div className="bg-card border border-border rounded-xl mb-4 sm:mb-6">
+        <div className="border-b border-border flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 sm:p-5 gap-3">
+          <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
+            Category:{" "}
+            {categoriesById[selectedCategoryId]?.name || "Select a category"}
+          </h2>
+          <button
+            onClick={() => setShowNewProductModal(true)}
+            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white transition-colors px-3 sm:px-4 py-2 rounded-lg text-sm w-full sm:w-auto justify-center"
+          >
+            <Plus size={16} />
+            Add Product
+          </button>
+        </div>
+
+        <div className="p-4 sm:p-5">
+          {/* search + sort */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-5">
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
+                Product search
+              </p>
+              <input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder={`Search in ${categoriesById[selectedCategoryId]?.name || "category"
+                  }`}
+                className="w-full bg-muted text-foreground border-none outline-none px-3 py-2 rounded-lg text-sm"
+              />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
+                Sort
+              </p>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="w-full bg-muted text-foreground border-none outline-none cursor-pointer px-3 py-2 rounded-lg text-sm"
+              >
+                <option value="name">Name</option>
+                <option value="price-low">Price: Low to High</option>
+                <option value="price-high">Price: High to Low</option>
+              </select>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
+                Tax
+              </p>
+              <select
+                value={selectedTax}
+                onChange={(e) => setSelectedTax(Number(e.target.value))}
+                className="w-full bg-secondary text-foreground text-center font-medium border-none outline-none cursor-pointer px-3 py-2 rounded-lg text-sm"
+              >
+                {taxOptions.map(tax => (
+                  <option key={tax} value={tax}>GST {tax}%</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* grouped products */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
+            {filteredGroups.map((g) => (
+              <div
+                key={`${g.categoryId}:${g.baseName}`}
+                className="bg-muted border border-border rounded-lg p-4"
+              >
+                {g.imageUrl && (
+                  <div className="w-full h-32 bg-gray-200 rounded-lg overflow-hidden mb-3">
+                    <img
+                      src={g.imageUrl}
+                      alt={g.baseName}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                <h3 className="text-foreground font-medium mb-3 text-sm sm:text-base">
+                  {g.baseName}
+                </h3>
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  {g.sizes.map((s) => (
+                    <div
+                      key={s.productId}
+                      className="px-3 py-2 rounded-lg text-xs font-medium bg-background text-foreground border border-border"
+                    >
+                      {s.size} ₹{s.price}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleEditProduct(g)}
+                    className="flex-1 border border-teal-500 text-teal-500 bg-transparent hover:bg-secondary transition-colors px-3 py-1.5 rounded text-xs"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDeleteWholeProductGroup(g)}
+                    className="flex-1 border border-red-500 text-red-500 bg-transparent hover:bg-red-50 transition-colors px-3 py-1.5 rounded text-xs"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {filteredGroups.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              No products found in{" "}
+              {categoriesById[selectedCategoryId]?.name || "this category"}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* grouped products */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-        {filteredGroups.map((g) => (
-          <div
-            key={`${g.categoryId}:${g.baseName}`}
-            className="bg-muted border border-border rounded-lg p-4"
+      {/* Recent edits */}
+      <div className="bg-card border border-border rounded-xl">
+        <div className="border-b border-border p-4 sm:p-5 flex justify-between items-center">
+          <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
+            Recently Edited
+          </h2>
+          <button
+            className="text-sm text-teal-500 hover:text-teal-400 font-medium transition-colors bg-transparent border-none p-0 cursor-pointer"
+            onClick={() => setShowAllEditsModal(true)}
           >
-            {g.imageUrl && (
-              <div className="w-full h-32 bg-gray-200 rounded-lg overflow-hidden mb-3">
-                <img
-                  src={g.imageUrl}
-                  alt={g.baseName}
-                  className="w-full h-full object-cover"
+            View All
+          </button>
+        </div>
+        <div className="p-4 sm:p-5 space-y-3">
+          {recentEdits.length === 0 && (
+            <p className="text-sm text-muted-foreground">No recent edits.</p>
+          )}
+          {recentEdits.slice(0, 5).map((e, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-between bg-muted border border-border rounded-full px-4 py-3 flex-wrap gap-2"
+            >
+              <span className="text-foreground text-xs sm:text-sm">
+                {e.action}
+              </span>
+              <span className="text-muted-foreground text-xs">
+                {formatTimeAgo(e.time)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ALL EDITS HISTORY MODAL */}
+      {showAllEditsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-xl p-6 max-w-lg w-full max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-semibold text-card-foreground">Edit History</h3>
+              <button
+                onClick={() => setShowAllEditsModal(false)}
+                className="bg-transparent border-none text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              {recentEdits.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No edit history yet.</p>
+              ) : (
+                recentEdits.map((e, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between bg-muted border border-border rounded-lg px-4 py-2.5 gap-2"
+                  >
+                    <span className="text-foreground text-xs sm:text-sm flex-1">{e.action}</span>
+                    <span className="text-muted-foreground text-xs flex-shrink-0">{formatTimeAgo(e.time)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="mt-4 flex justify-between items-center border-t border-border pt-4">
+              <button
+                onClick={() => {
+                  setRecentEdits([]);
+                  try { localStorage.removeItem("menu_recent_edits"); } catch { }
+                }}
+                className="text-xs text-red-500 hover:text-red-400 bg-transparent border-none cursor-pointer transition-colors"
+              >
+                Clear History
+              </button>
+              <button
+                onClick={() => setShowAllEditsModal(false)}
+                className="bg-teal-600 hover:bg-teal-700 text-white border-none px-4 py-2 rounded-lg text-sm transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW CATEGORY MODAL */}
+      {showNewCategoryModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-xl p-6 max-w-md w-full">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-semibold text-card-foreground">
+                Add New Category
+              </h3>
+              <button
+                onClick={() => setShowNewCategoryModal(false)}
+                className="bg-transparent border-none text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                  Category Name*
+                </label>
+                <input
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder="e.g., Beverages"
+                  className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-2.5 text-sm outline-none"
                 />
               </div>
-            )}
-            <h3 className="text-foreground font-medium mb-3 text-sm sm:text-base">
-              {g.baseName}
-            </h3>
-            <div className="flex items-center gap-2 mb-3 flex-wrap">
-              {g.sizes.map((s) => (
-                <div
-                  key={s.productId}
-                  className="px-3 py-2 rounded-lg text-xs font-medium bg-background text-foreground border border-border"
+              <div>
+                <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                  Description
+                </label>
+                <textarea
+                  value={newCategoryDescription}
+                  onChange={(e) => setNewCategoryDescription(e.target.value)}
+                  placeholder="Optional description"
+                  rows={3}
+                  className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-2.5 text-sm outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                  Category Icon
+                </label>
+                <div className="grid grid-cols-5 gap-2">
+                  {availableIcons.map((iconObj) => {
+                    const IconComp = iconObj.icon;
+                    const isSelected = newCategoryIcon === iconObj.name;
+                    return (
+                      <button
+                        key={iconObj.name}
+                        onClick={() => setNewCategoryIcon(iconObj.name)}
+                        className={`p-3 rounded-lg border-2 transition-all ${isSelected
+                          ? "border-teal-500 bg-teal-500/20"
+                          : "border-border bg-muted hover:bg-teal-500/10 hover:border-teal-400"
+                          }`}
+                      >
+                        <IconComp
+                          size={20}
+                          className={`mx-auto transition-colors ${isSelected ? "text-teal-600" : "text-foreground"
+                            }`}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowNewCategoryModal(false)}
+                  className="flex-1 bg-muted border border-border text-foreground hover:bg-secondary transition-colors px-4 py-2.5 rounded-lg text-sm"
                 >
-                  {s.size} ₹{s.price}
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddCategory}
+                  className="flex-1 bg-teal-600 hover:bg-teal-700 text-white transition-colors border-none px-4 py-2.5 rounded-lg text-sm"
+                >
+                  Add Category
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT CATEGORY MODAL */}
+      {showEditCategoryModal && editingCategory && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-xl p-6 max-w-md w-full">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-semibold text-card-foreground">
+                Edit Category
+              </h3>
+              <button
+                onClick={() => {
+                  setShowEditCategoryModal(false);
+                  setEditingCategory(null);
+                }}
+                className="bg-transparent border-none text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                  Category Name*
+                </label>
+                <input
+                  value={editingCategory.name}
+                  onChange={(e) =>
+                    setEditingCategory({ ...editingCategory, name: e.target.value })
+                  }
+                  className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-2.5 text-sm outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                  Description
+                </label>
+                <textarea
+                  value={editingCategory.description || ""}
+                  onChange={(e) =>
+                    setEditingCategory({
+                      ...editingCategory,
+                      description: e.target.value,
+                    })
+                  }
+                  rows={3}
+                  className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-2.5 text-sm outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                  Category Icon
+                </label>
+                <div className="grid grid-cols-5 gap-2">
+                  {availableIcons.map((iconObj) => {
+                    const IconComp = iconObj.icon;
+                    const isSelected = editingCategory.icon_name === iconObj.name;
+                    return (
+                      <button
+                        key={iconObj.name}
+                        onClick={() =>
+                          setEditingCategory({
+                            ...editingCategory,
+                            icon_name: iconObj.name,
+                          })
+                        }
+                        className={`p-3 rounded-lg border-2 transition-all ${isSelected
+                          ? "border-teal-500 bg-teal-500/20"
+                          : "border-border bg-muted hover:bg-teal-500/10 hover:border-teal-400"
+                          }`}
+                      >
+                        <IconComp
+                          size={20}
+                          className={`mx-auto transition-colors ${isSelected ? "text-teal-600" : "text-foreground"
+                            }`}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={editingCategory.is_active}
+                  onChange={(e) =>
+                    setEditingCategory({
+                      ...editingCategory,
+                      is_active: e.target.checked,
+                    })
+                  }
+                  className="w-4 h-4"
+                />
+                <label className="text-sm">Active</label>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowEditCategoryModal(false);
+                    setEditingCategory(null);
+                  }}
+                  className="flex-1 bg-muted border border-border text-foreground hover:bg-secondary transition-colors px-4 py-2.5 rounded-lg text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEditCategory}
+                  className="flex-1 bg-teal-600 hover:bg-teal-700 text-white transition-colors border-none px-4 py-2.5 rounded-lg text-sm"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NEW PRODUCT MODAL WITH AUTOCOMPLETE AND IMAGE UPLOAD */}
+      {showNewProductModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-semibold text-card-foreground">
+                Add New Product
+              </h3>
+              <button
+                onClick={() => {
+                  setShowNewProductModal(false);
+                  setNewProductData({
+                    baseName: "",
+                    sizes: [{ size: "Regular", price: "" }],
+                    imageUrl: null,
+                  });
+                  setShowAutocomplete(false);
+                }}
+                className="bg-transparent border-none text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              {/* Image Options Section */}
+              <div className="space-y-2">
+                <label className="text-xs text-muted-foreground uppercase tracking-wide block">
+                  Product Image
+                </label>
+
+                {/* BUTTON TO OPEN DISH LIBRARY */}
+                <button
+                  type="button"
+                  onClick={() => setShowDishLibrary(true)}
+                  className="w-full px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  <Pizza size={16} />
+                  Choose from Dish Library
+                </button>
+
+                {/* UPLOAD IMAGE BUTTON */}
+                <label className="w-full px-3 py-2 bg-muted border border-border text-foreground hover:bg-secondary transition-colors rounded-lg text-sm flex items-center justify-center gap-2 cursor-pointer">
+                  <Upload size={16} />
+                  {uploadingImage ? "Uploading..." : "Upload Image from Computer"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(e, false)}
+                    disabled={uploadingImage}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {/* Show selected dish image preview */}
+              {newProductData.imageUrl && (
+                <div className="relative w-full h-32 bg-gray-200 rounded-lg overflow-hidden">
+                  <img
+                    src={newProductData.imageUrl}
+                    alt="Selected dish"
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    onClick={() =>
+                      setNewProductData({ ...newProductData, imageUrl: null })
+                    }
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+
+              {/* Product Name Input with Autocomplete */}
+              <div className="relative">
+                <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                  Product Name*
+                </label>
+                <input
+                  type="text"
+                  placeholder="Product name"
+                  value={newProductData.baseName}
+                  onChange={(e) =>
+                    setNewProductData({
+                      ...newProductData,
+                      baseName: e.target.value,
+                    })
+                  }
+                  className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-2.5 text-sm outline-none"
+                />
+
+                {/* Autocomplete Dropdown */}
+                {showAutocomplete && filteredDishes.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
+                    {filteredDishes.map((dish) => (
+                      <button
+                        key={dish.id}
+                        onClick={() => handleSelectDishFromAutocomplete(dish)}
+                        className="w-full flex items-center gap-3 p-3 hover:bg-muted transition-colors text-left border-b border-border last:border-b-0"
+                      >
+                        {dish.image_url && (
+                          <div className="w-12 h-12 bg-gray-200 rounded overflow-hidden flex-shrink-0">
+                            <img
+                              src={dish.image_url}
+                              alt={dish.name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-foreground">
+                            {dish.name}
+                          </p>
+                          {dish.description && (
+                            <p className="text-xs text-muted-foreground truncate">
+                              {dish.description}
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="mb-5">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                    Sizes & Prices*
+                  </label>
+                  <button
+                    onClick={() =>
+                      setNewProductData({
+                        ...newProductData,
+                        sizes: [
+                          ...newProductData.sizes,
+                          { size: "", price: "" },
+                        ],
+                      })
+                    }
+                    className="text-teal-500 hover:text-teal-600 transition-colors p-1"
+                  >
+                    <Plus size={18} />
+                  </button>
+                </div>
+                {newProductData.sizes.map((s, idx) => (
+                  <div key={idx} className="flex items-center gap-2 mb-3">
+                    {s.size === "Custom" || (s.size !== "" && !AVAILABLE_SIZES.includes(s.size)) ? (
+                      <div className="flex-1 flex gap-2">
+                        <select
+                          value="Custom"
+                          onChange={(e) => {
+                            const copy = [...newProductData.sizes];
+                            if (e.target.value !== "Custom") {
+                              copy[idx].size = e.target.value;
+                            }
+                            setNewProductData({ ...newProductData, sizes: copy });
+                          }}
+                          className="w-[100px] bg-muted text-foreground border border-border rounded-lg px-2 py-2 text-sm outline-none"
+                        >
+                          {AVAILABLE_SIZES.map(sizeOption => (
+                            <option key={sizeOption} value={sizeOption}>{sizeOption}</option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          placeholder="Custom size name"
+                          value={s.size === "Custom" ? "" : s.size}
+                          onChange={(e) => {
+                            const copy = [...newProductData.sizes];
+                            copy[idx].size = e.target.value;
+                            setNewProductData({ ...newProductData, sizes: copy });
+                          }}
+                          className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                        />
+                      </div>
+                    ) : (
+                      <select
+                        value={s.size || "Regular"}
+                        onChange={(e) => {
+                          const copy = [...newProductData.sizes];
+                          copy[idx].size = e.target.value;
+                          setNewProductData({ ...newProductData, sizes: copy });
+                        }}
+                        className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                      >
+                        <option value="" disabled>Select Size</option>
+                        {AVAILABLE_SIZES.map(sizeOption => (
+                          <option key={sizeOption} value={sizeOption}>{sizeOption}</option>
+                        ))}
+                      </select>
+                    )}
+                    <input
+                      type="number"
+                      placeholder="Price"
+                      value={s.price}
+                      onChange={(e) => {
+                        const copy = [...newProductData.sizes];
+                        copy[idx].price = e.target.value;
+                        setNewProductData({ ...newProductData, sizes: copy });
+                      }}
+                      className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                    />
+                    <button
+                      onClick={() => handleDeleteNewProductSizeRow(idx)}
+                      className="text-red-500 hover:text-red-600 transition-colors p-1"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowNewProductModal(false);
+                    setNewProductData({
+                      baseName: "",
+                      sizes: [{ size: "Regular", price: "" }],
+                      imageUrl: null,
+                    });
+                    setShowAutocomplete(false);
+                  }}
+                  className="flex-1 bg-muted border border-border text-foreground hover:bg-secondary transition-colors px-4 py-2.5 rounded-lg text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddProduct}
+                  disabled={uploadingImage}
+                  className="flex-1 bg-teal-600 hover:bg-teal-700 text-white transition-colors border-none px-4 py-2.5 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Add Product
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PRODUCT MODAL WITH IMAGE UPLOAD */}
+      {showEditProductModal && editingProductGroup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-semibold text-card-foreground">
+                Edit Product
+              </h3>
+              <button
+                onClick={() => {
+                  setShowEditProductModal(false);
+                  setEditingProductGroup(null);
+                  setEditingRowIndex(null);
+                }}
+                className="bg-transparent border-none text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Image Options Section */}
+            <div className="space-y-2 mb-4">
+              <label className="text-xs text-muted-foreground uppercase tracking-wide block">
+                Product Image
+              </label>
+
+              <button
+                type="button"
+                onClick={() => setShowDishLibrary(true)}
+                className="w-full px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+              >
+                <Pizza size={16} />
+                Choose from Dish Library
+              </button>
+
+              <label className="w-full px-3 py-2 bg-muted border border-border text-foreground hover:bg-secondary transition-colors rounded-lg text-sm flex items-center justify-center gap-2 cursor-pointer">
+                <Upload size={16} />
+                {uploadingImage ? "Uploading..." : "Upload Image from Computer"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleImageUpload(e, true)}
+                  disabled={uploadingImage}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {editingProductGroup.imageUrl && (
+              <div className="relative w-full h-32 bg-gray-200 rounded-lg overflow-hidden mb-3">
+                <img
+                  src={editingProductGroup.imageUrl}
+                  alt="Selected dish"
+                  className="w-full h-full object-cover"
+                />
+                <button
+                  onClick={() =>
+                    setEditingProductGroup({
+                      ...editingProductGroup,
+                      imageUrl: null,
+                    })
+                  }
+                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+
+            <div className="mb-4">
+              <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                Product Name*
+              </label>
+              <input
+                type="text"
+                placeholder="Product name"
+                value={editingProductGroup.baseName}
+                onChange={(e) =>
+                  setEditingProductGroup({
+                    ...editingProductGroup,
+                    baseName: e.target.value,
+                  })
+                }
+                className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-2.5 text-sm outline-none"
+              />
+            </div>
+
+            <div className="mb-5">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs text-muted-foreground uppercase tracking-wide">
+                  Sizes & Prices
+                </label>
+                <button
+                  onClick={handleAddSizeRow}
+                  className="text-teal-500 hover:text-teal-600 transition-colors p-1"
+                >
+                  <Plus size={18} />
+                </button>
+              </div>
+              {editingProductGroup.sizes.map((s, idx) => (
+                <div key={idx} className="mb-3">
+                  {editingRowIndex === idx ? (
+                    <div className="flex items-center gap-2">
+                      {s.size === "Custom" || (s.size !== "" && !AVAILABLE_SIZES.includes(s.size)) ? (
+                        <div className="flex-1 flex gap-2">
+                          <select
+                            value="Custom"
+                            onChange={(e) => {
+                              const copy = [...editingProductGroup.sizes];
+                              if (e.target.value !== "Custom") {
+                                copy[idx].size = e.target.value;
+                              }
+                              setEditingProductGroup({ ...editingProductGroup, sizes: copy });
+                            }}
+                            className="w-[100px] bg-muted text-foreground border border-border rounded-lg px-2 py-2 text-sm outline-none"
+                          >
+                            {AVAILABLE_SIZES.map(sizeOption => (
+                              <option key={sizeOption} value={sizeOption}>{sizeOption}</option>
+                            ))}
+                          </select>
+                          <input
+                            type="text"
+                            placeholder="Custom size name"
+                            value={s.size === "Custom" ? "" : s.size}
+                            onChange={(e) => {
+                              const copy = [...editingProductGroup.sizes];
+                              copy[idx].size = e.target.value;
+                              setEditingProductGroup({ ...editingProductGroup, sizes: copy });
+                            }}
+                            className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                          />
+                        </div>
+                      ) : (
+                        <select
+                          value={s.size || "Regular"}
+                          onChange={(e) => {
+                            const copy = [...editingProductGroup.sizes];
+                            copy[idx].size = e.target.value;
+                            setEditingProductGroup({ ...editingProductGroup, sizes: copy });
+                          }}
+                          className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                        >
+                          <option value="" disabled>Select Size</option>
+                          {AVAILABLE_SIZES.map(sizeOption => (
+                            <option key={sizeOption} value={sizeOption}>{sizeOption}</option>
+                          ))}
+                        </select>
+                      )}
+                      <input
+                        type="number"
+                        placeholder="Price"
+                        value={s.price}
+                        onChange={(e) => {
+                          const copy = [...editingProductGroup.sizes];
+                          copy[idx].price = e.target.value;
+                          setEditingProductGroup({
+                            ...editingProductGroup,
+                            sizes: copy,
+                          });
+                        }}
+                        className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                      />
+                      <button
+                        onClick={() => handleToggleEditRow(idx)}
+                        className="text-green-500 hover:text-green-600 transition-colors p-1"
+                        title="Done editing"
+                      >
+                        <Check size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSizeRow(idx)}
+                        className="text-red-500 hover:text-red-600 transition-colors p-1"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2 border border-border">
+                      <div className="flex-1">
+                        <span className="text-foreground text-sm font-medium">
+                          {s.size}
+                        </span>
+                        <span className="text-foreground text-sm ml-2">
+                          ₹{s.price}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleToggleEditRow(idx)}
+                        className="text-teal-500 hover:text-teal-600 transition-colors p-1"
+                        title="Edit this size"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteSizeRow(idx)}
+                        className="text-red-500 hover:text-red-600 transition-colors p-1"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
-            <div className="flex gap-2">
+
+            <div className="flex gap-3">
               <button
-                onClick={() => handleEditProduct(g)}
-                className="flex-1 border border-teal-500 text-teal-500 bg-transparent hover:bg-secondary transition-colors px-3 py-1.5 rounded text-xs"
+                onClick={() => {
+                  setShowEditProductModal(false);
+                  setEditingProductGroup(null);
+                  setEditingRowIndex(null);
+                }}
+                className="flex-1 bg-muted border border-border text-foreground hover:bg-secondary transition-colors px-4 py-2.5 rounded-lg text-sm"
               >
-                Edit
+                Cancel
               </button>
               <button
-                onClick={() => handleDeleteWholeProductGroup(g)}
-                className="flex-1 border border-red-500 text-red-500 bg-transparent hover:bg-red-50 transition-colors px-3 py-1.5 rounded text-xs"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-      {filteredGroups.length === 0 && (
-        <div className="text-center py-8 text-muted-foreground">
-          No products found in{" "}
-          {categoriesById[selectedCategoryId]?.name || "this category"}
-        </div>
-      )}
-    </div>
-  </div>
-
-  {/* Recent edits */}
-  <div className="bg-card border border-border rounded-xl">
-    <div className="border-b border-border p-4 sm:p-5">
-      <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
-        Recently Edited
-      </h2>
-    </div>
-    <div className="p-4 sm:p-5 space-y-3">
-      {recentEdits.length === 0 && (
-        <p className="text-sm text-muted-foreground">No recent edits.</p>
-      )}
-      {recentEdits.map((e, i) => (
-        <div
-          key={i}
-          className="flex items-center justify-between bg-muted border border-border rounded-full px-4 py-3 flex-wrap gap-2"
-        >
-          <span className="text-foreground text-xs sm:text-sm">
-            {e.action}
-          </span>
-          <span className="text-muted-foreground text-xs">
-            {formatTimeAgo(e.time)}
-          </span>
-        </div>
-      ))}
-    </div>
-  </div>
-
-  {/* NEW CATEGORY MODAL */}
-  {showNewCategoryModal && (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-card border border-border rounded-xl p-6 max-w-md w-full">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-semibold text-card-foreground">
-            Add New Category
-          </h3>
-          <button
-            onClick={() => setShowNewCategoryModal(false)}
-            className="bg-transparent border-none text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
-          >
-            <X size={20} />
-          </button>
-        </div>
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
-              Category Name*
-            </label>
-            <input
-              value={newCategoryName}
-              onChange={(e) => setNewCategoryName(e.target.value)}
-              placeholder="e.g., Beverages"
-              className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-2.5 text-sm outline-none"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
-              Description
-            </label>
-            <textarea
-              value={newCategoryDescription}
-              onChange={(e) => setNewCategoryDescription(e.target.value)}
-              placeholder="Optional description"
-              rows={3}
-              className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-2.5 text-sm outline-none"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
-              Category Icon
-            </label>
-            <div className="grid grid-cols-5 gap-2">
-              {availableIcons.map((iconObj) => {
-                const IconComp = iconObj.icon;
-                const isSelected = newCategoryIcon === iconObj.name;
-                return (
-                  <button
-                    key={iconObj.name}
-                    onClick={() => setNewCategoryIcon(iconObj.name)}
-                    className={`p-3 rounded-lg border-2 transition-all ${
-                      isSelected
-                        ? "border-teal-500 bg-teal-500/20"
-                        : "border-border bg-muted hover:bg-teal-500/10 hover:border-teal-400"
-                    }`}
-                  >
-                    <IconComp
-                      size={20}
-                      className={`mx-auto transition-colors ${
-                        isSelected ? "text-teal-600" : "text-foreground"
-                      }`}
-                    />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setShowNewCategoryModal(false)}
-              className="flex-1 bg-muted border border-border text-foreground hover:bg-secondary transition-colors px-4 py-2.5 rounded-lg text-sm"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleAddCategory}
-              className="flex-1 bg-teal-600 hover:bg-teal-700 text-white transition-colors border-none px-4 py-2.5 rounded-lg text-sm"
-            >
-              Add Category
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )}
-
-  {/* EDIT CATEGORY MODAL */}
-  {showEditCategoryModal && editingCategory && (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-card border border-border rounded-xl p-6 max-w-md w-full">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-semibold text-card-foreground">
-            Edit Category
-          </h3>
-          <button
-            onClick={() => {
-              setShowEditCategoryModal(false);
-              setEditingCategory(null);
-            }}
-            className="bg-transparent border-none text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
-          >
-            <X size={20} />
-          </button>
-        </div>
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
-              Category Name*
-            </label>
-            <input
-              value={editingCategory.name}
-              onChange={(e) =>
-                setEditingCategory({ ...editingCategory, name: e.target.value })
-              }
-              className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-2.5 text-sm outline-none"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
-              Description
-            </label>
-            <textarea
-              value={editingCategory.description || ""}
-              onChange={(e) =>
-                setEditingCategory({
-                  ...editingCategory,
-                  description: e.target.value,
-                })
-              }
-              rows={3}
-              className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-2.5 text-sm outline-none"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
-              Category Icon
-            </label>
-            <div className="grid grid-cols-5 gap-2">
-              {availableIcons.map((iconObj) => {
-                const IconComp = iconObj.icon;
-                const isSelected = editingCategory.icon_name === iconObj.name;
-                return (
-                  <button
-                    key={iconObj.name}
-                    onClick={() =>
-                      setEditingCategory({
-                        ...editingCategory,
-                        icon_name: iconObj.name,
-                      })
-                    }
-                    className={`p-3 rounded-lg border-2 transition-all ${
-                      isSelected
-                        ? "border-teal-500 bg-teal-500/20"
-                        : "border-border bg-muted hover:bg-teal-500/10 hover:border-teal-400"
-                    }`}
-                  >
-                    <IconComp
-                      size={20}
-                      className={`mx-auto transition-colors ${
-                        isSelected ? "text-teal-600" : "text-foreground"
-                      }`}
-                    />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={editingCategory.is_active}
-              onChange={(e) =>
-                setEditingCategory({
-                  ...editingCategory,
-                  is_active: e.target.checked,
-                })
-              }
-              className="w-4 h-4"
-            />
-            <label className="text-sm">Active</label>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
-                setShowEditCategoryModal(false);
-                setEditingCategory(null);
-              }}
-              className="flex-1 bg-muted border border-border text-foreground hover:bg-secondary transition-colors px-4 py-2.5 rounded-lg text-sm"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSaveEditCategory}
-              className="flex-1 bg-teal-600 hover:bg-teal-700 text-white transition-colors border-none px-4 py-2.5 rounded-lg text-sm"
-            >
-              Save Changes
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )}
-
-  {/* NEW PRODUCT MODAL WITH AUTOCOMPLETE AND IMAGE UPLOAD */}
-  {showNewProductModal && (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-card border border-border rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-semibold text-card-foreground">
-            Add New Product
-          </h3>
-          <button
-            onClick={() => {
-              setShowNewProductModal(false);
-              setNewProductData({
-                baseName: "",
-                sizes: [{ size: "Regular", price: "" }],
-                imageUrl: null,
-              });
-              setShowAutocomplete(false);
-            }}
-            className="bg-transparent border-none text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
-          >
-            <X size={20} />
-          </button>
-        </div>
-        <div className="space-y-4">
-          {/* Image Options Section */}
-          <div className="space-y-2">
-            <label className="text-xs text-muted-foreground uppercase tracking-wide block">
-              Product Image
-            </label>
-
-            {/* BUTTON TO OPEN DISH LIBRARY */}
-            <button
-              type="button"
-              onClick={() => setShowDishLibrary(true)}
-              className="w-full px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-            >
-              <Pizza size={16} />
-              Choose from Dish Library
-            </button>
-
-            {/* UPLOAD IMAGE BUTTON */}
-            <label className="w-full px-3 py-2 bg-muted border border-border text-foreground hover:bg-secondary transition-colors rounded-lg text-sm flex items-center justify-center gap-2 cursor-pointer">
-              <Upload size={16} />
-              {uploadingImage ? "Uploading..." : "Upload Image from Computer"}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleImageUpload(e, false)}
+                onClick={handleSaveEditProduct}
                 disabled={uploadingImage}
-                className="hidden"
-              />
-            </label>
-          </div>
-
-          {/* Show selected dish image preview */}
-          {newProductData.imageUrl && (
-            <div className="relative w-full h-32 bg-gray-200 rounded-lg overflow-hidden">
-              <img
-                src={newProductData.imageUrl}
-                alt="Selected dish"
-                className="w-full h-full object-cover"
-              />
-              <button
-                onClick={() =>
-                  setNewProductData({ ...newProductData, imageUrl: null })
-                }
-                className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                className="flex-1 bg-teal-600 hover:bg-teal-700 text-white transition-colorsborder-none px-4 py-2.5 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <X size={16} />
+                Save Changes
               </button>
             </div>
-          )}
+          </div>
+        </div>
+      )}{/* DISH LIBRARY MODAL */}
+      {showDishLibrary && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-card-foreground">
+                Select Dish
+              </h3>
+              <button
+                onClick={() => setShowDishLibrary(false)}
+                className="bg-transparent border-none text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
 
-          {/* Product Name Input with Autocomplete */}
-          <div className="relative">
-            <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
-              Product Name*
-            </label>
-            <input
-              type="text"
-              placeholder="Product name"
-              value={newProductData.baseName}
-              onChange={(e) =>
-                setNewProductData({
-                  ...newProductData,
-                  baseName: e.target.value,
-                })
-              }
-              className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-2.5 text-sm outline-none"
-            />
-
-            {/* Autocomplete Dropdown */}
-            {showAutocomplete && filteredDishes.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
-                {filteredDishes.map((dish) => (
+            {dishTemplates.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No dishes in library yet. Create some via DishTemplates API.
+              </p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {dishTemplates.map((dish) => (
                   <button
                     key={dish.id}
-                    onClick={() => handleSelectDishFromAutocomplete(dish)}
-                    className="w-full flex items-center gap-3 p-3 hover:bg-muted transition-colors text-left border-b border-border last:border-b-0"
+                    onClick={() => {
+                      // Only update image, don't change the name
+                      if (showNewProductModal) {
+                        setNewProductData((prev) => ({
+                          ...prev,
+                          imageUrl: dish.image_url,
+                        }));
+                      }
+                      if (showEditProductModal) {
+                        setEditingProductGroup((prev) =>
+                          prev
+                            ? {
+                              ...prev,
+                              imageUrl: dish.image_url,
+                            }
+                            : prev
+                        );
+                      }
+                      setShowDishLibrary(false);
+                    }}
+                    className="bg-muted border border-border rounded-lg overflow-hidden text-left hover:border-teal-500 transition-colors"
                   >
-                    {dish.image_url && (
-                      <div className="w-12 h-12 bg-gray-200 rounded overflow-hidden flex-shrink-0">
-                        <img
-                          src={dish.image_url}
-                          alt={dish.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    )}
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-foreground">
+                    <div className="w-full h-24 bg-gray-200 overflow-hidden">
+                      <img
+                        src={dish.image_url}
+                        alt={dish.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="p-2">
+                      <p className="text-sm font-medium text-foreground truncate">
                         {dish.name}
                       </p>
-                      {dish.description && (
-                        <p className="text-xs text-muted-foreground truncate">
-                          {dish.description}
-                        </p>
-                      )}
                     </div>
                   </button>
                 ))}
               </div>
             )}
           </div>
-
-          <div className="mb-5">
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs text-muted-foreground uppercase tracking-wide">
-                Sizes & Prices*
-              </label>
-              <button
-                onClick={() =>
-                  setNewProductData({
-                    ...newProductData,
-                    sizes: [
-                      ...newProductData.sizes,
-                      { size: "", price: "" },
-                    ],
-                  })
-                }
-                className="text-teal-500 hover:text-teal-600 transition-colors p-1"
-              >
-                <Plus size={18} />
-              </button>
-            </div>
-            {newProductData.sizes.map((s, idx) => (
-              <div key={idx} className="flex items-center gap-2 mb-3">
-                <input
-                  type="text"
-                  placeholder="Size (e.g., Regular)"
-                  value={s.size}
-                  onChange={(e) => {
-                    const copy = [...newProductData.sizes];
-                    copy[idx].size = e.target.value;
-                    setNewProductData({ ...newProductData, sizes: copy });
-                  }}
-                  className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
-                />
-                <input
-                  type="number"
-                  placeholder="Price"
-                  value={s.price}
-                  onChange={(e) => {
-                    const copy = [...newProductData.sizes];
-                    copy[idx].price = e.target.value;
-                    setNewProductData({ ...newProductData, sizes: copy });
-                  }}
-                  className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
-                />
-                <button
-                  onClick={() => handleDeleteNewProductSizeRow(idx)}
-                  className="text-red-500 hover:text-red-600 transition-colors p-1"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
-                setShowNewProductModal(false);
-                setNewProductData({
-                  baseName: "",
-                  sizes: [{ size: "Regular", price: "" }],
-                  imageUrl: null,
-                });
-                setShowAutocomplete(false);
-              }}
-              className="flex-1 bg-muted border border-border text-foreground hover:bg-secondary transition-colors px-4 py-2.5 rounded-lg text-sm"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleAddProduct}
-              disabled={uploadingImage}
-              className="flex-1 bg-teal-600 hover:bg-teal-700 text-white transition-colors border-none px-4 py-2.5 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Add Product
-            </button>
-          </div>
         </div>
-      </div>
-    </div>
-  )}
-
-  {/* EDIT PRODUCT MODAL WITH IMAGE UPLOAD */}
-  {showEditProductModal && editingProductGroup && (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-card border border-border rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-semibold text-card-foreground">
-            Edit Product
-          </h3>
-          <button
-            onClick={() => {
-              setShowEditProductModal(false);
-              setEditingProductGroup(null);
-              setEditingRowIndex(null);
-            }}
-            className="bg-transparent border-none text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Image Options Section */}
-        <div className="space-y-2 mb-4">
-          <label className="text-xs text-muted-foreground uppercase tracking-wide block">
-            Product Image
-          </label>
-
-          <button
-            type="button"
-            onClick={() => setShowDishLibrary(true)}
-            className="w-full px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-          >
-            <Pizza size={16} />
-            Choose from Dish Library
-          </button>
-
-          <label className="w-full px-3 py-2 bg-muted border border-border text-foreground hover:bg-secondary transition-colors rounded-lg text-sm flex items-center justify-center gap-2 cursor-pointer">
-            <Upload size={16} />
-            {uploadingImage ? "Uploading..." : "Upload Image from Computer"}
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => handleImageUpload(e, true)}
-              disabled={uploadingImage}
-              className="hidden"
-            />
-          </label>
-        </div>
-
-        {editingProductGroup.imageUrl && (
-          <div className="relative w-full h-32 bg-gray-200 rounded-lg overflow-hidden mb-3">
-            <img
-              src={editingProductGroup.imageUrl}
-              alt="Selected dish"
-              className="w-full h-full object-cover"
-            />
-            <button
-              onClick={() =>
-                setEditingProductGroup({
-                  ...editingProductGroup,
-                  imageUrl: null,
-                })
-              }
-              className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        )}
-
-        <div className="mb-4">
-          <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
-            Product Name*
-          </label>
-          <input
-            type="text"
-            placeholder="Product name"
-            value={editingProductGroup.baseName}
-            onChange={(e) =>
-              setEditingProductGroup({
-                ...editingProductGroup,
-                baseName: e.target.value,
-              })
-            }
-            className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-2.5 text-sm outline-none"
-          />
-        </div>
-
-        <div className="mb-5">
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs text-muted-foreground uppercase tracking-wide">
-              Sizes & Prices
-            </label>
-            <button
-              onClick={handleAddSizeRow}
-              className="text-teal-500 hover:text-teal-600 transition-colors p-1"
-            >
-              <Plus size={18} />
-            </button>
-          </div>
-          {editingProductGroup.sizes.map((s, idx) => (
-            <div key={idx} className="mb-3">
-              {editingRowIndex === idx ? (
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="Size (e.g., Regular)"
-                    value={s.size}
-                    onChange={(e) => {
-                      const copy = [...editingProductGroup.sizes];
-                      copy[idx].size = e.target.value;
-                      setEditingProductGroup({
-                        ...editingProductGroup,
-                        sizes: copy,
-                      });
-                    }}
-                    className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Price"
-                    value={s.price}
-                    onChange={(e) => {
-                      const copy = [...editingProductGroup.sizes];
-                      copy[idx].price = e.target.value;
-                      setEditingProductGroup({
-                        ...editingProductGroup,
-                        sizes: copy,
-                      });
-                    }}
-                    className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
-                  />
-                  <button
-                    onClick={() => handleToggleEditRow(idx)}
-                    className="text-green-500 hover:text-green-600 transition-colors p-1"
-                    title="Done editing"
-                  >
-                    <Check size={16} />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteSizeRow(idx)}
-                    className="text-red-500 hover:text-red-600 transition-colors p-1"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2 border border-border">
-                  <div className="flex-1">
-                    <span className="text-foreground text-sm font-medium">
-                      {s.size}
-                    </span>
-                    <span className="text-foreground text-sm ml-2">
-                      ₹{s.price}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => handleToggleEditRow(idx)}
-                    className="text-teal-500 hover:text-teal-600 transition-colors p-1"
-                    title="Edit this size"
-                  >
-                    <Pencil size={16} />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteSizeRow(idx)}
-                    className="text-red-500 hover:text-red-600 transition-colors p-1"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            onClick={() => {
-              setShowEditProductModal(false);
-              setEditingProductGroup(null);
-              setEditingRowIndex(null);
-            }}
-            className="flex-1 bg-muted border border-border text-foreground hover:bg-secondary transition-colors px-4 py-2.5 rounded-lg text-sm"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSaveEditProduct}
-            disabled={uploadingImage}
-            className="flex-1 bg-teal-600 hover:bg-teal-700 text-white transition-colorsborder-none px-4 py-2.5 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed"
->
-Save Changes
-</button>
-</div>
-</div>
-</div>
-)}{/* DISH LIBRARY MODAL */}
-  {showDishLibrary && (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-card border border-border rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-card-foreground">
-            Select Dish
-          </h3>
-          <button
-            onClick={() => setShowDishLibrary(false)}
-            className="bg-transparent border-none text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        {dishTemplates.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No dishes in library yet. Create some via DishTemplates API.
-          </p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {dishTemplates.map((dish) => (
-              <button
-                key={dish.id}
-                onClick={() => {
-                  // Only update image, don't change the name
-                  if (showNewProductModal) {
-                    setNewProductData((prev) => ({
-                      ...prev,
-                      imageUrl: dish.image_url,
-                    }));
-                  }
-                  if (showEditProductModal) {
-                    setEditingProductGroup((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            imageUrl: dish.image_url,
-                          }
-                        : prev
-                    );
-                  }
-                  setShowDishLibrary(false);
-                }}
-                className="bg-muted border border-border rounded-lg overflow-hidden text-left hover:border-teal-500 transition-colors"
-              >
-                <div className="w-full h-24 bg-gray-200 overflow-hidden">
-                  <img
-                    src={dish.image_url}
-                    alt={dish.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="p-2">
-                  <p className="text-sm font-medium text-foreground truncate">
-                    {dish.name}
-                  </p>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  )}
-</div>);
+      )}
+    </div>);
 };
 export default Menu;

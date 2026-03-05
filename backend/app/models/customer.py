@@ -27,5 +27,10 @@ class Customer(Base):
     # Relationships
     orders = relationship("Order", back_populates="customer", cascade="all, delete-orphan")
 
+    @property
+    def orders_count(self):
+        """Count total orders for this customer"""
+        return len(self.orders)
+
     def __repr__(self):
         return f"<Customer(id={self.id}, name='{self.first_name} {self.last_name}', points={self.loyalty_points})>"

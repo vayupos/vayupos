@@ -17,6 +17,7 @@ class CouponBase(BaseModel):
     max_uses: Optional[int] = Field(None, ge=1, description="Maximum uses, NULL for unlimited")
     valid_from: Optional[datetime] = None
     valid_until: Optional[datetime] = None
+    product_id: Optional[int] = None
     description: Optional[str] = None
 
 
@@ -45,6 +46,7 @@ class CouponUpdate(BaseModel):
     max_uses: Optional[int] = Field(None, ge=1)
     valid_from: Optional[datetime] = None
     valid_until: Optional[datetime] = None
+    product_id: Optional[int] = None
     is_active: Optional[bool] = None
     description: Optional[str] = None
 
@@ -52,6 +54,7 @@ class CouponUpdate(BaseModel):
 class CouponResponse(CouponBase):
     id: int
     used_count: int
+    product_id: Optional[int] = None
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
