@@ -1,0 +1,5 @@
+{
+    "backend_url": "http://10.129.18.137:8000/api/v1",
+    "poll_interval": 2,
+    "log_level": "INFO"
+}
