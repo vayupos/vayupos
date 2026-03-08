@@ -12,7 +12,7 @@ class PrintJob(Base):
     printer_ip = Column(String(50), nullable=False)
     printer_port = Column(Integer, default=9100)
     content = Column(Text, nullable=False)
-    is_printed = Column(Boolean, default=False, nullable=False)
+    status = Column(String(20), default="pending", nullable=False) # pending, printed, failed
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     printed_at = Column(DateTime, nullable=True)
 

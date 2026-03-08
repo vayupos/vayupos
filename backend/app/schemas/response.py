@@ -359,7 +359,7 @@ class PrintJobBase(BaseModel):
     printer_ip: str = Field(..., max_length=50)
     printer_port: int = Field(default=9100)
     content: str
-    is_printed: bool = False
+    status: str = "pending"
 
 
 class PrintJobCreate(PrintJobBase):

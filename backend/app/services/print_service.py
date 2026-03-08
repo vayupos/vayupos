@@ -85,7 +85,7 @@ class PrintService:
                 printer_ip=ip,
                 printer_port=port,
                 content=content,
-                is_printed=False
+                status="pending"
             )
             db.add(db_print_job)
             created_jobs.append(db_print_job)
@@ -96,14 +96,14 @@ class PrintService:
     @staticmethod
     def get_pending_jobs(db: Session) -> list[PrintJob]:
         """Fetch all unprinted jobs"""
-        return db.query(PrintJob).filter(PrintJob.is_printed == False).order_by(PrintJob.created_at.asc()).all()
+        return db.query(PrintJob).filter(PrintJob.status == "pending").order_by(PrintJob.created_at.asc()).all()
 
     @staticmethod
     def mark_as_printed(db: Session, job_id: int) -> PrintJob:
         """Mark a job as printed"""
         db_job = db.query(PrintJob).get(job_id)
         if db_job:
-            db_job.is_printed = True
+            db_job.status = "printed"
             db_job.printed_at = datetime.utcnow()
             db.commit()
             db.refresh(db_job)

@@ -16,6 +16,7 @@ def get_pending_print_jobs(
     return jobs
 
 @router.post("/{id}/mark-printed", response_model=PrintJobResponse)
+@router.post("/{id}/complete", response_model=PrintJobResponse)
 def mark_print_job_as_printed(
     id: int,
     db: Session = Depends(get_db)
@@ -25,6 +26,25 @@ def mark_print_job_as_printed(
     if not job:
         raise HTTPException(status_code=404, detail="Print job not found")
     return job
+
+@router.post("", response_model=PrintJobResponse)
+def create_manual_print_job(
+    job_data: PrintJobResponse, # Using Response schema as template for manual creation
+    db: Session = Depends(get_db)
+):
+    """Create a print job manually (for testing)"""
+    from app.models.print_job import PrintJob
+    db_job = PrintJob(
+        order_id=job_data.order_id,
+        printer_ip=job_data.printer_ip,
+        printer_port=job_data.printer_port,
+        content=job_data.content,
+        status="pending"
+    )
+    db.add(db_job)
+    db.commit()
+    db.refresh(db_job)
+    return db_job
 
 @router.get("", response_model=List[PrintJobResponse])
 def list_print_jobs(
