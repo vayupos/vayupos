@@ -46,7 +46,7 @@ class PrintService:
         # Paper feed and cut command (ESC/POS)
         # Feed 4 lines then cut
         content += "\n\n\n\n"
-        content += "\x1dV\x00"  # ESC/POS cut command (GS V m)
+        content += "\x1dV\x01"  # ESC/POS cut command (GS V 1) - Avoids \x00 for DB compatibility
         
         return content
 
