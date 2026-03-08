@@ -51,8 +51,9 @@ class PrintService:
         return content
 
     @staticmethod
-    def create_print_jobs(db: Session, order: Order) -> list[PrintJob]:
+    def create_kot_for_order(db: Session, order: Order) -> list[PrintJob]:
         """Group items by category's printer and create print jobs"""
+        print(f"Creating KOT for order {order.id}")
         # Dictionary to group items: {(ip, port): [order_items]}
         printer_groups = defaultdict(list)
         

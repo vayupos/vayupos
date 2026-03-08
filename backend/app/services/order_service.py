@@ -123,11 +123,18 @@ class OrderService:
                 notes=f"Sold via order {db_order.order_number}",
             )
 
-        # Create Print Jobs for KOT (Splits by printer if needed)
-        PrintService.create_print_jobs(db=db, order=db_order)
-
         db.commit()
         db.refresh(db_order)
+
+        # Create Print Jobs for KOT (Splits by printer if needed)
+        try:
+            PrintService.create_kot_for_order(db=db, order=db_order)
+            db.commit()
+        except Exception as e:
+            print(f"Error creating KOT: {e}")
+            # Don't fail the whole order if KOT fails
+            db.rollback()
+
         return db_order
 
     @staticmethod
