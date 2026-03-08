@@ -2,7 +2,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from app.api.dependencies import get_db
-from app.schemas import PrintJobResponse
+from app.schemas import PrintJobResponse, PrintJobCreate
 from app.services.print_service import PrintService
 
 router = APIRouter(prefix="/print-jobs", tags=["Print Jobs"])
@@ -27,9 +27,11 @@ def mark_print_job_as_printed(
         raise HTTPException(status_code=404, detail="Print job not found")
     return job
 
+
 @router.post("", response_model=PrintJobResponse)
+@router.post("/", response_model=PrintJobResponse)
 def create_manual_print_job(
-    job_data: PrintJobResponse, # Using Response schema as template for manual creation
+    job_data: PrintJobCreate,
     db: Session = Depends(get_db)
 ):
     """Create a print job manually (for testing)"""
