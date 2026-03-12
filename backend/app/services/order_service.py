@@ -58,6 +58,24 @@ class OrderService:
         # Calculate totals
         tax = order_create.tax or Decimal("0")
         discount = order_create.discount or Decimal("0")
+        
+        # Handle coupon code if provided
+        if order_create.coupon_code:
+            from app.services.coupon_service import CouponService
+            valid, eligible, message, coupon, discount_amount = CouponService.validate_coupon(
+                db,
+                order_create.coupon_code,
+                float(subtotal),
+                customer_id=order_create.customer_id,
+                apply_discount=True # Increment usage count
+            )
+            if not valid or not eligible:
+                raise bad_request_exception(f"Coupon error: {message}")
+            
+            # Override discount with coupon discount if provided, or add to it?
+            # User said: "If valid, apply the discount"
+            discount = Decimal(str(discount_amount))
+
         total = subtotal + tax - discount
 
         # Create order

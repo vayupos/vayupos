@@ -15,6 +15,7 @@ class Coupon(Base):
     valid_from = Column(DateTime(timezone=True), server_default=func.now())
     valid_until = Column(DateTime(timezone=True), nullable=True)
     is_active = Column(Boolean, default=True)
+    is_first_order_only = Column(Boolean, default=False)
     product_id = Column(Integer, ForeignKey("products.id"), nullable=True)  # Optional: specific product
     description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

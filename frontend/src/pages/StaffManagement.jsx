@@ -362,7 +362,13 @@ const StaffManagement = () => {
 
         try {
             setLoading(true);
-            const salaryNum = parseFloat(newStaff.salary.replace(/[^0-9]/g, '')) || 0;
+            const salaryNum = parseFloat(newStaff.salary.toString().replace(/[^0-9.]/g, '')) || 0;
+
+            if (salaryNum <= 100) {
+                alert('Salary amount must be greater than ₹100.');
+                setLoading(false);
+                return;
+            }
 
             const requestBody = {
                 name: newStaff.name,
@@ -447,7 +453,13 @@ const StaffManagement = () => {
 
         try {
             setLoading(true);
-            const salaryNum = parseFloat(editingStaff.salary.replace(/[^0-9]/g, ''));
+            const salaryNum = parseFloat(editingStaff.salary.toString().replace(/[^0-9.]/g, '')) || 0;
+
+            if (salaryNum <= 100) {
+                alert('Salary amount must be greater than ₹100.');
+                setLoading(false);
+                return;
+            }
 
             const requestBody = {
                 name: editingStaff.name,
@@ -780,7 +792,14 @@ const StaffManagement = () => {
                                 </div>
 
                                 <div className="text-sm text-card-foreground md:text-left text-right">
-                                    {member.salary}
+                                    {member.salaryAmount <= 100 ? (
+                                        <div className="flex items-center gap-1 xl:justify-start justify-end text-red-500 font-medium">
+                                            {member.salary}
+                                            <AlertCircle className="w-4 h-4" title="Invalid Salary: Must be > ₹100" />
+                                        </div>
+                                    ) : (
+                                        member.salary
+                                    )}
                                 </div>
 
                                 <div className="text-sm text-card-foreground md:text-left text-right">
@@ -988,9 +1007,10 @@ const StaffManagement = () => {
                                 </label>
                                 <input
                                     type="number"
+                                    min="101"
                                     value={newStaff.salary}
                                     onChange={(e) =>
-                                        setNewStaff({ ...newStaff, salary: e.target.value })
+                                        setNewStaff({ ...newStaff, salary: e.target.value.replace(/[^0-9]/g, '') })
                                     }
                                     className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
                                 />
@@ -1130,11 +1150,12 @@ const StaffManagement = () => {
                                 </label>
                                 <input
                                     type="number"
+                                    min="101"
                                     value={editingStaff.salary}
                                     onChange={(e) =>
                                         setEditingStaff({
                                             ...editingStaff,
-                                            salary: e.target.value,
+                                            salary: e.target.value.replace(/[^0-9]/g, ''),
                                         })
                                     }
                                     className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"

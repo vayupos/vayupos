@@ -65,6 +65,7 @@ function Offers() {
   const [coupons, setCoupons] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [products, setProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
@@ -111,23 +112,30 @@ function Offers() {
     loadProducts();
   }, []);
 
-  const loadCoupons = async () => {
+  const loadCoupons = async (isRetry = false) => {
     try {
-      setLoading(true);
-      console.log('Loading coupons...');
+      if (!isRetry) setLoading(true);
       const response = await api.get('/coupons/', {
         params: { skip: 0, limit: 100 }
       });
-
-      console.log('Coupons response:', response.data);
       const couponData = response.data || [];
       setCoupons(Array.isArray(couponData) ? couponData : []);
+      setLoadError(null); // clear any previous error
     } catch (error) {
       console.error('LOAD COUPONS ERROR:', error?.response?.data || error);
-      if (error?.response?.status !== 401) {
-        alert('Failed to load coupons. Please try again.');
+      if (error?.response?.status === 401) {
+        // Auth error — don't retry
+        setCoupons([]);
+        return;
       }
-      setCoupons([]);
+      if (!isRetry) {
+        // Silent auto-retry after 1.2s (gives server time to finish hot-reload)
+        setTimeout(() => loadCoupons(true), 1200);
+      } else {
+        // Retry also failed — show inline error, no alert popup
+        setCoupons([]);
+        setLoadError('Could not load coupons. Check your connection or try syncing.');
+      }
     } finally {
       setLoading(false);
     }
@@ -242,12 +250,21 @@ function Offers() {
       return;
     }
 
+    // Validate min order amount must be a multiple of 50
+    const minOrderVal = formData.min_order_amount ? parseFloat(formData.min_order_amount) : 0;
+    if (minOrderVal !== 0 && minOrderVal % 50 !== 0) {
+      const lower = Math.floor(minOrderVal / 50) * 50;
+      const upper = lower + 50;
+      alert(`Minimum order must be a rounded value (₹100, ₹200, ₹300 etc.)\nYou entered ₹${minOrderVal}. Did you mean ₹${lower} or ₹${upper}?`);
+      return;
+    }
+
     try {
       const payload = {
         code: formData.code.toUpperCase().trim(),
         discount_type: formData.discount_type,
         discount_value: parseFloat(formData.discount_value),
-        min_order_amount: formData.min_order_amount ? parseFloat(formData.min_order_amount) : 0,
+        min_order_amount: minOrderVal,
         max_uses: formData.max_uses ? parseInt(formData.max_uses) : 1,
         product_id: formData.product_id ? parseInt(formData.product_id) : null,
       };
@@ -284,10 +301,14 @@ function Offers() {
     } catch (error) {
       console.error('SAVE COUPON ERROR:', error?.response?.data || error);
 
-      if (error?.response?.data?.detail) {
-        const detail = error.response.data.detail;
+      const status = error?.response?.status;
+      const detail = error?.response?.data?.detail;
+
+      if (status === 409) {
+        alert(`❌ Duplicate Code: ${detail || 'A coupon with this code already exists. Please use a different code.'}`);
+      } else if (detail) {
         if (Array.isArray(detail)) {
-          const errors = detail.map(err => `${err.loc.join('.')}: ${err.msg}`).join('\n');
+          const errors = detail.map(err => `• ${err.loc?.slice(-1)[0] || ''}: ${err.msg}`).join('\n');
           alert(`Validation Error:\n${errors}`);
         } else {
           alert(`Error: ${detail}`);
@@ -344,8 +365,8 @@ function Offers() {
   };
 
   const handleSync = async () => {
+    setLoadError(null);
     await loadCoupons();
-    alert('Coupons synced successfully!');
   };
 
   const isCouponExpired = (coupon) => {
@@ -587,13 +608,14 @@ function Offers() {
               <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Min Order Amount</label>
               <input
                 type="number"
-                step="0.01"
+                step="50"
                 min="0"
                 value={formData.min_order_amount}
                 onChange={(e) => handleInputChange('min_order_amount', e.target.value)}
                 className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base focus:border-teal-600"
-                placeholder="e.g., 299"
+                placeholder="e.g., 300"
               />
+              <p className="text-muted-foreground text-xs mt-1">Must be a rounded value: ₹100, ₹150, ₹200, ₹300…</p>
             </div>
             <div>
               <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Max Uses</label>
@@ -696,7 +718,20 @@ function Offers() {
         <div className="max-w-[1600px] mx-auto">
           <div className="flex flex-col gap-4 sm:gap-5 lg:gap-6">
 
-            {/* Coupons List */}
+        {/* Inline error banner (replaces the blocking alert popup) */}
+        {loadError && (
+          <div className="flex items-center justify-between gap-3 bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg px-4 py-3 mb-4 text-sm">
+            <span>⚠️ {loadError}</span>
+            <button
+              onClick={() => { setLoadError(null); loadCoupons(); }}
+              className="ml-4 px-3 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Coupons List */}
             <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 lg:p-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3">
                 <h2 className="text-foreground text-sm sm:text-base lg:text-lg font-semibold">
@@ -751,6 +786,7 @@ function Offers() {
                     <option value="All">All</option>
                     <option value="Active">Active</option>
                     <option value="Expired">Expired</option>
+                    <option value="Inactive">Inactive</option>
                   </select>
                 </div>
               </div>
@@ -799,7 +835,7 @@ function Offers() {
                             {coupon.min_order_amount ? `₹${coupon.min_order_amount}` : '-'}
                           </td>
                           <td className="text-foreground py-3 px-2 text-sm">
-                            {coupon.used_count || 0}/{coupon.max_uses || 0}
+                            {coupon.used_count || 0} / {coupon.max_uses ? coupon.max_uses : '∞'}
                           </td>
                           <td className="text-foreground py-3 px-2 text-xs whitespace-nowrap">
                             {formatValidity(coupon)}
@@ -807,8 +843,10 @@ function Offers() {
                           <td className="py-3 px-2">
                             <span
                               className={`inline-block px-2.5 py-1 text-white text-xs rounded-full ${displayStatus === 'Active'
-                                ? 'bg-teal-600'
-                                : 'bg-red-500'
+                                ? 'bg-emerald-600'
+                                : displayStatus === 'Expired'
+                                  ? 'bg-red-500'
+                                  : 'bg-gray-500'
                                 }`}
                             >
                               {displayStatus}
@@ -860,7 +898,11 @@ function Offers() {
                         </div>
                         <div>
                           <span
-                            className={`px-2 py-1 text-white text-xs rounded-full whitespace-nowrap flex-shrink-0 ${displayStatus === 'Active' ? 'bg-teal-600' : 'bg-red-500'
+                            className={`px-2 py-1 text-white text-xs rounded-full whitespace-nowrap flex-shrink-0 ${displayStatus === 'Active'
+                              ? 'bg-emerald-600'
+                              : displayStatus === 'Expired'
+                                ? 'bg-red-500'
+                                : 'bg-gray-500'
                               }`}
                           >
                             {displayStatus}
@@ -896,9 +938,9 @@ function Offers() {
                           </span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Used</span>
+                          <span className="text-muted-foreground">Used / Max</span>
                           <span className="text-foreground">
-                            {coupon.used_count || 0}/{coupon.max_uses || 0}
+                            {coupon.used_count || 0} / {coupon.max_uses ? coupon.max_uses : '∞'}
                           </span>
                         </div>
                         <div className="flex justify-between">

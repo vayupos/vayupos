@@ -206,10 +206,10 @@ const Menu = () => {
     if (!showNewProductModal) return;
     (async () => {
       try {
-        const res = await api.get("/dish-templates");
+        const res = await api.get("/upload/dish-library");
         setDishTemplates(res.data);
       } catch (err) {
-        console.error("LOAD DISH TEMPLATES ERROR:", err?.response?.data || err);
+        console.error("LOAD DISH LIBRARY ERROR:", err?.response?.data || err);
       }
     })();
   }, [showNewProductModal]);
@@ -219,11 +219,11 @@ const Menu = () => {
     if (!showDishLibrary) return;
     (async () => {
       try {
-        const res = await api.get("/dish-templates");
+        const res = await api.get("/upload/dish-library");
         setDishTemplates(res.data);
       } catch (err) {
-        console.error("LOAD DISH TEMPLATES ERROR:", err?.response?.data || err);
-        alert("Failed to load dish library");
+        console.error("LOAD DISH LIBRARY ERROR:", err?.response?.data || err);
+        alert("Failed to load dish library images");
       }
     })();
   }, [showDishLibrary]);
@@ -382,9 +382,17 @@ const Menu = () => {
       const formData = new FormData();
       formData.append("file", file);
 
+      // Pass dish name so the file gets a meaningful name in S3
+      const dishName = isEditMode
+        ? editingProductGroup?.baseName
+        : newProductData.baseName;
+      if (dishName) {
+        formData.append("dish_name", dishName);
+      }
+
       console.log("📤 Uploading image:", file.name);
 
-      const res = await api.post("/upload-image", formData, {
+      const res = await api.post("/upload/image", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
@@ -554,12 +562,26 @@ const Menu = () => {
       alert("Select a category first");
       return;
     }
+    const currentCategory = categoriesById[selectedCategoryId];
+    if (currentCategory && !currentCategory.is_active) {
+      alert(`Category "${currentCategory.name}" is Inactive. Please activate it first to add products.`);
+      return;
+    }
+
     const baseName = newProductData.baseName.trim();
+    const incompleteSizes = newProductData.sizes.filter(
+      (s) => s.size.trim() && !s.price
+    );
+    if (incompleteSizes.length > 0) {
+      alert("All entered sizes must have a price.");
+      return;
+    }
+
     const validSizes = newProductData.sizes.filter(
       (s) => s.size.trim() && s.price
     );
     if (!baseName || validSizes.length === 0) {
-      alert("Enter product name and at least one size with price");
+      alert("Enter product name and at least one size with a valid price");
       return;
     }
 
@@ -615,6 +637,14 @@ const Menu = () => {
     const validSizes = editingProductGroup.sizes.filter(
       (s) => s.size.trim() && s.price
     );
+    const incompleteSizes = editingProductGroup.sizes.filter(
+      (s) => s.size.trim() && !s.price
+    );
+    if (incompleteSizes.length > 0) {
+      alert("All sizes must have a valid price.");
+      return;
+    }
+
     if (validSizes.length === 0) {
       alert("Need at least one size with price");
       return;
@@ -886,16 +916,16 @@ const Menu = () => {
               <div
                 key={cat.id}
                 onClick={() => setSelectedCategoryId(cat.id)}
-                className="bg-muted rounded-lg cursor-pointer hover:bg-secondary transition-colors p-4"
+                className={`bg-muted rounded-lg cursor-pointer hover:bg-secondary transition-all p-4 ${!cat.is_active ? 'opacity-60 grayscale-[0.5]' : ''}`}
                 style={{
                   border: isSelected
-                    ? "1px solid #1ABC9C"
+                    ? "2px solid #1ABC9C"
                     : "1px solid transparent",
                 }}
               >
                 <div className="flex items-center gap-3 mb-3">
-                  <Icon className="text-foreground" size={18} />
-                  <h3 className="text-foreground font-medium text-sm sm:text-base flex-1">
+                  <Icon className={`${cat.is_active ? 'text-teal-500' : 'text-muted-foreground'}`} size={18} />
+                  <h3 className="text-foreground font-semibold text-sm sm:text-base flex-1">
                     {cat.name}
                   </h3>
                   <button
@@ -909,15 +939,15 @@ const Menu = () => {
                   </button>
                 </div>
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <p className="text-muted-foreground text-xs sm:text-sm">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-tight ${cat.is_active ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
                     {cat.is_active ? "Active" : "Inactive"}
-                  </p>
+                  </span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDeleteCategory(cat);
                     }}
-                    className="border border-red-500 text-red-500 bg-transparent hover:bg-red-50 transition-colors px-2 sm:px-3 py-1 text-xs rounded"
+                    className="border border-red-500/30 text-red-500 bg-transparent hover:bg-red-500 hover:text-white transition-all px-2.5 sm:px-3 py-1 text-xs rounded-md"
                   >
                     Delete
                   </button>
@@ -939,8 +969,18 @@ const Menu = () => {
             {categoriesById[selectedCategoryId]?.name || "Select a category"}
           </h2>
           <button
-            onClick={() => setShowNewProductModal(true)}
-            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white transition-colors px-3 sm:px-4 py-2 rounded-lg text-sm w-full sm:w-auto justify-center"
+            onClick={() => {
+              const cat = categoriesById[selectedCategoryId];
+              if (cat && !cat.is_active) {
+                alert(`Cannot add products to Inactive category "${cat.name}". Please activate it first.`);
+                return;
+              }
+              setShowNewProductModal(true);
+            }}
+            disabled={categoriesById[selectedCategoryId]?.is_active === false}
+            className={`flex items-center gap-2 transition-colors px-3 sm:px-4 py-2 rounded-lg text-sm w-full sm:w-auto justify-center ${categoriesById[selectedCategoryId]?.is_active === false
+              ? 'bg-muted text-muted-foreground cursor-not-allowed border border-border'
+              : 'bg-teal-600 hover:bg-teal-700 text-white'}`}
           >
             <Plus size={16} />
             Add Product
@@ -1023,14 +1063,32 @@ const Menu = () => {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => handleEditProduct(g)}
-                    className="flex-1 border border-teal-500 text-teal-500 bg-transparent hover:bg-secondary transition-colors px-3 py-1.5 rounded text-xs"
+                    onClick={() => {
+                      if (categoriesById[selectedCategoryId]?.is_active === false) {
+                        alert("Category is Inactive. Reactivate it to edit products.");
+                        return;
+                      }
+                      handleEditProduct(g);
+                    }}
+                    disabled={categoriesById[selectedCategoryId]?.is_active === false}
+                    className={`flex-1 border transition-all px-3 py-1.5 rounded text-xs ${categoriesById[selectedCategoryId]?.is_active === false
+                      ? 'border-border text-muted-foreground cursor-not-allowed'
+                      : 'border-teal-500 text-teal-500 bg-transparent hover:bg-teal-500 hover:text-white'}`}
                   >
                     Edit
                   </button>
                   <button
-                    onClick={() => handleDeleteWholeProductGroup(g)}
-                    className="flex-1 border border-red-500 text-red-500 bg-transparent hover:bg-red-50 transition-colors px-3 py-1.5 rounded text-xs"
+                    onClick={() => {
+                      if (categoriesById[selectedCategoryId]?.is_active === false) {
+                        alert("Category is Inactive. Reactivate it to delete products.");
+                        return;
+                      }
+                      handleDeleteWholeProductGroup(g);
+                    }}
+                    disabled={categoriesById[selectedCategoryId]?.is_active === false}
+                    className={`flex-1 border transition-all px-3 py-1.5 rounded text-xs ${categoriesById[selectedCategoryId]?.is_active === false
+                      ? 'border-border text-muted-foreground cursor-not-allowed'
+                      : 'border-red-500/30 text-red-500 bg-transparent hover:bg-red-500 hover:text-white'}`}
                   >
                     Delete
                   </button>
@@ -1812,8 +1870,8 @@ const Menu = () => {
             </div>
 
             {dishTemplates.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No dishes in library yet. Create some via DishTemplates API.
+              <p className="text-sm text-muted-foreground text-center py-8">
+                No dish library images available.
               </p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">

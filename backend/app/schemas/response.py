@@ -254,9 +254,10 @@ class OrderCreate(BaseModel):
     customer_id: Optional[int] = None
     order_items: List[OrderItemCreate]
     discount: Money = Field(default=0, ge=0)
+    coupon_code: Optional[str] = None
     tax: Money = Field(default=0, ge=0)
     notes: Optional[str] = None
-    payment_method: str = Field(default="Cash", description="Cash, UPI, Card")
+    payment_method: PaymentMethod = Field(default=PaymentMethod.CASH, description="cash, upi, card")
 
 
 class OrderUpdate(BaseModel):

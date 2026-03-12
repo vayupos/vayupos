@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -14,6 +14,26 @@ class ExpenseBase(BaseModel):
     payment_mode: Optional[str] = "Cash"
     due_date: Optional[str] = None
     notes: Optional[str] = ""
+
+    @validator("date")
+    def validate_date_format(cls, v):
+        try:
+            # Check if it already matches YYYY-MM-DD HH:MM
+            datetime.strptime(v, "%Y-%m-%d %H:%M")
+            return v
+        except ValueError:
+            try:
+                # If it's just YYYY-MM-DD, convert it
+                dt = datetime.strptime(v, "%Y-%m-%d")
+                return dt.strftime("%Y-%m-%d 00:00")
+            except ValueError:
+                # If it's something else, try to parse it generically or fallback to now
+                try:
+                    dt = datetime.fromisoformat(v.replace('Z', '+00:00'))
+                    return dt.strftime("%Y-%m-%d %H:%M")
+                except:
+                    # Final fallback to standard format for current time if everything fails
+                    return datetime.now().strftime("%Y-%m-%d %H:%M")
 
 class ExpenseCreate(ExpenseBase):
     pass

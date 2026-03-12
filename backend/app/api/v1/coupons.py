@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from app.core.database import get_db
 from app.schemas.coupon import (
@@ -61,21 +61,43 @@ def list_coupons(
 # ✅ FIXED: Changed from Query parameter to request body
 @router.get("/available", response_model=CouponAvailableResponse)
 def get_available_coupons(
+    subtotal: float = Query(0.0, ge=0),
+    customer_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
-    """Get all available coupons (no subtotal filter needed for initial load)"""
-    # Get all active coupons
-    eligible, ineligible = CouponService.get_available_coupons(db, subtotal=0)
+    """Get all available coupons based on subtotal and customer eligibility"""
+    eligible, ineligible = CouponService.get_available_coupons(db, subtotal=subtotal, customer_id=customer_id)
     
-    # Combine both lists - frontend will filter based on order total
-    all_coupons = eligible + ineligible
-
     # Convert Coupon objects to CouponResponse dicts
-    coupons_response = [CouponResponse.model_validate(coupon).model_dump() for coupon in all_coupons]
+    eligible_response = [CouponResponse.model_validate(coupon).model_dump() for coupon in eligible]
+    
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    
+    ineligible_response = []
+    for coupon in ineligible:
+        reason = "Ineligible"
+        if not coupon.is_active:
+            reason = "Coupon is inactive"
+        elif coupon.valid_until and now > coupon.valid_until:
+            reason = "Coupon has expired"
+        elif coupon.valid_from and now < coupon.valid_from:
+            reason = "Coupon not yet active"
+        elif coupon.max_uses and coupon.used_count >= coupon.max_uses:
+            reason = "Usage limit reached"
+        elif subtotal < coupon.min_order_amount:
+            reason = f"Minimum order ₹{coupon.min_order_amount} required"
+        elif coupon.is_first_order_only:
+            reason = "Valid only for first-time customers"
+            
+        ineligible_response.append({
+            "coupon": CouponResponse.model_validate(coupon).model_dump(),
+            "reason": reason
+        })
 
     return {
-        "eligible": coupons_response,
-        "ineligible": [],
+        "eligible": eligible_response,
+        "ineligible": ineligible_response,
     }
 
 
@@ -110,10 +132,13 @@ def validate_coupon(
             detail="Order total is required"
         )
     
+    customer_id = getattr(request, 'customer_id', None)
+    
     valid, eligible, message, coupon, discount_amount = CouponService.validate_coupon(
         db,
         coupon_code,
         order_total,
+        customer_id=customer_id
     )
     return {
         "valid": valid,

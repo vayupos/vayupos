@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DollarSign, ShoppingBag, TrendingUp, Wallet, RefreshCw, AlertCircle, Lock } from 'lucide-react';
+import { formatDateTime, formatPaymentMethod } from '../utils/formatters';
 
 // API Configuration
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
@@ -27,21 +28,22 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [staffAccessDenied, setStaffAccessDenied] = useState(false);
 
-  const activities = [
-    { action: 'Staff login', time: 'just now' },
-    { action: 'Menu updated', time: '20m ago' },
-    { action: 'Expense added', time: '1h ago' }
-  ];
+  const [activities, setActivities] = useState([]);
 
   // Fetch all data on mount
   useEffect(() => {
     fetchAllData();
   }, []);
 
+  // Helper function to get auth token from localStorage
+  const getAuthToken = () => {
+    return localStorage.getItem('access_token') || '';
+  };
+
   const fetchAllData = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       await Promise.all([
         fetchDailySummary(),
@@ -49,11 +51,11 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         fetchCustomers(),
         fetchOffers(),
         fetchStaff(),
-        fetchExpenses()
+        fetchExpenses(),
+        fetchActivities()
       ]);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
-      setError('Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
@@ -62,22 +64,28 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
   // Fetch daily summary
   const fetchDailySummary = async () => {
     try {
+      const token = getAuthToken();
       const today = new Date().toISOString().split('T')[0];
       const response = await fetch(`${API_BASE_URL}/reports/daily-summary?date=${today}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const result = await response.json();
+        const data = result.data || {};
+
         setDailySummary({
           todaySales: data.total_sales || 0,
           ordersCount: data.orders_count || 0,
           avgTicket: data.average_order_value || 0,
           totalExpenses: data.total_expenses || 0
         });
+      } else {
+        console.error('Daily Summary API Error:', response.status);
       }
     } catch (err) {
       console.error('Error fetching daily summary:', err);
@@ -87,17 +95,19 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
   // Fetch recent orders
   const fetchRecentOrders = async () => {
     try {
+      const token = getAuthToken();
       const response = await fetch(`${API_BASE_URL}/orders?skip=0&limit=5`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
       });
 
       if (response.ok) {
         const data = await response.json();
         const ordersArray = data.data || [];
-        
+
         const transformedOrders = ordersArray.map(order => {
           const timeAgo = getTimeAgo(order.created_at);
 
@@ -119,10 +129,12 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
   // Fetch customers - FIXED with trailing slash
   const fetchCustomers = async () => {
     try {
+      const token = getAuthToken();
       const response = await fetch(`${API_BASE_URL}/customers/?skip=0&limit=10`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
       });
 
@@ -131,10 +143,10 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
       if (response.ok) {
         const data = await response.json();
         console.log('Customers API Response:', data);
-        
+
         // Handle different possible response structures
         let customersArray = [];
-        
+
         if (Array.isArray(data)) {
           customersArray = data;
         } else if (data.data && Array.isArray(data.data)) {
@@ -144,7 +156,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         } else if (data.items && Array.isArray(data.items)) {
           customersArray = data.items;
         }
-        
+
         const transformedCustomers = customersArray.map(customer => ({
           id: customer.id,
           name: `${customer.first_name || ''} ${customer.last_name || ''}`.trim() || 'No Name',
@@ -168,18 +180,20 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
   // Fetch offers/coupons
   const fetchOffers = async () => {
     try {
+      const token = getAuthToken();
       const response = await fetch(`${API_BASE_URL}/coupons?skip=0&limit=10&active_only=true`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
       });
 
       if (response.ok) {
         const data = await response.json();
-        
+
         let offersArray = [];
-        
+
         if (Array.isArray(data)) {
           offersArray = data;
         } else if (data.data && Array.isArray(data.data)) {
@@ -187,13 +201,13 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         } else if (data.coupons && Array.isArray(data.coupons)) {
           offersArray = data.coupons;
         }
-        
+
         const transformedOffers = offersArray.map(offer => ({
           id: offer.id,
           code: offer.code,
           type: offer.discount_type === 'percentage' ? 'Percentage' : 'Flat',
-          value: offer.discount_type === 'percentage' 
-            ? `${offer.discount_value}%` 
+          value: offer.discount_type === 'percentage'
+            ? `${offer.discount_value}%`
             : `₹${offer.discount_value}`,
           category: offer.description || 'General'
         }));
@@ -208,11 +222,13 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
   // Fetch staff - Handles 403 gracefully
   const fetchStaff = async () => {
     try {
+      const token = getAuthToken();
       // Try with trailing slash first
       const response = await fetch(`${API_BASE_URL}/staff/?skip=0&limit=10`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
       });
 
@@ -221,9 +237,9 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
       if (response.ok) {
         const data = await response.json();
         console.log('Staff API Response:', data);
-        
+
         let staffArray = [];
-        
+
         if (Array.isArray(data)) {
           staffArray = data;
         } else if (data.data && Array.isArray(data.data)) {
@@ -233,7 +249,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         } else if (data.items && Array.isArray(data.items)) {
           staffArray = data.items;
         }
-        
+
         const transformedStaff = staffArray.map(member => ({
           id: member.id,
           name: member.name,
@@ -266,18 +282,20 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
   // Fetch expenses
   const fetchExpenses = async () => {
     try {
+      const token = getAuthToken();
       const response = await fetch(`${API_BASE_URL}/expenses/?skip=0&limit=10`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
       });
 
       if (response.ok) {
         const data = await response.json();
-        
+
         let expensesArray = [];
-        
+
         if (Array.isArray(data)) {
           expensesArray = data;
         } else if (data.data && Array.isArray(data.data)) {
@@ -285,7 +303,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         } else if (data.expenses && Array.isArray(data.expenses)) {
           expensesArray = data.expenses;
         }
-        
+
         const transformedExpenses = expensesArray.map(expense => ({
           id: expense.id,
           title: expense.title,
@@ -305,21 +323,48 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
     }
   };
 
+  const fetchActivities = async () => {
+    try {
+      const token = getAuthToken();
+      const response = await fetch(`${API_BASE_URL}/notifications?limit=5`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // The API returns a list of notifications
+        const transformedActivities = (data || []).map(notif => ({
+          action: notif.title,
+          time: `${formatDateTime(notif.created_at)} (${getTimeAgo(notif.created_at)})`,
+          description: notif.description
+        }));
+        setActivities(transformedActivities);
+      }
+    } catch (err) {
+      console.error('Error fetching activities:', err);
+    }
+  };
+
+
   // Helper function to calculate time ago
   const getTimeAgo = (dateString) => {
     if (!dateString) return '--';
-    
+
     const now = new Date();
     const date = new Date(dateString);
     const diffMs = now - date;
     const diffMins = Math.floor(diffMs / 60000);
-    
+
     if (diffMins < 1) return 'just now';
     if (diffMins < 60) return `${diffMins}m ago`;
-    
+
     const diffHours = Math.floor(diffMins / 60);
     if (diffHours < 24) return `${diffHours}h ago`;
-    
+
     const diffDays = Math.floor(diffHours / 24);
     return `${diffDays}d ago`;
   };
@@ -421,7 +466,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
             <p className="text-muted-foreground text-xs sm:text-sm">Today Sales</p>
             <DollarSign className="text-teal-400" size={18} />
           </div>
-          <p className="text-xl sm:text-3xl font-bold text-card-foreground">₹{dailySummary.todaySales.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+          <p className="text-xl sm:text-3xl font-bold text-card-foreground">₹{dailySummary.todaySales.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</p>
         </div>
         <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
           <div className="flex items-center justify-between mb-2 sm:mb-3">
@@ -435,14 +480,14 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
             <p className="text-muted-foreground text-xs sm:text-sm">Avg Ticket</p>
             <TrendingUp className="text-teal-400" size={18} />
           </div>
-          <p className="text-xl sm:text-3xl font-bold text-card-foreground">₹{dailySummary.avgTicket.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+          <p className="text-xl sm:text-3xl font-bold text-card-foreground">₹{dailySummary.avgTicket.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</p>
         </div>
         <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
           <div className="flex items-center justify-between mb-2 sm:mb-3">
             <p className="text-muted-foreground text-xs sm:text-sm">Expenses</p>
             <Wallet className="text-teal-400" size={18} />
           </div>
-          <p className="text-xl sm:text-3xl font-bold text-card-foreground">₹{dailySummary.totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</p>
+          <p className="text-xl sm:text-3xl font-bold text-card-foreground">₹{dailySummary.totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</p>
         </div>
       </div>
 
@@ -452,7 +497,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
           <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-4">Quick Links</h3>
           <div className="space-y-3">
-            <button 
+            <button
               onClick={handleNavigateToPOS}
               className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
             >
@@ -462,7 +507,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
               </div>
               <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Open</span>
             </button>
-            <button 
+            <button
               onClick={handleNavigateToMenu}
               className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
             >
@@ -472,7 +517,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
               </div>
               <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Menu</span>
             </button>
-            <button 
+            <button
               onClick={handleNavigateToReports}
               className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
             >
@@ -489,7 +534,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Recent Orders</h3>
-            <button 
+            <button
               onClick={handleSeeAllOrders}
               className="text-teal-400 text-xs sm:text-sm hover:underline"
             >
@@ -515,14 +560,23 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
 
         {/* Activity */}
         <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
-          <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-4">Activity</h3>
+          <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-4">Activity Log</h3>
           <div className="space-y-3">
-            {activities.map((activity, idx) => (
-              <div key={idx} className="flex items-center justify-between p-3 bg-muted rounded-lg hover:bg-secondary transition-colors">
-                <p className="text-foreground text-sm sm:text-base">{activity.action}</p>
-                <p className="text-xs sm:text-sm text-muted-foreground">{activity.time}</p>
-              </div>
-            ))}
+            {activities.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">No recent activities</p>
+            ) : (
+              activities.map((activity, idx) => (
+                <div key={idx} className="p-3 bg-muted rounded-lg hover:bg-secondary transition-colors">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="font-medium text-foreground text-sm sm:text-base">{activity.action}</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{activity.time}</p>
+                  {activity.description && (
+                    <p className="text-xs text-muted-foreground mt-1 italic">{activity.description}</p>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -533,7 +587,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Customers</h3>
-            <button 
+            <button
               onClick={handleNavigateToCustomers}
               className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
             >
@@ -558,7 +612,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Offers</h3>
-            <button 
+            <button
               onClick={handleNavigateToOffers}
               className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
             >
@@ -590,7 +644,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Staff</h3>
-            <button 
+            <button
               onClick={handleNavigateToStaff}
               className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
             >
@@ -625,7 +679,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
         <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Expenses</h3>
-            <button 
+            <button
               onClick={handleNavigateToExpenses}
               className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
             >

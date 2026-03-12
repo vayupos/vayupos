@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Download, Printer, Calendar, Filter, RotateCw, ChevronDown, AlertCircle, FileText } from 'lucide-react';
+import { formatDateTime, formatPaymentMethod } from '../utils/formatters';
 import { LineChart, Line, PieChart, Pie, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -14,6 +15,18 @@ const ReportsPage = () => {
   const [error, setError] = useState(null);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const exportRef = useRef(null);
+
+  // Helper function to safely parse numbers and avoid NaN/concatenation issues
+  const safeNum = (val) => {
+    if (val === null || val === undefined) return 0;
+    const n = typeof val === 'string' ? parseFloat(val.replace(/[₹,]/g, '')) : parseFloat(val);
+    return isNaN(n) ? 0 : n;
+  };
+
+  // Helper function for consistent currency formatting
+  const formatCurrency = (val) => {
+    return `₹${safeNum(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -137,39 +150,49 @@ const ReportsPage = () => {
 
       // Transform the API response to match your UI structure
       if (salesArray && salesArray.length > 0) {
-        const transformedData = salesArray.map(item => ({
-          period: item.date || item.period || 'Unknown',
-          orders: item.order_count || item.orders || 0,
-          grossSales: `₹${(item.gross_sales || item.total_sales || 0).toLocaleString('en-IN')}`,
-          discounts: `₹${(item.discounts || 0).toLocaleString('en-IN')}`,
-          net: `₹${(item.net_sales || (item.total_sales - item.discounts) || 0).toLocaleString('en-IN')}`
-        }));
+        const transformedData = salesArray.map(item => {
+          const gross = safeNum(item.gross_sales || item.total_sales);
+          const disc = safeNum(item.discounts);
+          const net = safeNum(item.net_sales || (gross - disc));
+
+          return {
+            period: item.date || item.period || 'Unknown',
+            orders: item.order_count || item.orders || 0,
+            grossSales: formatCurrency(gross),
+            discounts: formatCurrency(disc),
+            net: formatCurrency(net)
+          };
+        });
 
         console.log('✅ Transformed Sales Data:', transformedData);
         setSalesData(transformedData);
 
         // Prepare chart data
-        const chartData = salesArray.map(item => ({
-          month: item.date || item.period || 'Unknown',
-          sales: item.gross_sales || item.total_sales || 0,
-          net: item.net_sales || ((item.total_sales || 0) - (item.discounts || 0))
-        }));
+        const chartData = salesArray.map(item => {
+          const gross = safeNum(item.gross_sales || item.total_sales);
+          const disc = safeNum(item.discounts);
+          return {
+            month: item.date || item.period || 'Unknown',
+            sales: gross,
+            net: safeNum(item.net_sales || (gross - disc))
+          };
+        });
 
         console.log('✅ Sales Chart Data:', chartData);
         setSalesChartData([...chartData]); // Force new array reference
 
         // Calculate key metrics
-        const totalSales = salesArray.reduce((sum, item) => sum + (item.gross_sales || item.total_sales || 0), 0);
-        const totalOrders = salesArray.reduce((sum, item) => sum + (item.order_count || item.orders || 0), 0);
-        const totalDiscounts = salesArray.reduce((sum, item) => sum + (item.discounts || 0), 0);
+        const totalSales = salesArray.reduce((sum, item) => sum + safeNum(item.gross_sales || item.total_sales), 0);
+        const totalOrders = salesArray.reduce((sum, item) => sum + safeNum(item.order_count || item.orders), 0);
+        const totalDiscounts = salesArray.reduce((sum, item) => sum + safeNum(item.discounts), 0);
 
         console.log('✅ Calculated Metrics - Sales:', totalSales, 'Orders:', totalOrders);
 
         setKeyMetrics(prev => ({
           ...prev,
-          totalSales: `₹${totalSales.toLocaleString('en-IN')}`,
+          totalSales: formatCurrency(totalSales),
           totalOrders: totalOrders.toString(),
-          avgOrderValue: `₹${totalOrders > 0 ? Math.round(totalSales / totalOrders).toLocaleString('en-IN') : '0'}`
+          avgOrderValue: formatCurrency(totalOrders > 0 ? totalSales / totalOrders : 0)
         }));
       } else {
         console.warn('⚠️ No sales data found in API response');
@@ -218,18 +241,18 @@ const ReportsPage = () => {
                 }
 
                 groupedData[period].orders += 1;
-                groupedData[period].grossSales += (order.total || order.total_amount || 0);
-                groupedData[period].discounts += (order.discount || 0);
+                groupedData[period].grossSales += safeNum(order.total || order.total_amount);
+                groupedData[period].discounts += safeNum(order.discount);
               });
 
               // Convert to array
               const calculatedSalesData = Object.entries(groupedData)
                 .map(([period, data]) => ({
-                  period,
+                  period: period.includes('-') && period.length >= 10 ? formatDateTime(period).split(' | ')[0] : period,
                   orders: data.orders,
-                  grossSales: `₹${data.grossSales.toLocaleString('en-IN')}`,
-                  discounts: `₹${data.discounts.toLocaleString('en-IN')}`,
-                  net: `₹${(data.grossSales - data.discounts).toLocaleString('en-IN')}`,
+                  grossSales: formatCurrency(data.grossSales),
+                  discounts: formatCurrency(data.discounts),
+                  net: formatCurrency(data.grossSales - data.discounts),
                   grossSalesNum: data.grossSales,
                   netNum: data.grossSales - data.discounts
                 }))
@@ -254,9 +277,9 @@ const ReportsPage = () => {
 
               setKeyMetrics(prev => ({
                 ...prev,
-                totalSales: `₹${totalSales.toLocaleString('en-IN')}`,
+                totalSales: formatCurrency(totalSales),
                 totalOrders: totalOrders.toString(),
-                avgOrderValue: `₹${totalOrders > 0 ? Math.round(totalSales / totalOrders).toLocaleString('en-IN') : '0'}`
+                avgOrderValue: formatCurrency(totalOrders > 0 ? totalSales / totalOrders : 0)
               }));
 
               return; // Exit successfully
@@ -298,16 +321,23 @@ const ReportsPage = () => {
         (data.data || data.results || data.items || []);
 
       if (paymentsArray && paymentsArray.length > 0) {
-        const totalAmount = paymentsArray.reduce((sum, item) => sum + (item.total_amount || 0), 0);
-        const totalCount = paymentsArray.reduce((sum, item) => sum + (item.count || 0), 0);
+        const totalAmount = paymentsArray.reduce((sum, item) => sum + safeNum(item.total_amount), 0);
+        const totalCount = paymentsArray.reduce((sum, item) => sum + safeNum(item.count), 0);
 
-        const transformedData = paymentsArray.map((item, index) => ({
-          mode: item.payment_method || item.mode || 'Unknown',
-          count: item.count || 0,
-          share: `${totalCount > 0 ? ((item.count / totalCount) * 100).toFixed(1) : 0}%`,
-          amount: `₹${(item.total_amount || 0).toLocaleString('en-IN')}`,
-          rank: index + 1
-        }));
+        const transformedData = paymentsArray.map((item, index) => {
+          const modeRaw = String(item.payment_method || item.mode || 'Unknown').trim();
+          const modeFormatted = modeRaw.includes('_')
+            ? modeRaw.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+            : modeRaw.charAt(0).toUpperCase() + modeRaw.slice(1).toLowerCase();
+
+          return {
+            mode: modeFormatted,
+            count: safeNum(item.transaction_count || item.count),
+            share: `${totalCount > 0 ? ((safeNum(item.transaction_count || item.count) / totalCount) * 100).toFixed(1) : 0}%`,
+            amount: formatCurrency(item.total_amount || item.amount),
+            rank: index + 1
+          };
+        });
 
         console.log('✅ Transformed payment data:', transformedData);
 
@@ -373,8 +403,8 @@ const ReportsPage = () => {
         let totalRevenue = 0;
 
         filteredOrders.forEach(order => {
-          const source = order.payment_method || 'Unknown';
-          const orderTotal = order.total || order.total_amount || order.final_amount || 0;
+          const source = String(order.payment_method || 'Unknown').trim();
+          const orderTotal = safeNum(order.total || order.total_amount || order.final_amount);
 
           if (!ordersBySource[source]) {
             ordersBySource[source] = {
@@ -384,8 +414,9 @@ const ReportsPage = () => {
           }
 
           ordersBySource[source].orders += 1;
-          ordersBySource[source].revenue += orderTotal;
-          totalRevenue += orderTotal;
+          // Explicitly ensure numeric addition to avoid concatenation
+          ordersBySource[source].revenue = Number(ordersBySource[source].revenue) + Number(orderTotal);
+          totalRevenue = Number(totalRevenue) + Number(orderTotal);
         });
 
         const totalOrders = filteredOrders.length;
@@ -394,13 +425,20 @@ const ReportsPage = () => {
 
         // Transform to array format
         const sourcesArray = Object.entries(ordersBySource)
-          .map(([source, data]) => ({
-            source: source.charAt(0).toUpperCase() + source.slice(1),
-            orders: data.orders,
-            share: `${totalOrders > 0 ? ((data.orders / totalOrders) * 100).toFixed(1) : 0}%`,
-            revenue: `₹${data.revenue.toLocaleString('en-IN')}`,
-            revenueNum: data.revenue
-          }))
+          .map(([source, data]) => {
+            const sourceStr = String(source).trim();
+            const label = sourceStr.includes('_')
+              ? sourceStr.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+              : sourceStr.charAt(0).toUpperCase() + sourceStr.slice(1).toLowerCase();
+
+            return {
+              source: label,
+              orders: data.orders,
+              share: `${totalOrders > 0 ? ((data.orders / totalOrders) * 100).toFixed(1) : 0}%`,
+              revenue: formatCurrency(data.revenue),
+              revenueNum: data.revenue
+            };
+          })
           .sort((a, b) => b.orders - a.orders)
           .map((item, index) => ({
             ...item,
@@ -423,12 +461,11 @@ const ReportsPage = () => {
         console.log('✅ Pie Chart Data:', pieData);
         setOrderDistributionData([...pieData]); // Force new array reference
 
-        // Also populate payment summary table (byPayment)
         const paymentSummary = sourcesArray.map((item, index) => ({
           mode: item.source,
           count: item.orders,
           share: item.share,
-          amount: item.revenue,
+          amount: item.revenue, // Already formatted via formatCurrency
           rank: item.rank
         }));
 
@@ -496,7 +533,7 @@ const ReportsPage = () => {
 
         filteredExpenses.forEach(expense => {
           const category = expense.category || 'Other';
-          const amount = expense.amount || 0;
+          const amount = safeNum(expense.amount);
 
           if (!expensesByCategory[category]) {
             expensesByCategory[category] = {
@@ -515,7 +552,7 @@ const ReportsPage = () => {
           .map(([category, data]) => ({
             category: category,
             transactions: data.transactions,
-            amount: `₹${data.amount.toLocaleString('en-IN')}`,
+            amount: formatCurrency(data.amount),
             amountNum: data.amount,
             share: `${totalExpenses > 0 ? ((data.amount / totalExpenses) * 100).toFixed(1) : 0}%`
           }))
@@ -540,11 +577,11 @@ const ReportsPage = () => {
         // Update total expenses in key metrics
         setKeyMetrics(prev => ({
           ...prev,
-          totalExpenses: `₹${totalExpenses.toLocaleString('en-IN')}`
+          totalExpenses: formatCurrency(totalExpenses)
         }));
 
         // Calculate gross margin if we have sales data
-        const salesAmount = parseFloat(keyMetrics.totalSales.replace(/[₹,]/g, '')) || 0;
+        const salesAmount = safeNum(keyMetrics.totalSales);
         if (salesAmount > 0) {
           const margin = ((salesAmount - totalExpenses) / salesAmount * 100).toFixed(1);
           setKeyMetrics(prev => ({
@@ -658,14 +695,19 @@ const ReportsPage = () => {
 
   // Recalculate gross margin when sales or expenses change
   useEffect(() => {
-    const salesAmount = parseFloat(keyMetrics.totalSales.replace(/[₹,]/g, '')) || 0;
-    const expensesAmount = parseFloat(keyMetrics.totalExpenses.replace(/[₹,]/g, '')) || 0;
+    const salesAmount = safeNum(keyMetrics.totalSales);
+    const expensesAmount = safeNum(keyMetrics.totalExpenses);
 
-    if (salesAmount > 0 && expensesAmount > 0) {
+    if (salesAmount > 0) {
       const margin = ((salesAmount - expensesAmount) / salesAmount * 100).toFixed(1);
       setKeyMetrics(prev => ({
         ...prev,
         grossMargin: `${margin}%`
+      }));
+    } else {
+      setKeyMetrics(prev => ({
+        ...prev,
+        grossMargin: '0%'
       }));
     }
   }, [keyMetrics.totalSales, keyMetrics.totalExpenses]);
@@ -999,30 +1041,30 @@ const ReportsPage = () => {
               <div className="grid grid-cols-3 gap-2">
                 <div className="text-center p-2 rounded-lg bg-muted">
                   <div className="text-xs text-muted-foreground mb-0.5 truncate">Sales</div>
-                  <div className="text-xs sm:text-sm lg:text-base font-bold text-foreground truncate">{keyMetrics.totalSales}</div>
+                  <div className="text-xs sm:text-sm lg:text-sm font-bold text-foreground">{keyMetrics.totalSales}</div>
                 </div>
                 <div className="text-center p-2 rounded-lg bg-muted">
                   <div className="text-xs text-muted-foreground mb-0.5 truncate">Orders</div>
-                  <div className="text-xs sm:text-sm lg:text-base font-bold text-foreground truncate">{keyMetrics.totalOrders}</div>
+                  <div className="text-xs sm:text-sm lg:text-base font-bold text-foreground">{keyMetrics.totalOrders}</div>
                 </div>
                 <div className="text-center p-2 rounded-lg bg-muted">
                   <div className="text-xs text-muted-foreground mb-0.5 truncate">Expenses</div>
-                  <div className="text-xs sm:text-sm lg:text-base font-bold text-foreground truncate">{keyMetrics.totalExpenses}</div>
+                  <div className="text-[10px] sm:text-xs lg:text-sm font-bold text-foreground">{keyMetrics.totalExpenses}</div>
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div className="text-center p-2 rounded-lg bg-muted">
                   <div className="text-xs text-muted-foreground mb-0.5 truncate">Avg</div>
-                  <div className="text-[10px] sm:text-xs lg:text-sm font-bold text-foreground truncate">{keyMetrics.avgOrderValue}</div>
+                  <div className="text-[10px] sm:text-xs lg:text-sm font-bold text-foreground">{keyMetrics.avgOrderValue}</div>
                 </div>
                 <div className="text-center p-2 rounded-lg bg-muted">
                   <div className="text-xs text-muted-foreground mb-0.5 truncate">Margin</div>
-                  <div className="text-[10px] sm:text-xs lg:text-sm font-bold text-foreground truncate">{keyMetrics.grossMargin}</div>
+                  <div className="text-[10px] sm:text-xs lg:text-sm font-bold text-foreground">{keyMetrics.grossMargin}</div>
                 </div>
                 <div className="text-center p-2 rounded-lg bg-muted">
                   <div className="text-xs text-muted-foreground mb-0.5 truncate">Top</div>
-                  <div className="text-[10px] sm:text-xs font-bold text-foreground truncate" title={keyMetrics.topCategory}>
-                    {keyMetrics.topCategory.length > 8 ? keyMetrics.topCategory.substring(0, 8) + '...' : keyMetrics.topCategory}
+                  <div className="text-[10px] sm:text-xs font-bold text-foreground" title={keyMetrics.topCategory}>
+                    {keyMetrics.topCategory}
                   </div>
                 </div>
               </div>

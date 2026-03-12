@@ -4,6 +4,7 @@ import { Search, Calendar, RefreshCw, Printer, Download, Eye, AlertCircle } from
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import { formatDateTime, formatPaymentMethod } from '../utils/formatters';
 
 // API Configuration - Using environment variables
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
@@ -124,21 +125,6 @@ const PastOrders = () => {
       const total = parseFloat(order.total || 0);
 
       const orderType = order.order_type || 'Dine-in';
-      const formatDateTime = (dateStr) => {
-        if (!dateStr) return '--:--';
-        const d = new Date(dateStr);
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const year = d.getFullYear();
-        let hours = d.getHours();
-        const minutes = String(d.getMinutes()).padStart(2, '0');
-        const ampm = hours >= 12 ? 'PM' : 'AM';
-        hours = hours % 12;
-        hours = hours ? hours : 12; // the hour '0' should be '12'
-        const strTime = `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`;
-        return `${day}-${month}-${year} | ${strTime}`;
-      };
-
       const orderTime = formatDateTime(order.created_at);
 
       // Normalize status and payment
@@ -146,8 +132,7 @@ const PastOrders = () => {
       if (normalizedStatus === 'complete') normalizedStatus = 'completed';
       if (normalizedStatus === 'refund') normalizedStatus = 'refunded';
 
-      let normalizedPayment = (order.payment_method || order.payment || 'Cash').trim();
-      normalizedPayment = normalizedPayment.charAt(0).toUpperCase() + normalizedPayment.slice(1).toLowerCase();
+      const normalizedPayment = formatPaymentMethod(order.payment_method || order.payment);
 
       return {
         id: order.order_number || order.id.toString(),
@@ -578,6 +563,13 @@ const PastOrders = () => {
                       <span className="text-muted-foreground">GST</span>
                       <span className="text-foreground">₹ {order.gst.toFixed(2)}</span>
                     </div>
+                    <div className="flex justify-between text-xs sm:text-sm">
+                      <span className="text-muted-foreground">Status</span>
+                      <span className={`font-bold uppercase text-[10px] ${order.status === 'completed' ? 'text-green-500' :
+                          order.status === 'pending' ? 'text-yellow-500' :
+                            'text-red-500'
+                        }`}>{order.status}</span>
+                    </div>
                     {order.discount && (
                       <div className="flex justify-between text-xs sm:text-sm">
                         <span className="text-muted-foreground">Discount</span>
@@ -632,6 +624,7 @@ const PastOrders = () => {
                     <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Discount</th>
                     <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Total</th>
                     <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Payment</th>
+                    <th className="text-left font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Status</th>
                     <th className="text-right font-semibold py-3.5 px-3 text-[15px] text-muted-foreground">Actions</th>
                   </tr>
                 </thead>
@@ -676,8 +669,16 @@ const PastOrders = () => {
                         </div>
                       </td>
                       <td className="py-4 px-3">
-                        <span className="inline-block px-3.5 py-1.5 rounded-md text-[13px] font-medium bg-primary text-primary-foreground">
+                        <span className="inline-block px-3.5 py-1.5 rounded-md text-[13px] font-medium bg-secondary text-foreground border border-border">
                           {order.payment}
+                        </span>
+                      </td>
+                      <td className="py-4 px-3">
+                        <span className={`inline-block px-3.5 py-1.5 rounded-md text-[13px] font-bold uppercase ${order.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                            order.status === 'pending' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                              'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                          }`}>
+                          {order.status}
                         </span>
                       </td>
                       <td className="py-4 px-3">

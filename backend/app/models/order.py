@@ -14,6 +14,8 @@ class OrderStatus(str, enum.Enum):
     ON_HOLD = "on_hold"
 
 
+from app.models.payment import PaymentMethod
+
 class Order(Base):
     """Order model for managing customer orders"""
     __tablename__ = "orders"

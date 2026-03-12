@@ -14,6 +14,7 @@ import {
     RefreshCw,
     Receipt
 } from 'lucide-react';
+import { formatDateTime, formatPaymentMethod } from '../utils/formatters';
 import api from '../api/axios';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
@@ -45,22 +46,6 @@ const OrderDetail = () => {
         }
     }, [orderId]);
 
-    const formatDateTime = (dateString) => {
-        if (!dateString) return 'N/A';
-        const date = new Date(dateString);
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-
-        let hours = date.getHours();
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        const ampm = hours >= 12 ? 'PM' : 'AM';
-        hours = hours % 12;
-        hours = hours ? hours : 12;
-        const strTime = String(hours).padStart(2, '0') + ':' + minutes + ' ' + ampm;
-
-        return `${day}-${month}-${year} | ${strTime}`;
-    };
 
     const handleDownloadPDF = () => {
         if (!order) return;
@@ -139,7 +124,7 @@ const OrderDetail = () => {
 
             doc.setFontSize(8);
             doc.setFont('courier', 'normal');
-            doc.text(`Payment: ${order.payment_method || 'N/A'}`, 5, y); y += 5;
+            doc.text(`Payment: ${formatPaymentMethod(order.payment_method)}`, 5, y); y += 5;
 
             doc.line(5, y, 75, y); y += 6;
             doc.text('Thank you for your visit!', 40, y, { align: 'center' });
@@ -351,7 +336,7 @@ const OrderDetail = () => {
                                     <div>
                                         <p className="text-[11px] text-muted-foreground uppercase font-bold mb-0.5">Payment Method</p>
                                         <span className="px-2 py-0.5 bg-primary text-primary-foreground text-[11px] font-bold rounded uppercase">
-                                            {order.payment_method || 'Cash'}
+                                            {formatPaymentMethod(order.payment_method)}
                                         </span>
                                     </div>
                                 </div>

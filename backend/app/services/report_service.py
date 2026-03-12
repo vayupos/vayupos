@@ -142,6 +142,7 @@ class ReportService:
     @staticmethod
     def get_daily_summary(db: Session, date: Optional[datetime] = None) -> Dict:
         """Get daily sales summary"""
+        from app.models.expense import Expense
         if not date:
             date = datetime.utcnow().date()
 
@@ -153,7 +154,7 @@ class ReportService:
         ).all()
 
         total_orders = len(orders)
-        total_sales = sum(order.total for order in orders)
+        total_sales = sum(float(order.total) for order in orders)
         completed_orders = sum(1 for order in orders if order.status == OrderStatus.COMPLETED)
 
         payments = db.query(Payment).filter(
@@ -162,15 +163,25 @@ class ReportService:
             (Payment.created_at <= end_of_day)
         ).all()
 
-        total_received = sum(payment.amount for payment in payments)
+        total_received = sum(float(payment.amount) for payment in payments)
+        average_order_value = total_sales / total_orders if total_orders > 0 else 0.0
+
+        # Query expenses for this date
+        # Expense date field is a string, so we match it format "YYYY-MM-DD" or similar, or just parse
+        date_str = date.strftime("%Y-%m-%d")
+        expenses = db.query(Expense).filter(Expense.date == date_str).all()
+        total_expenses = sum(float(expense.amount) for expense in expenses)
 
         return {
             "date": date,
             "total_orders": total_orders,
+            "orders_count": total_orders,
             "completed_orders": completed_orders,
             "total_sales": total_sales,
             "total_received": total_received,
             "pending_amount": total_sales - total_received,
+            "average_order_value": average_order_value,
+            "total_expenses": total_expenses,
         }
 
     @staticmethod

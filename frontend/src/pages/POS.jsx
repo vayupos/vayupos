@@ -19,6 +19,7 @@ function POS() {
   const [inputCoupon, setInputCoupon] = useState('');
   const [discount, setDiscount] = useState(0);
   const [availableCoupons, setAvailableCoupons] = useState([]);
+  const [ineligibleCoupons, setIneligibleCoupons] = useState([]);
   const [loadingCoupons, setLoadingCoupons] = useState(false);
   const [newCustomer, setNewCustomer] = useState({
     first_name: '',
@@ -361,12 +362,17 @@ function POS() {
 
   // ---------------- COUPON FUNCTIONS (BACKEND) ----------------
 
-  const fetchAvailableCoupons = async () => {
+  const fetchAvailableCoupons = async (currentSubtotal = subtotal, customerId = selectedCustomerId) => {
     try {
       setLoadingCoupons(true);
-      console.log('🎫 Fetching coupons from backend...');
+      console.log('🎫 Fetching coupons from backend for subtotal:', currentSubtotal, 'customer:', customerId);
 
-      const res = await api.get('/coupons/available');
+      const res = await api.get('/coupons/available', {
+        params: {
+          subtotal: currentSubtotal,
+          customer_id: customerId || null
+        }
+      });
       console.log('📦 Raw coupon response:', res);
       console.log('📊 Coupon response data:', res.data);
 
@@ -416,6 +422,25 @@ function POS() {
         setAvailableCoupons([]);
       }
 
+      // Handle ineligible coupons
+      if (res.data.ineligible && Array.isArray(res.data.ineligible)) {
+        const normalizedIneligible = res.data.ineligible.map(item => {
+          const coupon = item.coupon;
+          return {
+            id: coupon.id,
+            code: coupon.code || coupon.coupon_code || '',
+            discount: coupon.discount_value || coupon.discount || coupon.discount_amount || 0,
+            type: coupon.discount_type || coupon.type || 'percentage',
+            description: coupon.description || coupon.desc || '',
+            min_order: coupon.min_order_amount || coupon.min_order || 0,
+            reason: item.reason
+          };
+        });
+        setIneligibleCoupons(normalizedIneligible);
+      } else {
+        setIneligibleCoupons([]);
+      }
+
     } catch (error) {
       console.error('❌ Error fetching available coupons:', error);
       console.error('📋 Error details:', error.response?.data);
@@ -442,7 +467,8 @@ function POS() {
 
       const requestBody = {
         coupon_code: couponCode,
-        subtotal: subtotal
+        subtotal: subtotal,
+        customer_id: selectedCustomerId || null
       };
 
       console.log('📤 Sending validation request:', requestBody);
@@ -1178,26 +1204,21 @@ function POS() {
               <div className="text-center py-4 text-muted-foreground">
                 Loading coupons...
               </div>
-            ) : availableCoupons.length > 0 ? (
+            ) : (availableCoupons.length > 0 || ineligibleCoupons.length > 0) ? (
               <div className="mb-4">
                 <p className="text-sm font-semibold text-foreground mb-2">
                   Available Coupons (Subtotal: ₹{subtotal.toFixed(2)})
                 </p>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {/* Eligible Coupons */}
                   {availableCoupons.map((coupon, i) => {
                     const minOrder = coupon.min_order || 0;
-                    const isEligible = subtotal >= minOrder;
                     return (
                       <div
                         key={coupon.id || i}
-                        className={`bg-muted rounded p-2 sm:p-3 cursor-pointer transition-colors ${isEligible
-                          ? 'hover:bg-teal-600 hover:text-white border-2 border-transparent hover:border-teal-700'
-                          : 'opacity-60 cursor-not-allowed border-2 border-red-300'
-                          }`}
+                        className="bg-muted rounded p-2 sm:p-3 cursor-pointer transition-colors hover:bg-teal-600 hover:text-white border-2 border-transparent hover:border-teal-700"
                         onClick={() => {
-                          if (isEligible) {
-                            setInputCoupon(coupon.code);
-                          }
+                          setInputCoupon(coupon.code);
                         }}
                       >
                         <div className="flex justify-between items-center">
@@ -1214,26 +1235,54 @@ function POS() {
                           {coupon.description}
                         </p>
                         {minOrder > 0 && (
-                          <p className={`text-xs mt-1 ${isEligible ? 'text-green-600' : 'text-red-500'}`}>
-                            {isEligible
-                              ? `✓ Min order: ₹${minOrder}`
-                              : `✗ Min order: ₹${minOrder} (Need ₹${(minOrder - subtotal).toFixed(2)} more)`
-                            }
+                          <p className="text-xs mt-1 text-green-600">
+                            ✓ Min order: ₹{minOrder}
                           </p>
                         )}
                       </div>
                     );
                   })}
+
+                  {/* Ineligible Coupons */}
+                  {ineligibleCoupons.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <p className="text-sm font-semibold text-muted-foreground mb-2">
+                        Currently Ineligible
+                      </p>
+                      <div className="space-y-2">
+                        {ineligibleCoupons.map((coupon, i) => (
+                          <div
+                            key={`ineligible-${i}`}
+                            className="bg-muted bg-opacity-50 rounded p-2 sm:p-3 opacity-60 border border-dashed border-border"
+                          >
+                            <div className="flex justify-between items-center text-muted-foreground">
+                              <span className="font-semibold text-sm">
+                                {coupon.code}
+                              </span>
+                              <span className="text-xs">
+                                {coupon.type === 'percentage' || coupon.type === 'percent'
+                                  ? `${coupon.discount}% off`
+                                  : `₹${coupon.discount} off`}
+                              </span>
+                            </div>
+                            <p className="text-xs mt-1 text-red-500 font-medium">
+                              {coupon.reason || 'Not applicable'}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
               <div className="text-center py-4 text-muted-foreground mb-4">
-                {loadingCoupons ? 'Loading coupons...' : 'No coupons available'}
+                No coupons available
               </div>
             )}
 
             {/* Action Buttons */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 mt-4">
               <button
                 onClick={applyCoupon}
                 disabled={!inputCoupon.trim()}
@@ -1293,66 +1342,53 @@ function POS() {
               className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-4 py-2 pl-10 text-sm sm:text-base"
             />
           </div>
-        </div>
-        <div className="flex flex-wrap gap-2 mb-3 sm:mb-4">
-          {customers.map((customer, i) => {
-            if (!customer) return null;
+          <div className="flex flex-wrap gap-2 mb-3 sm:mb-4">
+            {customers.map((customer, i) => {
+              if (!customer) return null;
+              const firstName = customer.first_name || '';
+              const lastName = customer.last_name || '';
+              const initial = firstName.charAt(0)?.toUpperCase() || '?';
+              const colors = ['#4A5568', '#2D5A7B', '#8B6F47', '#6B7280'];
+              const bgColor = colors[i % colors.length];
+              const displayName = `${firstName} ${lastName}`.trim() || 'Unknown';
+              const isSelected = selectedCustomerId === customer.id;
 
-            const firstName = customer.first_name || '';
-            const lastName = customer.last_name || '';
-            const initial = firstName.charAt(0)?.toUpperCase() || '?';
-            const colors = ['#4A5568', '#2D5A7B', '#8B6F47', '#6B7280'];
-            const bgColor = colors[i % colors.length];
-            const displayName = `${firstName} ${lastName}`.trim() || 'Unknown';
-            const isSelected = selectedCustomerId === customer.id;
-
-            return (
-              <button
-                key={i}
-                onClick={() => handleCustomerSelect(customer)}
-                className="px-2.5 py-1.5 sm:px-3 sm:py-2 border border-teal-600 rounded-full text-sm cursor-pointer flex items-center gap-1.5 sm:gap-2 transition-colors flex-shrink-0"
-                style={{
-                  backgroundColor: isSelected ? '#1ABC9C' : 'transparent',
-                  color: isSelected ? 'white' : 'inherit',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isSelected) {
-                    e.currentTarget.style.backgroundColor = '#1ABC9C';
-                    e.currentTarget.style.color = 'white';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isSelected) {
-                    e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.color = 'inherit';
-                  }
-                }}
-              >
-                <div
-                  className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
-                  style={{ backgroundColor: bgColor }}
+              return (
+                <button
+                  key={i}
+                  onClick={() => handleCustomerSelect(customer)}
+                  className="px-2.5 py-1.5 sm:px-3 sm:py-2 border border-teal-600 rounded-full text-sm cursor-pointer flex items-center gap-1.5 sm:gap-2 transition-colors flex-shrink-0"
+                  style={{
+                    backgroundColor: isSelected ? '#1ABC9C' : 'transparent',
+                    color: isSelected ? 'white' : 'inherit',
+                  }}
                 >
-                  {firstName === 'Guest' ? '👤' : initial}
-                </div>
-                <span className="text-sm whitespace-nowrap">{displayName}</span>
-              </button>
-            );
-          })}
-        </div>
-        <div>
-          <label className="text-muted-foreground text-sm mb-2 block">Notes</label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows="2"
-            className="w-full bg-muted text-foreground border border-border rounded-md outline-none resize-y px-3 py-2 text-sm sm:text-base"
-          />
+                  <div
+                    className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
+                    style={{ backgroundColor: bgColor }}
+                  >
+                    {firstName === 'Guest' ? '👤' : initial}
+                  </div>
+                  <span className="text-sm whitespace-nowrap">{displayName}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div>
+            <label className="text-muted-foreground text-sm mb-2 block">Notes</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows="2"
+              className="w-full bg-muted text-foreground border border-border rounded-md outline-none resize-y px-3 py-2 text-sm sm:text-base"
+            />
+          </div>
         </div>
       </div>
 
       {/* Conditional rendering based on preview mode */}
       {!isPreviewMode ? (
-        <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full">
+        <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full mb-3 sm:mb-4 md:mb-5">
           <div className="flex items-center justify-between mb-3 sm:mb-4 flex-wrap gap-2">
             <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">
               Menu
@@ -1436,19 +1472,32 @@ function POS() {
                           }}
                         />
                       </div>
-                      <div className="p-2 sm:p-2.5 flex flex-col gap-1.5 sm:gap-2">
-                        <div>
-                          <h3 className="text-foreground text-sm font-semibold mb-0.5 sm:mb-1 line-clamp-2 leading-tight">
+                      <div className="p-2 sm:p-2.5 flex flex-col gap-1.5 sm:gap-2 flex-grow">
+                        <div className="flex-grow">
+                          <h3 className="text-foreground text-sm font-bold mb-1.5 line-clamp-2 leading-tight">
                             {itemName}
                           </h3>
+                          {/* Price Display for all variants */}
+                          <div className="space-y-1 mt-1 mb-2">
+                            {item.sizes && item.sizes.length > 0 ? (
+                              item.sizes.map((s, idx) => (
+                                <div key={idx} className="flex justify-between items-center text-[10px] sm:text-xs">
+                                  <span className="text-muted-foreground truncate max-w-[60%]">{s.name}</span>
+                                  <span className="text-teal-500 font-bold whitespace-nowrap">₹{s.price}</span>
+                                </div>
+                              ))
+                            ) : (
+                              <div className="text-teal-500 font-bold text-xs">₹{item.basePrice}</div>
+                            )}
+                          </div>
                         </div>
                         <button
                           onClick={() => handleAddToCartClick(item)}
-                          className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-full text-sm cursor-pointer flex items-center justify-center gap-1 hover:bg-teal-700 w-full"
+                          className="px-3 py-2 bg-teal-600 text-white border-none rounded-lg text-xs font-semibold cursor-pointer flex items-center justify-center gap-1.5 hover:bg-teal-700 transition-colors w-full mt-auto"
                         >
                           <Plus size={14} />
                           <span>
-                            {quantity === 0 ? 'Add' : `${quantity} in cart`}
+                            {quantity === 0 ? 'Add' : `${quantity} View`}
                           </span>
                         </button>
                       </div>
@@ -1564,7 +1613,10 @@ function POS() {
               </h2>
               <div className="flex gap-2">
                 <button
-                  onClick={() => setShowCouponModal(true)}
+                  onClick={() => {
+                    fetchAvailableCoupons(subtotal, selectedCustomerId);
+                    setShowCouponModal(true);
+                  }}
                   disabled={loadingCoupons}
                   className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 hover:bg-teal-700 flex-shrink-0 disabled:opacity-50"
                 >
@@ -1705,5 +1757,5 @@ function POS() {
     </div>
   );
 }
-export default POS;
 
+export default POS;

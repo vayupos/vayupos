@@ -27,10 +27,23 @@ app = FastAPI(
     redirect_slashes=False,
 )
 
-# -------------------- CORS (FIXED) --------------------
+# -------------------- CORS --------------------
+# NOTE: allow_origins=["*"] + allow_credentials=True is invalid per CORS spec.
+# Browsers will block it. We must list origins explicitly when using credentials.
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Temporarily allow all for deployment debugging
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -62,22 +75,22 @@ def startup_event():
         )
 
         if result.returncode == 0:
-            print("✓ Database migrations completed")
+            print("[OK] Database migrations completed")
         elif "already exists" in result.stderr:
             # Tables already exist (e.g., in production database)
-            print("✓ Database schema already exists, skipping migrations")
+            print("[OK] Database schema already exists, skipping migrations")
         else:
-            print(f"⚠ Migration warning: {result.stderr}")
+            print(f"[WARN] Migration warning: {result.stderr}")
 
     except Exception as e:
-        print(f"⚠ Could not run migrations: {str(e)}")
+        print(f"[ERR] Could not run migrations: {str(e)}")
 
     try:
         init_db()
-        print("✓ Database initialized")
+        print("[OK] Database initialized")
     except Exception as e:
-        print(f"⚠ Could not initialize database: {str(e)}")
-        print("✓ Starting application anyway (tables may already exist)")
+        print(f"[ERR] Could not initialize database: {str(e)}")
+        print("[OK] Starting application anyway (tables may already exist)")
 
 # -------------------- ROOT --------------------
 @app.get("/")
@@ -125,108 +138,108 @@ async def health(db: Session = Depends(get_db)):
         )
 
 # -------------------- ROUTERS --------------------
-print("📋 Including routers...")
+print("[INFO] Including routers...")
 try:
     app.include_router(auth.router, prefix="/api/v1", tags=["Auth"])
-    print("✓ Auth router included")
+    print("[OK] Auth router included")
 except Exception as e:
-    print(f"✗ Failed to include auth router: {e}")
+    print(f"[ERR] Failed to include auth router: {e}")
     traceback.print_exc()
 
 try:
     app.include_router(users.router, prefix="/api/v1", tags=["Users"])
-    print("✓ Users router included")
+    print("[OK] Users router included")
 except Exception as e:
-    print(f"✗ Failed to include users router: {e}")
+    print(f"[ERR] Failed to include users router: {e}")
 
 try:
     app.include_router(products.router, prefix="/api/v1", tags=["Products"])
-    print("✓ Products router included")
+    print("[OK] Products router included")
 except Exception as e:
-    print(f"✗ Failed to include products router: {e}")
+    print(f"[ERR] Failed to include products router: {e}")
 
 try:
     app.include_router(categories.router, prefix="/api/v1", tags=["Categories"])
-    print("✓ Categories router included")
+    print("[OK] Categories router included")
 except Exception as e:
-    print(f"✗ Failed to include categories router: {e}")
+    print(f"[ERR] Failed to include categories router: {e}")
 
 try:
     app.include_router(customers.router, prefix="/api/v1", tags=["Customers"])
-    print("✓ Customers router included")
+    print("[OK] Customers router included")
 except Exception as e:
-    print(f"✗ Failed to include customers router: {e}")
+    print(f"[ERR] Failed to include customers router: {e}")
 
 try:
     app.include_router(orders.router, prefix="/api/v1", tags=["Orders"])
-    print("✓ Orders router included")
+    print("[OK] Orders router included")
 except Exception as e:
-    print(f"✗ Failed to include orders router: {e}")
+    print(f"[ERR] Failed to include orders router: {e}")
 
 try:
     app.include_router(inventory.router, prefix="/api/v1", tags=["Inventory"])
-    print("✓ Inventory router included")
+    print("[OK] Inventory router included")
 except Exception as e:
-    print(f"✗ Failed to include inventory router: {e}")
+    print(f"[ERR] Failed to include inventory router: {e}")
 
 try:
     app.include_router(payment.router, prefix="/api/v1", tags=["Payment"])
-    print("✓ Payment router included")
+    print("[OK] Payment router included")
 except Exception as e:
-    print(f"✗ Failed to include payment router: {e}")
+    print(f"[ERR] Failed to include payment router: {e}")
 
 try:
     app.include_router(reports.router, prefix="/api/v1", tags=["Reports"])
-    print("✓ Reports router included")
+    print("[OK] Reports router included")
 except Exception as e:
-    print(f"✗ Failed to include reports router: {e}")
+    print(f"[ERR] Failed to include reports router: {e}")
 
 try:
     app.include_router(coupons.router, prefix="/api/v1", tags=["Coupons"])
-    print("✓ Coupons router included")
+    print("[OK] Coupons router included")
 except Exception as e:
-    print(f"✗ Failed to include coupons router: {e}")
+    print(f"[ERR] Failed to include coupons router: {e}")
 
 try:
     app.include_router(dish_templates.router, prefix="/api/v1", tags=["DishTemplates"])
-    print("✓ DishTemplates router included")
+    print("[OK] DishTemplates router included")
 except Exception as e:
-    print(f"✗ Failed to include dish_templates router: {e}")
+    print(f"[ERR] Failed to include dish_templates router: {e}")
 
 try:
     app.include_router(upload.router, prefix="/api/v1", tags=["Upload"])
-    print("✓ Upload router included")
+    print("[OK] Upload router included")
 except Exception as e:
-    print(f"✗ Failed to include upload router: {e}")
+    print(f"[ERR] Failed to include upload router: {e}")
 
 try:
     app.include_router(staff.router, prefix="/api/v1", tags=["Staff"])
-    print("✓ Staff router included")
+    print("[OK] Staff router included")
 except Exception as e:
-    print(f"✗ Failed to include staff router: {e}")
+    print(f"[ERR] Failed to include staff router: {e}")
 
 try:
     app.include_router(expense.router, prefix="/api/v1", tags=["Expense"])
-    print("✓ Expense router included")
+    print("[OK] Expense router included")
 except Exception as e:
-    print(f"✗ Failed to include expense router: {e}")
+    print(f"[ERR] Failed to include expense router: {e}")
 
 try:
     app.include_router(notification.router, prefix="/api/v1", tags=["Notifications"])
-    print("✓ Notification router included")
+    print("[OK] Notification router included")
 except Exception as e:
-    print(f"✗ Failed to include notification router: {e}")
+    print(f"[ERR] Failed to include notification router: {e}")
 
 try:
     app.include_router(search.router, prefix="/api/v1", tags=["Search"])
-    print("✓ Search router included")
+    print("[OK] Search router included")
 except Exception as e:
-    print(f"✗ Failed to include search router: {e}")
+    print(f"[ERR] Failed to include search router: {e}")
 
 try:
     app.include_router(print_jobs.router, prefix="/api/v1", tags=["Print Jobs"])
-    print("✓ Print Jobs router included")
+    print("[OK] Print Jobs router included")
 except Exception as e:
-    print(f"✗ Failed to include print jobs router: {e}")
+    print(f"[ERR] Failed to include print jobs router: {e}")
 
-print("✓ All routers included")
+print("[OK] All routers included")

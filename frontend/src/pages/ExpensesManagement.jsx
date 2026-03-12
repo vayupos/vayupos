@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Download, Plus, Filter, Eye, Edit2, Trash2, RotateCw, FileText, Flame, Droplet, Zap, Wifi, Paperclip, X, Search, ChevronDown } from 'lucide-react';
+import { formatDateTime, formatPaymentMethod } from '../utils/formatters';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -204,7 +205,7 @@ const ExpensesManagement = () => {
 
     const [formData, setFormData] = useState({
         title: '',
-        date: new Date().toISOString().split('T')[0],
+        date: new Date().toLocaleDateString('en-CA') + 'T' + new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
         category: '',
         account: 'Cashbook',
         amount: '0.00',
@@ -264,7 +265,7 @@ const ExpensesManagement = () => {
                 cycle: `Due on ${entry.dueDate || entry.due_date}`,
                 dueDate: entry.due_date || entry.dueDate,
                 status: 'Scheduled',
-                category: 'Salaries & Wages'
+                category: 'Salary Payment'
             }));
 
             setAutoAddedPayments(transformedSalaries);
@@ -288,8 +289,7 @@ const ExpensesManagement = () => {
     };
 
     const formatDate = (dateString) => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        return formatDateTime(dateString);
     };
 
     const formatAmount = (amount) => {
@@ -474,7 +474,7 @@ const ExpensesManagement = () => {
     const handleReset = () => {
         setFormData({
             title: '',
-            date: new Date().toISOString().split('T')[0],
+            date: new Date().toLocaleDateString('en-CA') + 'T' + new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
             category: '',
             account: 'Cashbook',
             amount: '0.00',
@@ -1113,7 +1113,7 @@ const ExpensesManagement = () => {
                                 <div>
                                     <label className="block text-xs mb-1.5 text-muted-foreground">Date</label>
                                     <input
-                                        type="date"
+                                        type="datetime-local"
                                         value={formData.date}
                                         onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                                         className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
@@ -1129,7 +1129,7 @@ const ExpensesManagement = () => {
                                     >
                                         <option value="">Select category</option>
                                         <option>Kitchen Supplies</option>
-                                        <option>Salaries & Wages</option>
+                                        <option>Salary Payment</option>
                                         <option>Utilities</option>
                                         <option>Rent</option>
                                     </select>

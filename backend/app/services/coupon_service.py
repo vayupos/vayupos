@@ -3,6 +3,7 @@ from typing import Optional, List, Tuple
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.models.coupon import Coupon
 from app.models.order_coupon import OrderCoupon  # keep if you use later
@@ -14,9 +15,25 @@ class CouponService:
     @staticmethod
     def create_coupon(db: Session, coupon_data: CouponCreate) -> Coupon:
         """Create a new coupon"""
+        # Check for duplicate code first (friendly error)
+        existing = db.query(Coupon).filter(Coupon.code == coupon_data.code).first()
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail=f"A coupon with code '{coupon_data.code}' already exists. "
+                       f"Please use a different code or edit the existing coupon."
+            )
+
         coupon = Coupon(**coupon_data.dict())
         db.add(coupon)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail=f"A coupon with code '{coupon_data.code}' already exists."
+            )
         db.refresh(coupon)
         return coupon
 
@@ -45,32 +62,51 @@ class CouponService:
 
     @staticmethod
     def get_available_coupons(
-        db: Session, subtotal: float
+        db: Session, subtotal: float, customer_id: Optional[int] = None
     ) -> Tuple[List[Coupon], List[Coupon]]:
         """Get available coupons split into eligible and ineligible based on subtotal"""
+        from app.models.order import Order
         now = datetime.now(timezone.utc)
 
-        active_coupons = (
-            db.query(Coupon)
-            .filter(
-                Coupon.is_active == True,
-                Coupon.valid_from <= now,
-                (Coupon.valid_until == None) | (Coupon.valid_until >= now),
-            )
-            .all()
-        )
+        all_coupons = db.query(Coupon).all()
 
         eligible: List[Coupon] = []
         ineligible: List[Coupon] = []
 
-        for coupon in active_coupons:
+        for coupon in all_coupons:
+            # 1. Check Inactive
+            if not coupon.is_active:
+                ineligible.append(coupon)
+                continue
+
+            # 2. Check Expiration
+            if coupon.valid_from and now < coupon.valid_from:
+                ineligible.append(coupon)
+                continue
+            if coupon.valid_until and now > coupon.valid_until:
+                ineligible.append(coupon)
+                continue
+
+            # 3. Usage Limit
             if coupon.max_uses and coupon.used_count >= coupon.max_uses:
                 ineligible.append(coupon)
                 continue
 
+            # 4. Minimum Order
             if coupon.min_order_amount and subtotal < coupon.min_order_amount:
                 ineligible.append(coupon)
                 continue
+
+            # 5. First Order Only
+            if coupon.is_first_order_only:
+                if not customer_id:
+                    ineligible.append(coupon)
+                    continue
+                
+                order_count = db.query(Order).filter(Order.customer_id == customer_id).count()
+                if order_count > 0:
+                    ineligible.append(coupon)
+                    continue
 
             eligible.append(coupon)
 
@@ -116,9 +152,16 @@ class CouponService:
 
     @staticmethod
     def validate_coupon(
-        db: Session, code: str, order_amount: float, apply_discount: bool = False
+        db: Session,
+        code: str,
+        order_amount: float,
+        customer_id: Optional[int] = None,
+        apply_discount: bool = False,
     ) -> Tuple[bool, bool, Optional[str], Optional[Coupon], float]:
         """Validate if coupon can be applied to an order and optionally apply it"""
+        # Import Order here to avoid circular imports if any, or at the top
+        from app.models.order import Order
+
         coupon = db.query(Coupon).filter(Coupon.code == code).first()
 
         if not coupon:
@@ -146,6 +189,27 @@ class CouponService:
                 None,
                 0.0,
             )
+
+        # Welcome Offer / First Order Only Logic
+        if coupon.is_first_order_only:
+            if not customer_id:
+                return (
+                    False,
+                    False,
+                    "Welcome offer is valid only for registered customers.",
+                    None,
+                    0.0,
+                )
+
+            order_count = db.query(Order).filter(Order.customer_id == customer_id).count()
+            if order_count > 0:
+                return (
+                    False,
+                    False,
+                    "Welcome offer is valid only for first-time customers.",
+                    None,
+                    0.0,
+                )
 
         discount = CouponService.calculate_discount(coupon, order_amount)
 

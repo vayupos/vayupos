@@ -7,8 +7,13 @@ from enum import Enum
 class DiscountType(str, Enum):
     PERCENTAGE = "percentage"
     FIXED = "fixed"
+    FLAT = "flat"  # alias used by frontend & legacy DB rows
 
 
+# ---------------------------------------------------------------------------
+# Base — shared fields only. NO input-validation validators here because
+# CouponResponse also inherits from this and runs validators on DB reads.
+# ---------------------------------------------------------------------------
 class CouponBase(BaseModel):
     code: str = Field(..., min_length=3, max_length=50, description="Coupon code")
     discount_type: DiscountType
@@ -19,12 +24,11 @@ class CouponBase(BaseModel):
     valid_until: Optional[datetime] = None
     product_id: Optional[int] = None
     description: Optional[str] = None
-
+    is_first_order_only: bool = False
 
     @validator("code")
     def code_uppercase(cls, v: str) -> str:
         return v.upper().strip()
-
 
     @validator("discount_value")
     def validate_discount(cls, v: float, values):
@@ -34,10 +38,25 @@ class CouponBase(BaseModel):
         return v
 
 
+# ---------------------------------------------------------------------------
+# Create — adds min_order_amount rounding rule (input only, not on DB reads)
+# ---------------------------------------------------------------------------
 class CouponCreate(CouponBase):
-    pass
+    @validator("min_order_amount")
+    def validate_min_order_amount(cls, v: float) -> float:
+        """Enforce rounded minimum order amounts (multiples of 50)."""
+        if v and v % 50 != 0:
+            raise ValueError(
+                f"Minimum order must be a rounded value (\u20b9100, \u20b9200, \u20b9300 etc.). "
+                f"Got \u20b9{int(v)}, nearest valid values: "
+                f"\u20b9{int(v // 50) * 50} or \u20b9{int(v // 50 + 1) * 50}."
+            )
+        return v
 
 
+# ---------------------------------------------------------------------------
+# Update — partial, with its own rounding rule
+# ---------------------------------------------------------------------------
 class CouponUpdate(BaseModel):
     code: Optional[str] = Field(None, min_length=3, max_length=50)
     discount_type: Optional[DiscountType] = None
@@ -48,17 +67,32 @@ class CouponUpdate(BaseModel):
     valid_until: Optional[datetime] = None
     product_id: Optional[int] = None
     is_active: Optional[bool] = None
+    is_first_order_only: Optional[bool] = None
     description: Optional[str] = None
 
+    @validator("min_order_amount")
+    def validate_min_order_amount(cls, v: Optional[float]) -> Optional[float]:
+        """Enforce rounded minimum order amounts (multiples of 50)."""
+        if v is not None and v != 0 and v % 50 != 0:
+            raise ValueError(
+                f"Minimum order must be a rounded value (\u20b9100, \u20b9200, \u20b9300 etc.). "
+                f"Got \u20b9{int(v)}, nearest valid values: "
+                f"\u20b9{int(v // 50) * 50} or \u20b9{int(v // 50 + 1) * 50}."
+            )
+        return v
 
+
+# ---------------------------------------------------------------------------
+# Response — inherits CouponBase WITHOUT any strict input validators
+# ---------------------------------------------------------------------------
 class CouponResponse(CouponBase):
     id: int
     used_count: int
     product_id: Optional[int] = None
     is_active: bool
+    is_first_order_only: bool
     created_at: datetime
     updated_at: Optional[datetime] = None
-
 
     class Config:
         from_attributes = True
@@ -68,7 +102,7 @@ class CouponResponse(CouponBase):
 class CouponValidateRequest(BaseModel):
     coupon_code: str  # ✅ Matches frontend {"coupon_code":"PONGAL"}
     subtotal: float = Field(..., ge=0)  # ✅ Matches frontend {"subtotal":5720}
-    customer_id: Optional[str] = None
+    customer_id: Optional[int] = None
 
 
 class CouponValidateResponse(BaseModel):

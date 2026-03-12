@@ -8,11 +8,8 @@ from datetime import datetime
 class PaymentMethod(str, enum.Enum):
     """Payment method enumeration"""
     CASH = "cash"
-    CREDIT_CARD = "credit_card"
-    DEBIT_CARD = "debit_card"
-    MOBILE_PAYMENT = "mobile_payment"
-    BANK_TRANSFER = "bank_transfer"
-    CHEQUE = "cheque"
+    CARD = "card"
+    UPI = "upi"
     OTHER = "other"
 
 

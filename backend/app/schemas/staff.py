@@ -17,7 +17,7 @@ class StaffBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     phone: str = Field(..., min_length=10, max_length=15)
     role: StaffRole
-    salary: float = Field(..., gt=0)
+    salary: float = Field(..., gt=100)
     joined: date
     aadhar: Optional[str] = Field(None, max_length=14)
 
@@ -28,7 +28,7 @@ class StaffUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=2, max_length=100)
     phone: Optional[str] = Field(None, min_length=10, max_length=15)
     role: Optional[StaffRole] = None
-    salary: Optional[float] = Field(None, gt=0)
+    salary: Optional[float] = Field(None, gt=100)
     aadhar: Optional[str] = Field(None, max_length=14)
     status: Optional[StaffStatus] = None
 
