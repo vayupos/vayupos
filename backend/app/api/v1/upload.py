@@ -44,11 +44,12 @@ async def upload_image(
     file: UploadFile = File(...),
     dish_name: str = Form(None),
 ):
+    print(f"[UPLOAD] Received file: {file.filename}, type: {file.content_type}, dish_name: {dish_name}")
     try:
-        if not file.content_type.startswith("image/"):
+        if not file.content_type or not file.content_type.startswith("image/"):
             raise HTTPException(status_code=400, detail="Only image files allowed")
 
-        file_extension = file.filename.split(".")[-1]
+        file_extension = file.filename.split(".")[-1] if "." in file.filename else "jpg"
         short_id = str(uuid4())[:8]
 
         # If dish_name is provided, store under dish-library/ so it shows
@@ -61,30 +62,44 @@ async def upload_image(
             s3_key = f"{uuid4()}.{file_extension}"
             local_filename = s3_key
 
+        # Read file content into memory first (avoids stream issues)
+        content = await file.read()
+        print(f"[UPLOAD] File size: {len(content)} bytes, S3 key: {s3_key}")
+
         # Use S3 if configured, otherwise use local storage
         if s3 and AWS_BUCKET_NAME:
+            from io import BytesIO
             s3.upload_fileobj(
-                file.file,
+                BytesIO(content),
                 AWS_BUCKET_NAME,
                 s3_key,
-                ExtraArgs={"ContentType": file.content_type},
+                ExtraArgs={
+                    "ContentType": file.content_type,
+                    "ACL": "public-read"
+                },
             )
             image_url = f"https://{AWS_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/{s3_key}"
+            print(f"[UPLOAD] Successfully uploaded to S3: {image_url}")
         else:
             # Fallback to local storage
             file_path = LOCAL_UPLOAD_DIR / local_filename
-            content = await file.read()
             with open(file_path, "wb") as f:
                 f.write(content)
             image_url = f"/static/uploads/products/{local_filename}"
+            print(f"[UPLOAD] Saved locally: {image_url}")
 
         return {
             "success": True,
             "image_url": image_url
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[UPLOAD ERROR] {type(e).__name__}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
 @router.get("/dish-library")

@@ -394,8 +394,11 @@ const Menu = () => {
 
       const res = await api.post("/upload/image", formData, {
         headers: {
-          "Content-Type": "multipart/form-data",
+          // Let the browser auto-set Content-Type with the correct boundary
+          // Do NOT set 'multipart/form-data' manually — it breaks parsing
+          "Content-Type": undefined,
         },
+        timeout: 60000, // 60s timeout for large files
       });
 
       console.log("✅ Upload response:", res.data);
