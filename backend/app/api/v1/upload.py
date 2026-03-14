@@ -74,8 +74,7 @@ async def upload_image(
                 AWS_BUCKET_NAME,
                 s3_key,
                 ExtraArgs={
-                    "ContentType": file.content_type,
-                    "ACL": "public-read"
+                    "ContentType": file.content_type
                 },
             )
             image_url = f"https://{AWS_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/{s3_key}"
