@@ -622,7 +622,8 @@ const Menu = () => {
       alert("Product added successfully!");
     } catch (err) {
       console.error("ADD PRODUCT ERROR:", err?.response?.data || err);
-      alert("Failed to add product(s)");
+      const errorMsg = err?.response?.data?.detail || err?.response?.data?.message || err.message || "Unknown error";
+      alert(`Failed to add product(s): ${errorMsg}`);
     }
   };
 
