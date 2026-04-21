@@ -1,1165 +1,1129 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, ShoppingBag, TrendingUp, Wallet } from 'lucide-react';
+import { Download, Plus, RefreshCw, X, Save, Edit, Trash2, Link2, FolderOpen } from 'lucide-react';
+import api from '../api/axios';
 
-const Dashboard = ({ isDarkMode = true, onNavigate }) => {
-  // API Configuration
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
-  const [authToken, setAuthToken] = useState('');
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const [credentials, setCredentials] = useState({ username: '', password: '' });
-
-  // View state
-  const [showAllOrders, setShowAllOrders] = useState(false);
-  
-  // Modal states
-  const [showCustomerModal, setShowCustomerModal] = useState(false);
-  const [showOfferModal, setShowOfferModal] = useState(false);
-  const [showStaffModal, setShowStaffModal] = useState(false);
-  const [showExpenseModal, setShowExpenseModal] = useState(false);
-
-  // Loading states
-  const [isLoadingCustomers, setIsLoadingCustomers] = useState(false);
-  const [isLoadingOffers, setIsLoadingOffers] = useState(false);
-  const [isLoadingStaff, setIsLoadingStaff] = useState(false);
-  const [isLoadingExpenses, setIsLoadingExpenses] = useState(false);
-  const [isLoadingOrders, setIsLoadingOrders] = useState(false);
-  const [isLoadingStats, setIsLoadingStats] = useState(false);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
-
-  // Form states
-  const [newCustomer, setNewCustomer] = useState({ 
-    first_name: '', 
-    last_name: '',
-    phone: '', 
-    email: '',
-    address: '',
-    city: '',
-    state: '',
-    zip_code: '',
-    country: 'India'
-  });
-  const [newOffer, setNewOffer] = useState({ 
-    code: '', 
-    discount_type: 'percentage', 
-    discount_value: '', 
-    min_order_amount: 0,
-    max_uses: 0,
-    valid_from: new Date().toISOString(),
-    valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-    description: '' 
-  });
-  const [newStaff, setNewStaff] = useState({ 
-    name: '', 
-    role: 'Cashier', 
-    salary: '', 
-    joined: new Date().toISOString().split('T')[0],
-    phone: '',
-    aadhar: ''
-  });
-  const [newExpense, setNewExpense] = useState({ 
-    title: '', 
-    amount: '', 
-    date: new Date().toISOString().split('T')[0], 
-    category: 'Supplies',
-    subtitle: 'Manual entry',
-    type: 'manual',
-    account: 'Cashbook',
-    tax: 0,
-    payment_mode: 'Cash',
-    notes: ''
-  });
-
-  // Data states
-  const [recentOrders, setRecentOrders] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [offers, setOffers] = useState([]);
-  const [staff, setStaff] = useState([]);
-  const [expenses, setExpenses] = useState([]);
-  const [dailyStats, setDailyStats] = useState({
-    today_sales: 0,
-    total_orders: 0,
-    avg_ticket: 0,
-    total_expenses: 0
-  });
-
-  const activities = [
-    { action: 'Staff login', time: 'just now' },
-    { action: 'Menu updated', time: '20m ago' },
-    { action: 'Expense added', time: '1h ago' }
-  ];
-
-  // API Helper Functions
-  const getAuthHeaders = () => ({
-    'Content-Type': 'application/json',
-    ...(authToken && { 'Authorization': `Bearer ${authToken}` })
-  });
-
-  const handleApiError = (error, context) => {
-    console.error(`Error in ${context}:`, error);
-    if (error.message.includes('401') || error.message.includes('403')) {
-      alert('Session expired or unauthorized. Please login again.');
-      setAuthToken('');
-      setShowLoginModal(true);
-    } else {
-      console.error(`Error in ${context}: ${error.message}`);
-    }
-  };
-
-  // Login Function
-  const handleLogin = async () => {
-    if (!credentials.username || !credentials.password) {
-      alert('Please enter username and password');
-      return;
-    }
-
-    setIsLoggingIn(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username: credentials.username,
-          password: credentials.password
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Login failed. Please check your credentials.');
-      }
-
-      const data = await response.json();
-      const token = data.access_token || data.token;
-      
-      if (token) {
-        setAuthToken(token);
-        setShowLoginModal(false);
-        setCredentials({ username: '', password: '' });
-      } else {
-        throw new Error('No token received from server');
-      }
-    } catch (error) {
-      alert(error.message);
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
-
-  // Skip Login (Demo Mode)
-  const handleSkipLogin = () => {
-    setShowLoginModal(false);
-    // Load mock data instead
-    loadMockData();
-  };
-
-  const loadMockData = () => {
-    setDailyStats({
-      today_sales: 12450,
-      total_orders: 24,
-      avg_ticket: 518,
-      total_expenses: 3200
-    });
-    
-    setRecentOrders([
-      { id: '#1256', type: 'Dine-In', time: '5m ago', amount: 850 },
-      { id: '#1255', type: 'Takeaway', time: '15m ago', amount: 420 },
-      { id: '#1254', type: 'Delivery', time: '32m ago', amount: 1200 }
-    ]);
-
-    setCustomers([
-      { name: 'John Doe', phone: '+91 9876543210', email: 'john@example.com', orders: 15 },
-      { name: 'Jane Smith', phone: '+91 9876543211', email: 'jane@example.com', orders: 8 }
-    ]);
-
-    setOffers([
-      { code: 'SAVE10', type: 'Percentage', value: '10%', category: 'All items', id: 1, is_active: true },
-      { code: 'FLAT50', type: 'Flat', value: '₹50', category: 'Min ₹500', id: 2, is_active: true }
-    ]);
-
-    setStaff([
-      { name: 'Raj Kumar', role: 'Chef', payscale: '₹25,000', joined: '01 Jan, 2024', id: 1 },
-      { name: 'Priya Singh', role: 'Cashier', payscale: '₹18,000', joined: '15 Feb, 2024', id: 2 }
-    ]);
-
-    setExpenses([
-      { title: 'Vegetables', amount: '₹ 1,200', date: '20 Jan, 2026', source: 'Manual', id: 1 },
-      { title: 'Electricity Bill', amount: '₹ 2,000', date: '19 Jan, 2026', source: 'Auto', id: 2 }
-    ]);
-  };
-
-  // Fetch Functions
-  const fetchDailyStats = async () => {
-    if (!authToken) return;
-    
-    setIsLoadingStats(true);
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const response = await fetch(
-        `${API_BASE_URL}/reports/daily-summary?date=${today}`,
-        { headers: getAuthHeaders() }
-      );
-      if (!response.ok) throw new Error('Failed to fetch daily stats');
-      const data = await response.json();
-      setDailyStats({
-        today_sales: data.total_sales || 0,
-        total_orders: data.total_orders || 0,
-        avg_ticket: data.avg_ticket || 0,
-        total_expenses: data.total_expenses || 0
-      });
-    } catch (error) {
-      handleApiError(error, 'fetchDailyStats');
-    } finally {
-      setIsLoadingStats(false);
-    }
-  };
-
-  const fetchOrders = async () => {
-    if (!authToken) return;
-    
-    setIsLoadingOrders(true);
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/orders?skip=0&limit=10`,
-        { headers: getAuthHeaders() }
-      );
-      if (!response.ok) throw new Error('Failed to fetch orders');
-      const data = await response.json();
-      
-      const ordersArray = data.data || data || [];
-      const transformedOrders = ordersArray.map((order, index) => ({
-        id: order.order_number || order.id || (1256 - index),
-        type: order.order_type || 'Dine-In',
-        time: formatTime(order.created_at),
-        amount: order.total || order.total_amount || 0
-      }));
-      setRecentOrders(transformedOrders);
-    } catch (error) {
-      handleApiError(error, 'fetchOrders');
-    } finally {
-      setIsLoadingOrders(false);
-    }
-  };
-
-  const fetchCustomers = async () => {
-    if (!authToken) return;
-    
-    setIsLoadingCustomers(true);
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/customers?skip=0&limit=100&is_active=true`,
-        { headers: getAuthHeaders() }
-      );
-      if (!response.ok) throw new Error('Failed to fetch customers');
-      const data = await response.json();
-      
-      const customersArray = data.data || data || [];
-      const transformedCustomers = customersArray.map(customer => ({
-        name: `${customer.first_name} ${customer.last_name || ''}`.trim(),
-        phone: customer.phone,
-        email: customer.email,
-        orders: customer.order_count || 0
-      }));
-      setCustomers(transformedCustomers);
-    } catch (error) {
-      handleApiError(error, 'fetchCustomers');
-    } finally {
-      setIsLoadingCustomers(false);
-    }
-  };
-
-  const fetchOffers = async () => {
-    if (!authToken) return;
-    
-    setIsLoadingOffers(true);
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/coupons?skip=0&limit=100&active_only=true`,
-        { headers: getAuthHeaders() }
-      );
-      if (!response.ok) throw new Error('Failed to fetch offers');
-      const data = await response.json();
-      
-      const offersArray = data.data || data || [];
-      const transformedOffers = offersArray.map(coupon => ({
-        code: coupon.code,
-        type: coupon.discount_type === 'percentage' ? 'Percentage' : 'Flat',
-        value: coupon.discount_type === 'percentage' 
-          ? `${coupon.discount_value}%` 
-          : `₹${coupon.discount_value}`,
-        category: coupon.description || '',
-        id: coupon.id,
-        is_active: coupon.is_active
-      }));
-      setOffers(transformedOffers);
-    } catch (error) {
-      handleApiError(error, 'fetchOffers');
-    } finally {
-      setIsLoadingOffers(false);
-    }
-  };
-
-  const fetchStaff = async () => {
-    if (!authToken) return;
-    
-    setIsLoadingStaff(true);
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/staff?skip=0&limit=100`,
-        { headers: getAuthHeaders() }
-      );
-      if (!response.ok) throw new Error('Failed to fetch staff');
-      const data = await response.json();
-      
-      const staffArray = data.data || data || [];
-      const transformedStaff = staffArray.map(member => ({
-        name: member.name,
-        role: member.role,
-        payscale: `₹${member.salary?.toLocaleString() || 0}`,
-        joined: formatDate(member.joined),
-        id: member.id,
-        phone: member.phone
-      }));
-      setStaff(transformedStaff);
-    } catch (error) {
-      handleApiError(error, 'fetchStaff');
-    } finally {
-      setIsLoadingStaff(false);
-    }
-  };
-
-  const fetchExpenses = async () => {
-    if (!authToken) return;
-    
-    setIsLoadingExpenses(true);
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/expenses?skip=0&limit=100`,
-        { headers: getAuthHeaders() }
-      );
-      if (!response.ok) throw new Error('Failed to fetch expenses');
-      const data = await response.json();
-      
-      const expensesArray = data.data || data || [];
-      const transformedExpenses = expensesArray.map(expense => ({
-        title: expense.title,
-        amount: `₹ ${expense.amount?.toLocaleString() || 0}`,
-        date: formatDate(expense.date),
-        source: expense.type === 'manual' ? 'Manual' : 'Auto',
-        id: expense.id
-      }));
-      setExpenses(transformedExpenses);
-    } catch (error) {
-      handleApiError(error, 'fetchExpenses');
-    } finally {
-      setIsLoadingExpenses(false);
-    }
-  };
-
-  // Helper functions for date/time formatting
-  const formatTime = (datetime) => {
-    if (!datetime) return 'N/A';
-    const now = new Date();
-    const then = new Date(datetime);
-    const diffMs = now - then;
-    const diffMins = Math.floor(diffMs / 60000);
-    
-    if (diffMins < 1) return 'just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return `${Math.floor(diffHours / 24)}d ago`;
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-IN', { 
-      day: '2-digit', 
-      month: 'short', 
-      year: 'numeric' 
-    });
-  };
-
-  // Add functions with API integration
-  const addCustomer = async () => {
-    if (!newCustomer.first_name || !newCustomer.phone) {
-      alert('Please fill in first name and phone');
-      return;
-    }
-
-    if (!authToken) {
-      alert('Please login first');
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/customers`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(newCustomer)
-      });
-
-      if (!response.ok) throw new Error('Failed to create customer');
-      
-      alert('Customer added successfully!');
-      setNewCustomer({ 
-        first_name: '', 
-        last_name: '',
-        phone: '', 
-        email: '',
-        address: '',
-        city: '',
-        state: '',
-        zip_code: '',
-        country: 'India'
-      });
-      setShowCustomerModal(false);
-      fetchCustomers();
-    } catch (error) {
-      handleApiError(error, 'addCustomer');
-    }
-  };
-
-  const addOffer = async () => {
-    if (!newOffer.code || !newOffer.discount_value) {
-      alert('Please fill in code and value');
-      return;
-    }
-
-    if (!authToken) {
-      alert('Please login first');
-      return;
-    }
-
-    try {
-      const payload = {
-        ...newOffer,
-        discount_value: parseFloat(newOffer.discount_value)
-      };
-
-      const response = await fetch(`${API_BASE_URL}/coupons`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) throw new Error('Failed to create offer');
-      
-      alert('Offer created successfully!');
-      setNewOffer({ 
-        code: '', 
-        discount_type: 'percentage', 
-        discount_value: '', 
-        min_order_amount: 0,
-        max_uses: 0,
-        valid_from: new Date().toISOString(),
-        valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        description: '' 
-      });
-      setShowOfferModal(false);
-      fetchOffers();
-    } catch (error) {
-      handleApiError(error, 'addOffer');
-    }
-  };
-
-  const addStaff = async () => {
-    if (!newStaff.name || !newStaff.salary) {
-      alert('Please fill in name and salary');
-      return;
-    }
-
-    if (!authToken) {
-      alert('Please login first');
-      return;
-    }
-
-    try {
-      const payload = {
-        ...newStaff,
-        salary: parseFloat(newStaff.salary)
-      };
-
-      const response = await fetch(`${API_BASE_URL}/staff`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) throw new Error('Failed to add staff');
-      
-      alert('Staff member added successfully!');
-      setNewStaff({ 
-        name: '', 
-        role: 'Cashier', 
-        salary: '', 
-        joined: new Date().toISOString().split('T')[0],
-        phone: '',
-        aadhar: ''
-      });
-      setShowStaffModal(false);
-      fetchStaff();
-    } catch (error) {
-      handleApiError(error, 'addStaff');
-    }
-  };
-
-  const addExpense = async () => {
-    if (!newExpense.title || !newExpense.amount) {
-      alert('Please fill in title and amount');
-      return;
-    }
-
-    if (!authToken) {
-      alert('Please login first');
-      return;
-    }
-
-    try {
-      const payload = {
-        ...newExpense,
-        amount: parseFloat(newExpense.amount)
-      };
-
-      const response = await fetch(`${API_BASE_URL}/expenses`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) throw new Error('Failed to add expense');
-      
-      alert('Expense added successfully!');
-      setNewExpense({ 
-        title: '', 
-        amount: '', 
-        date: new Date().toISOString().split('T')[0], 
-        category: 'Supplies',
-        subtitle: 'Manual entry',
-        type: 'manual',
-        account: 'Cashbook',
-        tax: 0,
-        payment_mode: 'Cash',
-        notes: ''
-      });
-      setShowExpenseModal(false);
-      fetchExpenses();
-      fetchDailyStats();
-    } catch (error) {
-      handleApiError(error, 'addExpense');
-    }
-  };
-
-  // Load all data on component mount
+// Reusable Modal Component
+function Modal({ isOpen, onClose, title, children, maxWidth = "max-w-3xl" }) {
   useEffect(() => {
-    if (authToken) {
-      fetchDailyStats();
-      fetchOrders();
-      fetchCustomers();
-      fetchOffers();
-      fetchStaff();
-      fetchExpenses();
-    } else {
-      setShowLoginModal(true);
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+      
+      const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+          onClose();
+        }
+      };
+      
+      document.addEventListener('keydown', handleEscape);
+      
+      return () => {
+        document.body.style.overflow = 'unset';
+        document.removeEventListener('keydown', handleEscape);
+      };
     }
-  }, [authToken]);
+  }, [isOpen, onClose]);
 
-  // Navigation handlers
-  const handleNavigateToPOS = () => {
-    if (onNavigate) {
-      onNavigate('pos');
-    }
-  };
+  if (!isOpen) return null;
 
-  const handleNavigateToMenu = () => {
-    if (onNavigate) {
-      onNavigate('menu');
-    }
-  };
-
-  const handleNavigateToReports = () => {
-    if (onNavigate) {
-      onNavigate('reports');
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget) {
+      onClose();
     }
   };
-
-  const handleNavigateToPastOrders = () => {
-    if (onNavigate) {
-      onNavigate('past-orders');
-    }
-  };
-
-  const handleSeeAllOrders = () => {
-    handleNavigateToPastOrders();
-  };
-
-  // Computed values
-  const displayedOrders = showAllOrders ? recentOrders : recentOrders.slice(0, 3);
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen">
-      {/* Login Modal */}
-      {showLoginModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Login Required</h3>
-            <p className="text-sm text-muted-foreground mb-4">Please login to access the dashboard or continue in demo mode.</p>
-            
-            <input 
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-3 sm:p-4 animate-fadeIn overflow-y-auto"
+      onClick={handleBackdropClick}
+    >
+      <div 
+        className={`bg-card rounded-xl shadow-2xl w-full ${maxWidth} my-8 animate-slideUp`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-3 sm:p-4 lg:p-5 border-b border-border flex-shrink-0">
+          <h2 className="text-foreground text-sm sm:text-base lg:text-lg font-semibold pr-4">{title}</h2>
+          <button 
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground transition-colors p-1 flex-shrink-0"
+          >
+            <X size={20} className="sm:w-[22px] sm:h-[22px]" />
+          </button>
+        </div>
+        
+        <div className="overflow-y-auto max-h-[calc(90vh-120px)] p-3 sm:p-4 lg:p-6">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Offers() {
+  const [coupons, setCoupons] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState('All / Percentage / Flat');
+  const [statusFilter, setStatusFilter] = useState('All / Active / Expired');
+  const [editingId, setEditingId] = useState(null);
+  const [showCouponModal, setShowCouponModal] = useState(false);
+  
+  const [formData, setFormData] = useState({
+    code: '',
+    discount_type: 'percentage',
+    discount_value: '',
+    min_order_amount: '',
+    max_uses: '',
+    valid_from: '',
+    valid_until: '',
+    description: ''
+  });
+
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showCouponSelectModal, setShowCouponSelectModal] = useState(false);
+  const [selectedCoupon, setSelectedCoupon] = useState(null);
+  const [assignOrderId, setAssignOrderId] = useState('');
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState([]);
+
+  // Load coupons and categories from backend on component mount
+  useEffect(() => {
+    loadCoupons();
+    loadCategories();
+  }, []);
+
+  const loadCoupons = async () => {
+    try {
+      setLoading(true);
+      console.log('Loading coupons...');
+      const response = await api.get('/coupons/', {
+        params: { skip: 0, limit: 100 }
+      });
+      
+      console.log('Coupons response:', response.data);
+      const couponData = response.data || [];
+      setCoupons(Array.isArray(couponData) ? couponData : []);
+    } catch (error) {
+      console.error('LOAD COUPONS ERROR:', error?.response?.data || error);
+      if (error?.response?.status !== 401) {
+        alert('Failed to load coupons. Please try again.');
+      }
+      setCoupons([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadCategories = async () => {
+    try {
+      setCategoriesLoading(true);
+      console.log('Loading categories...');
+      
+      // Try the main categories endpoint
+      const response = await api.get('/categories/');
+      
+      console.log('Categories API Response:', response);
+      console.log('Categories data:', response.data);
+      
+      let categoryData = response.data;
+      
+      // Handle different response formats
+      if (categoryData && typeof categoryData === 'object') {
+        // If the response has a 'categories' property
+        if (categoryData.categories && Array.isArray(categoryData.categories)) {
+          categoryData = categoryData.categories;
+        }
+        // If the response has an 'items' property (paginated response)
+        else if (categoryData.items && Array.isArray(categoryData.items)) {
+          categoryData = categoryData.items;
+        }
+        // If the response has a 'data' property
+        else if (categoryData.data && Array.isArray(categoryData.data)) {
+          categoryData = categoryData.data;
+        }
+        // If it's directly an array
+        else if (!Array.isArray(categoryData)) {
+          console.warn('Unexpected categories format:', categoryData);
+          categoryData = [];
+        }
+      } else {
+        categoryData = [];
+      }
+      
+      console.log('Processed categories:', categoryData);
+      setCategories(Array.isArray(categoryData) ? categoryData : []);
+      
+      if (Array.isArray(categoryData) && categoryData.length > 0) {
+        console.log(`✓ Successfully loaded ${categoryData.length} categories`);
+      } else {
+        console.warn('⚠ No categories found in response');
+      }
+    } catch (error) {
+      console.error('LOAD CATEGORIES ERROR:', error);
+      console.error('Error details:', {
+        status: error?.response?.status,
+        statusText: error?.response?.statusText,
+        data: error?.response?.data,
+        message: error?.message
+      });
+      
+      if (error?.response?.status === 404) {
+        console.warn('Categories endpoint not found. Trying alternative endpoint...');
+        // Try alternative endpoint if main one fails
+        try {
+          const altResponse = await api.get('/products/categories');
+          console.log('Alternative endpoint response:', altResponse.data);
+          const altData = Array.isArray(altResponse.data) ? altResponse.data : [];
+          setCategories(altData);
+        } catch (altError) {
+          console.error('Alternative endpoint also failed:', altError);
+          setCategories([]);
+        }
+      } else {
+        setCategories([]);
+      }
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData({ ...formData, [field]: value });
+  };
+
+  const resetForm = () => {
+    setFormData({
+      code: '',
+      discount_type: 'percentage',
+      discount_value: '',
+      min_order_amount: '',
+      max_uses: '',
+      valid_from: '',
+      valid_until: '',
+      description: ''
+    });
+    setEditingId(null);
+  };
+
+  const handleNewCoupon = () => {
+    resetForm();
+    setShowCouponModal(true);
+  };
+
+  const handleSaveCoupon = async () => {
+    if (!formData.code || !formData.discount_value) {
+      alert('Please fill in all required fields (Code, Discount Value)');
+      return;
+    }
+
+    try {
+      const payload = {
+        code: formData.code.toUpperCase().trim(),
+        discount_type: formData.discount_type,
+        discount_value: parseFloat(formData.discount_value),
+        min_order_amount: formData.min_order_amount ? parseFloat(formData.min_order_amount) : 0,
+        max_uses: formData.max_uses ? parseInt(formData.max_uses) : 1,
+      };
+
+      if (formData.valid_from) {
+        payload.valid_from = new Date(formData.valid_from).toISOString();
+      }
+      
+      if (formData.valid_until) {
+        payload.valid_until = new Date(formData.valid_until).toISOString();
+      }
+      
+      if (formData.description && formData.description.trim()) {
+        payload.description = formData.description.trim();
+      }
+
+      console.log('Sending payload:', payload);
+
+      if (editingId !== null) {
+        const response = await api.put(`/coupons/${editingId}`, {
+          ...payload,
+          is_active: true
+        });
+        setCoupons(coupons.map(c => c.id === editingId ? response.data : c));
+        alert('Coupon updated successfully!');
+      } else {
+        const response = await api.post('/coupons/', payload);
+        setCoupons([...coupons, response.data]);
+        alert('Coupon created successfully!');
+      }
+
+      resetForm();
+      setShowCouponModal(false);
+    } catch (error) {
+      console.error('SAVE COUPON ERROR:', error?.response?.data || error);
+      
+      if (error?.response?.data?.detail) {
+        const detail = error.response.data.detail;
+        if (Array.isArray(detail)) {
+          const errors = detail.map(err => `${err.loc.join('.')}: ${err.msg}`).join('\n');
+          alert(`Validation Error:\n${errors}`);
+        } else {
+          alert(`Error: ${detail}`);
+        }
+      } else {
+        alert('Failed to save coupon. Check console for details.');
+      }
+    }
+  };
+
+  const handleCancel = () => {
+    resetForm();
+    setShowCouponModal(false);
+  };
+
+  const handleEdit = (coupon) => {
+    setFormData({
+      code: coupon.code,
+      discount_type: coupon.discount_type,
+      discount_value: coupon.discount_value.toString(),
+      min_order_amount: coupon.min_order_amount?.toString() || '',
+      max_uses: coupon.max_uses?.toString() || '',
+      valid_from: coupon.valid_from ? coupon.valid_from.split('T')[0] : '',
+      valid_until: coupon.valid_until ? coupon.valid_until.split('T')[0] : '',
+      description: coupon.description || ''
+    });
+    setEditingId(coupon.id);
+    setShowCouponModal(true);
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this coupon?')) {
+      return;
+    }
+
+    try {
+      await api.delete(`/coupons/${id}`);
+      setCoupons(coupons.filter(c => c.id !== id));
+      alert('Coupon deleted successfully!');
+    } catch (error) {
+      console.error('DELETE COUPON ERROR:', error?.response?.data || error);
+      alert('Failed to delete coupon');
+    }
+  };
+
+  const handleSync = async () => {
+    await loadCoupons();
+    alert('Coupons synced successfully!');
+  };
+
+  const handleAssign = (coupon) => {
+    setSelectedCoupon(coupon);
+    setShowAssignModal(true);
+  };
+
+  const handleAssignToOrder = async () => {
+    if (!assignOrderId) {
+      alert('Please enter an order ID');
+      return;
+    }
+
+    try {
+      await api.post(`/coupons/${selectedCoupon.id}/assign-order`, {
+        order_id: parseInt(assignOrderId)
+      });
+      alert(`Coupon ${selectedCoupon.code} assigned to Order #${assignOrderId}`);
+      setShowAssignModal(false);
+      setAssignOrderId('');
+    } catch (error) {
+      console.error('ASSIGN ORDER ERROR:', error?.response?.data || error);
+      alert('Failed to assign coupon to order');
+    }
+  };
+
+  const handleQuickAssignOrder = () => {
+    if (coupons.length === 0) {
+      alert('Please create a coupon first');
+      return;
+    }
+    
+    const couponCode = window.prompt('Enter coupon code to assign:');
+    if (!couponCode) return;
+    
+    const coupon = coupons.find(c => c.code.toUpperCase() === couponCode.toUpperCase());
+    if (!coupon) {
+      alert('Coupon not found');
+      return;
+    }
+    
+    const orderId = window.prompt('Enter Order ID:');
+    if (!orderId) return;
+    
+    api.post(`/coupons/${coupon.id}/assign-order`, {
+      order_id: parseInt(orderId)
+    })
+    .then(() => {
+      alert(`✓ Coupon "${coupon.code}" assigned to Order #${orderId}`);
+    })
+    .catch((error) => {
+      console.error('QUICK ASSIGN ORDER ERROR:', error);
+      alert('Failed to assign coupon to order');
+    });
+  };
+
+  const handleQuickAssignCategories = async () => {
+    if (coupons.length === 0) {
+      alert('Please create a coupon first');
+      return;
+    }
+    
+    // Reload categories to ensure we have the latest data
+    console.log('Reloading categories before showing modal...');
+    await loadCategories();
+    
+    console.log('Current categories state:', categories);
+    
+    if (categories.length === 0) {
+      alert('No categories available. Please create categories in the Products section first.');
+      return;
+    }
+    
+    // Show coupon selection modal
+    setShowCouponSelectModal(true);
+  };
+
+  const handleSelectCouponForCategories = (coupon) => {
+    console.log('Selected coupon:', coupon);
+    console.log('Available categories:', categories);
+    setSelectedCoupon(coupon);
+    setShowCouponSelectModal(false);
+    setSelectedCategoryIds([]);
+    setShowCategoryModal(true);
+  };
+
+  const handleSaveCategories = async () => {
+    if (selectedCategoryIds.length === 0) {
+      alert('Please select at least one category');
+      return;
+    }
+
+    if (!selectedCoupon) {
+      alert('No coupon selected');
+      return;
+    }
+
+    try {
+      console.log('Assigning categories:', selectedCategoryIds, 'to coupon:', selectedCoupon.id);
+      
+      await api.post(`/coupons/${selectedCoupon.id}/assign-categories`, {
+        category_ids: selectedCategoryIds
+      });
+
+      const selectedCategoryNames = categories
+        .filter(cat => selectedCategoryIds.includes(cat.id))
+        .map(cat => cat.name)
+        .join(', ');
+
+      alert(`✓ Coupon "${selectedCoupon.code}" assigned to categories:\n${selectedCategoryNames}`);
+      setShowCategoryModal(false);
+      setSelectedCategoryIds([]);
+      setSelectedCoupon(null);
+    } catch (error) {
+      console.error('ASSIGN CATEGORIES ERROR:', error?.response?.data || error);
+      const errorMsg = error?.response?.data?.detail || 'Failed to assign categories';
+      alert(`Error: ${errorMsg}`);
+    }
+  };
+
+  const toggleCategory = (categoryId) => {
+    setSelectedCategoryIds(prev => 
+      prev.includes(categoryId) 
+        ? prev.filter(id => id !== categoryId)
+        : [...prev, categoryId]
+    );
+  };
+
+  const handleExport = () => {
+    const headers = ['ID', 'Code', 'Type', 'Value', 'Min Order', 'Max Uses', 'Valid From', 'Valid Until', 'Status'];
+    
+    const csvRows = [
+      headers.join(','),
+      ...filteredCoupons.map(coupon => [
+        coupon.id,
+        `"${coupon.code}"`,
+        coupon.discount_type,
+        coupon.discount_value,
+        coupon.min_order_amount || 0,
+        coupon.max_uses || 0,
+        coupon.valid_from || '',
+        coupon.valid_until || '',
+        coupon.is_active ? 'Active' : 'Inactive'
+      ].join(','))
+    ];
+    
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `coupons_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    alert('Export completed! CSV file downloaded.');
+  };
+
+  const isCouponExpired = (coupon) => {
+    if (!coupon.valid_until) return false;
+    return new Date(coupon.valid_until) < new Date();
+  };
+
+  const formatValidity = (coupon) => {
+    if (!coupon.valid_from && !coupon.valid_until) return 'No expiration';
+    
+    const formatDate = (dateStr) => {
+      if (!dateStr) return '';
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    };
+    
+    if (coupon.valid_from && coupon.valid_until) {
+      return `${formatDate(coupon.valid_from)} – ${formatDate(coupon.valid_until)}`;
+    } else if (coupon.valid_from) {
+      return `From ${formatDate(coupon.valid_from)}`;
+    } else {
+      return `Until ${formatDate(coupon.valid_until)}`;
+    }
+  };
+
+  const filteredCoupons = coupons.filter(coupon => {
+    const matchesSearch = coupon.code.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                         (coupon.description && coupon.description.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    const matchesType = typeFilter === 'All / Percentage / Flat' || 
+                       (typeFilter === 'Percentage' && coupon.discount_type === 'percentage') ||
+                       (typeFilter === 'Flat' && coupon.discount_type === 'flat');
+    
+    const isExpired = isCouponExpired(coupon);
+    const displayStatus = !coupon.is_active ? 'Expired' : (isExpired ? 'Expired' : 'Active');
+    const matchesStatus = statusFilter === 'All / Active / Expired' || displayStatus === statusFilter;
+    
+    return matchesSearch && matchesType && matchesStatus;
+  });
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+        <p className="text-muted-foreground">Loading coupons...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background text-foreground" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      <style>{`
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes slideUp {
+          from { 
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to { 
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+        .animate-slideUp {
+          animation: slideUp 0.3s ease-out;
+        }
+      `}</style>
+
+      {/* Create/Edit Coupon Modal */}
+      <Modal 
+        isOpen={showCouponModal} 
+        onClose={handleCancel}
+        title={editingId !== null ? 'Edit Coupon' : 'Create New Coupon'}
+        maxWidth="max-w-md sm:max-w-xl lg:max-w-2xl xl:max-w-3xl"
+      >
+        <div className="flex flex-col gap-3 sm:gap-4">
+          <div>
+            <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Coupon Code *</label>
+            <input
               type="text"
-              placeholder="Username"
-              value={credentials.username}
-              onChange={(e) => setCredentials({...credentials, username: e.target.value})}
-              onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
+              value={formData.code}
+              onChange={(e) => handleInputChange('code', e.target.value.toUpperCase())}
+              className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base focus:border-teal-600"
+              placeholder="e.g., DIW50"
             />
-            <input 
-              type="password"
-              placeholder="Password"
-              value={credentials.password}
-              onChange={(e) => setCredentials({...credentials, password: e.target.value})}
-              onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-4"
-            />
-            
-            <div className="flex gap-2 mb-3">
-              <button 
-                onClick={handleLogin} 
-                disabled={isLoggingIn}
-                className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:bg-gray-400"
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Discount Type *</label>
+              <select
+                value={formData.discount_type}
+                onChange={(e) => handleInputChange('discount_type', e.target.value)}
+                className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base focus:border-teal-600"
               >
-                {isLoggingIn ? 'Logging in...' : 'Login'}
-              </button>
+                <option value="percentage">Percentage</option>
+                <option value="flat">Flat</option>
+              </select>
             </div>
-            
+            <div>
+              <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">
+                Discount Value * {formData.discount_type === 'percentage' ? '(%)' : '(₹)'}
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="1"
+                value={formData.discount_value}
+                onChange={(e) => handleInputChange('discount_value', e.target.value)}
+                className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base focus:border-teal-600"
+                placeholder={formData.discount_type === 'percentage' ? 'e.g., 10' : 'e.g., 50'}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Valid From</label>
+              <input
+                type="date"
+                value={formData.valid_from}
+                onChange={(e) => handleInputChange('valid_from', e.target.value)}
+                className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base focus:border-teal-600"
+              />
+            </div>
+            <div>
+              <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Valid Until</label>
+              <input
+                type="date"
+                value={formData.valid_until}
+                onChange={(e) => handleInputChange('valid_until', e.target.value)}
+                className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base focus:border-teal-600"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Min Order Amount (₹)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.min_order_amount}
+                onChange={(e) => handleInputChange('min_order_amount', e.target.value)}
+                className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base focus:border-teal-600"
+                placeholder="e.g., 299"
+              />
+            </div>
+            <div>
+              <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Max Uses</label>
+              <input
+                type="number"
+                min="1"
+                value={formData.max_uses}
+                onChange={(e) => handleInputChange('max_uses', e.target.value)}
+                className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base focus:border-teal-600"
+                placeholder="e.g., 100"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Description</label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => handleInputChange('description', e.target.value)}
+              rows="3"
+              className="w-full bg-muted text-foreground border border-border rounded-md outline-none resize-y px-3 py-2 text-sm sm:text-base focus:border-teal-600"
+              placeholder="Optional description about this coupon..."
+            />
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-2">
             <button 
-              onClick={handleSkipLogin}
-              className="w-full py-2 bg-muted text-foreground rounded-lg hover:bg-secondary"
+              onClick={handleCancel}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 border border-border text-muted-foreground bg-transparent rounded-lg text-sm sm:text-base hover:bg-muted transition-colors order-2 sm:order-1"
             >
-              Continue in Demo Mode
+              <X size={16} className="sm:w-[18px] sm:h-[18px]" />
+              Cancel
+            </button>
+            <button 
+              onClick={handleSaveCoupon}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-600 text-white rounded-lg text-sm sm:text-base font-medium hover:bg-teal-700 transition-colors order-1 sm:order-2"
+            >
+              <Save size={16} className="sm:w-[18px] sm:h-[18px]" />
+              {editingId !== null ? 'Update Coupon' : 'Save Coupon'}
+            </button>
+          </div>
+
+          <p className="text-muted-foreground text-xs sm:text-sm leading-relaxed">
+            * Required fields. Create percentage or flat discount coupons with validity periods.
+          </p>
+        </div>
+      </Modal>
+
+      {/* Assign to Order Modal */}
+      <Modal
+        isOpen={showAssignModal}
+        onClose={() => setShowAssignModal(false)}
+        title={`Assign Coupon: ${selectedCoupon?.code}`}
+        maxWidth="max-w-sm sm:max-w-md"
+      >
+        <div className="space-y-4">
+          <input 
+            type="number"
+            placeholder="Enter Order ID"
+            value={assignOrderId}
+            onChange={(e) => setAssignOrderId(e.target.value)}
+            className="w-full bg-muted border border-border rounded-lg px-3 py-2.5 text-sm sm:text-base text-foreground focus:border-teal-600 outline-none"
+          />
+          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
+            <button 
+              onClick={() => setShowAssignModal(false)} 
+              className="flex-1 py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base hover:bg-secondary transition-colors"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleAssignToOrder} 
+              className="flex-1 py-2.5 bg-teal-600 text-white rounded-lg text-sm sm:text-base hover:bg-teal-700 transition-colors"
+            >
+              Assign
             </button>
           </div>
         </div>
-      )}
+      </Modal>
 
-      {/* Customer Modal */}
-      {showCustomerModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Add Customer</h3>
-            <input 
-              type="text"
-              placeholder="First name *"
-              value={newCustomer.first_name}
-              onChange={(e) => setNewCustomer({...newCustomer, first_name: e.target.value})}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-            />
-            <input 
-              type="text"
-              placeholder="Last name"
-              value={newCustomer.last_name}
-              onChange={(e) => setNewCustomer({...newCustomer, last_name: e.target.value})}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-            />
-            <input 
-              type="text"
-              placeholder="+91 Phone number *"
-              value={newCustomer.phone}
-              onChange={(e) => setNewCustomer({...newCustomer, phone: e.target.value})}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-            />
-            <input 
-              type="email"
-              placeholder="example@mail.com"
-              value={newCustomer.email}
-              onChange={(e) => setNewCustomer({...newCustomer, email: e.target.value})}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-            />
-            <input 
-              type="text"
-              placeholder="Address"
-              value={newCustomer.address}
-              onChange={(e) => setNewCustomer({...newCustomer, address: e.target.value})}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-            />
-            <input 
-              type="text"
-              placeholder="City"
-              value={newCustomer.city}
-              onChange={(e) => setNewCustomer({...newCustomer, city: e.target.value})}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-            />
-            <input 
-              type="text"
-              placeholder="State"
-              value={newCustomer.state}
-              onChange={(e) => setNewCustomer({...newCustomer, state: e.target.value})}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-            />
-            <input 
-              type="text"
-              placeholder="ZIP Code"
-              value={newCustomer.zip_code}
-              onChange={(e) => setNewCustomer({...newCustomer, zip_code: e.target.value})}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-            />
-            <div className="flex gap-2">
-              <button onClick={addCustomer} className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Save</button>
-              <button onClick={() => setShowCustomerModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Offer Modal */}
-      {showOfferModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Create Offer</h3>
-            <input 
-              type="text"
-              placeholder="Coupon code (e.g. SAVE10) *"
-              value={newOffer.code}
-              onChange={(e) => setNewOffer({...newOffer, code: e.target.value.toUpperCase()})}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-            />
-            <select 
-              value={newOffer.discount_type}
-              onChange={(e) => setNewOffer({...newOffer, discount_type: e.target.value})}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-            >
-              <option value="percentage">Percentage</option>
-              <option value="flat">Flat</option>
-            </select>
-            <input 
-              type="number"
-              placeholder="Value (e.g. 10 or 50) *"
-              value={newOffer.discount_value}
-              onChange={(e) => setNewOffer({...newOffer, discount_value: e.target.value})}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-            />
-            <input 
-              type="number"
-              placeholder="Minimum order amount"
-              value={newOffer.min_order_amount}
-              onChange={(e) => setNewOffer({...newOffer, min_order_amount: parseFloat(e.target.value) || 0})}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-            />
-            <input 
-              type="number"
-              placeholder="Max uses (0 for unlimited)"
-              value={newOffer.max_uses}
-              onChange={(e) => setNewOffer({...newOffer, max_uses: parseInt(e.target.value) || 0})}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-            />
-            <input 
-              type="text"
-              placeholder="Description"
-              value={newOffer.description}
-              onChange={(e) => setNewOffer({...newOffer, description: e.target.value})}
-              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-            />
-            <div className="flex gap-2">
-              <button onClick={addOffer} className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Create</button>
-              <button onClick={() => setShowOfferModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Staff Modal */}
-      {showStaffModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Add Staff</h3>
-            <input 
-              type="text"
-              placeholder="Full name *"
-              value={newStaff.name}
-onChange={(e) => setNewStaff({...newStaff, name: e.target.value})}
-className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-/>
-<input
-type="text"
-placeholder="Phone number (10 digits) *"
-value={newStaff.phone}
-onChange={(e) => setNewStaff({...newStaff, phone: e.target.value})}
-className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-/>
-<select
-value={newStaff.role}
-onChange={(e) => setNewStaff({...newStaff, role: e.target.value})}
-className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
->
-<option value="Cashier">Cashier</option>
-<option value="Chef">Chef</option>
-<option value="Waiter">Waiter</option>
-<option value="Manager">Manager</option>
-</select>
-<input
-type="number"
-placeholder="Monthly salary (e.g. 15000) *"
-value={newStaff.salary}
-onChange={(e) => setNewStaff({...newStaff, salary: e.target.value})}
-className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-/>
-<input
-type="date"
-value={newStaff.joined}
-onChange={(e) => setNewStaff({...newStaff, joined: e.target.value})}
-className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-/>
-<input
-type="text"
-placeholder="Aadhar number (optional)"
-value={newStaff.aadhar}
-onChange={(e) => setNewStaff({...newStaff, aadhar: e.target.value})}
-className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-/>
-<div className="flex gap-2">
-<button onClick={addStaff} className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Save</button>
-<button onClick={() => setShowStaffModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
-</div>
-</div>
-</div>
-)}  {/* Expense Modal */}
-  {showExpenseModal && (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-xl rounded-xl p-6 max-w-md w-full">
-        <h3 className="text-lg font-semibold text-foreground dark:text-card-foreground mb-4">Add Expense</h3>
-        <input 
-          type="text"
-          placeholder="Expense title (e.g. Milk purchase) *"
-          value={newExpense.title}
-          onChange={(e) => setNewExpense({...newExpense, title: e.target.value})}
-          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-        />
-        <input 
-          type="number"
-          placeholder="Amount (e.g. 2150) *"
-          value={newExpense.amount}
-          onChange={(e) => setNewExpense({...newExpense, amount: e.target.value})}
-          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-        />
-        <input 
-          type="date"
-          value={newExpense.date}
-          onChange={(e) => setNewExpense({...newExpense, date: e.target.value})}
-          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-        />
-        <select 
-          value={newExpense.category}
-          onChange={(e) => setNewExpense({...newExpense, category: e.target.value})}
-          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-        >
-          <option value="Supplies">Supplies</option>
-          <option value="Utilities">Utilities</option>
-          <option value="Salary">Salary</option>
-          <option value="Maintenance">Maintenance</option>
-        </select>
-        <select 
-          value={newExpense.payment_mode}
-          onChange={(e) => setNewExpense({...newExpense, payment_mode: e.target.value})}
-          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-        >
-          <option value="Cash">Cash</option>
-          <option value="UPI">UPI</option>
-          <option value="Card">Card</option>
-          <option value="Bank Transfer">Bank Transfer</option>
-        </select>
-        <textarea 
-          placeholder="Notes (optional)"
-          value={newExpense.notes}
-          onChange={(e) => setNewExpense({...newExpense, notes: e.target.value})}
-          className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-3"
-          rows="2"
-        />
-        <div className="flex gap-2">
-          <button onClick={addExpense} className="flex-1 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">Save</button>
-          <button onClick={() => setShowExpenseModal(false)} className="flex-1 py-2 bg-muted text-foreground rounded-lg">Cancel</button>
-        </div>
-      </div>
-    </div>
-  )}  {/* Header */}
-  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-4">
-    <div>
-      <h2 className="text-2xl font-semibold text-foreground">Dashboard</h2>
-      {!authToken && (
-        <p className="text-sm text-muted-foreground">Demo Mode - Data is not synced</p>
-      )}
-    </div>
-    <div className="flex gap-2">
-      {authToken && (
-        <button
-          onClick={() => {
-            fetchDailyStats();
-            fetchOrders();
-            fetchCustomers();
-            fetchOffers();
-            fetchStaff();
-            fetchExpenses();
-          }}
-          className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm"
-        >
-          Refresh Data
-        </button>
-      )}
-      <button
-        onClick={() => {
-          setAuthToken('');
-          setShowLoginModal(true);
-        }}
-        className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-secondary text-sm"
+      {/* Coupon Selection Modal for Category Assignment */}
+      <Modal
+        isOpen={showCouponSelectModal}
+        onClose={() => setShowCouponSelectModal(false)}
+        title="Select Coupon"
+        maxWidth="max-w-sm sm:max-w-md"
       >
-        {authToken ? 'Logout' : 'Login'}
+        <div className="space-y-3">
+          {coupons.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground text-sm">No coupons available</p>
+              <p className="text-muted-foreground text-xs mt-2">Create a coupon first</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {coupons.map(coupon => (
+                <button
+                  key={coupon.id}
+                  onClick={() => handleSelectCouponForCategories(coupon)}
+                  className="w-full text-left p-3 bg-muted rounded-lg hover:bg-secondary transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-foreground font-semibold text-sm mb-0.5">{coupon.code}</p>
+                      <p className="text-muted-foreground text-xs truncate">
+                        {coupon.discount_type === 'percentage' ? `${coupon.discount_value}% off` : `₹${coupon.discount_value} off`}
+                        {coupon.description && ` • ${coupon.description}`}
+                      </p>
+                    </div>
+                    <span className={`px-2 py-1 text-xs rounded-full whitespace-nowrap ${
+                      coupon.is_active ? 'bg-teal-600 text-white' : 'bg-red-500 text-white'
+                    }`}>
+                      {coupon.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+          <button onClick={() => setShowCouponSelectModal(false)}
+        className="w-full py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base hover:bg-secondary transition-colors"
+      >
+        Cancel
       </button>
     </div>
-  </div>  {/* Stats Cards */}
-  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
-    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
-      <div className="flex items-center justify-between mb-2 sm:mb-3">
-        <p className="text-muted-foreground text-xs sm:text-sm">Today Sales</p>
-        <DollarSign className="text-teal-400" size={18} />
-      </div>
-      <p className="text-xl sm:text-3xl font-bold text-card-foreground">
-        {isLoadingStats ? '...' : `₹${dailyStats.today_sales.toLocaleString()}`}
-      </p>
-    </div>
-    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
-      <div className="flex items-center justify-between mb-2 sm:mb-3">
-        <p className="text-muted-foreground text-xs sm:text-sm">Orders</p>
-        <ShoppingBag className="text-teal-400" size={18} />
-      </div>
-      <p className="text-xl sm:text-3xl font-bold text-card-foreground">
-        {isLoadingStats ? '...' : dailyStats.total_orders}
-      </p>
-    </div>
-    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
-      <div className="flex items-center justify-between mb-2 sm:mb-3">
-        <p className="text-muted-foreground text-xs sm:text-sm">Avg Ticket</p>
-        <TrendingUp className="text-teal-400" size={18} />
-      </div>
-      <p className="text-xl sm:text-3xl font-bold text-card-foreground">
-        {isLoadingStats ? '...' : `₹${dailyStats.avg_ticket.toLocaleString()}`}
-      </p>
-    </div>
-    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-lg hover:scale-105 rounded-xl p-4 sm:p-6 transition-all duration-300 cursor-pointer">
-      <div className="flex items-center justify-between mb-2 sm:mb-3">
-        <p className="text-muted-foreground text-xs sm:text-sm">Expenses</p>
-        <Wallet className="text-teal-400" size={18} />
-      </div>
-      <p className="text-xl sm:text-3xl font-bold text-card-foreground">
-        {isLoadingStats ? '...' : `₹${dailyStats.total_expenses.toLocaleString()}`}
-      </p>
-    </div>
-  </div>  {/* Quick Links, Recent Orders, Activity */}
-  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
-    {/* Quick Links */}
-    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
-      <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-4">Quick Links</h3>
-      <div className="space-y-3">
-        <button 
-          onClick={handleNavigateToPOS}
-          className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
-        >
-          <div className="text-left">
-            <p className="font-medium text-sm sm:text-base">Open POS</p>
-            <p className="text-xs sm:text-sm text-muted-foreground">Start billing and print KOT</p>
-          </div>
-          <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Open</span>
-        </button>
-        <button 
-          onClick={handleNavigateToMenu}
-          className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
-        >
-          <div className="text-left">
-            <p className="font-medium text-sm sm:text-base">Manage Menu</p>
-            <p className="text-xs sm:text-sm text-muted-foreground">Categories, items and prices</p>
-          </div>
-          <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Menu</span>
-        </button>
-        <button 
-          onClick={handleNavigateToReports}
-          className="w-full flex items-center justify-between px-3 sm:px-4 py-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground"
-        >
-          <div className="text-left">
-            <p className="font-medium text-sm sm:text-base">View Reports</p>
-            <p className="text-xs sm:text-sm text-muted-foreground">Sales and orders</p>
-          </div>
-          <span className="px-2 sm:px-3 py-1 bg-teal-600 text-xs sm:text-sm rounded whitespace-nowrap text-white">Reports</span>
-        </button>
-      </div>
-    </div>    {/* Recent Orders */}
-    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Recent Orders</h3>
-        <button 
-          onClick={handleSeeAllOrders}
-          className="text-teal-400 text-xs sm:text-sm hover:underline"
-        >
-          See all
-        </button>
-      </div>
-      {isLoadingOrders ? (
-        <p className="text-center text-muted-foreground">Loading...</p>
-      ) : (
-        <div className="space-y-3">
-          {displayedOrders.length > 0 ? displayedOrders.map(order => (
-            <div key={order.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-              <div className="text-foreground">
-                <p className="font-medium text-xs sm:text-sm">{order.id} • {order.type}</p>
-                <p className="text-xs text-muted-foreground">{order.time}</p>
-              </div>
-              <p className="font-semibold text-foreground text-sm sm:text-base">₹ {order.amount}</p>
-            </div>
-          )) : (
-            <p className="text-center text-muted-foreground text-sm">No orders yet</p>
-          )}
+  </Modal>
+
+  {/* Category Selection Modal */}
+  <Modal
+    isOpen={showCategoryModal}
+    onClose={() => {
+      setShowCategoryModal(false);
+      setSelectedCategoryIds([]);
+      setSelectedCoupon(null);
+    }}
+    title={`Assign "${selectedCoupon?.code}" to Categories`}
+    maxWidth="max-w-sm sm:max-w-md"
+  >
+    <div className="space-y-4">
+      {categoriesLoading ? (
+        <div className="text-center py-8">
+          <p className="text-muted-foreground text-sm">Loading categories...</p>
         </div>
-      )}
-    </div>    {/* Activity */}
-    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
-      <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-4">Activity</h3>
-      <div className="space-y-3">
-        {activities.map((activity, idx) => (
-          <div key={idx} className="flex items-center justify-between p-3 bg-muted rounded-lg hover:bg-secondary transition-colors">
-            <p className="text-foreground text-sm sm:text-base">{activity.action}</p>
-            <p className="text-xs sm:text-sm text-muted-foreground">{activity.time}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  </div>  {/* Customers, Offers */}
-  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
-    {/* Customers */}
-    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Customers</h3>
-        <button 
-          onClick={() => setShowCustomerModal(true)}
-          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
-        >
-          Add
-        </button>
-      </div>
-      {isLoadingCustomers ? (
-        <p className="text-center text-muted-foreground">Loading...</p>
-      ) : (
-        <div className="space-y-2 mb-4">
-          {customers.length > 0 ? customers.slice(0, 5).map((cust, idx) => (
-            <div key={idx} className="p-3 bg-muted rounded-lg">
-              <p className="font-medium text-foreground text-sm sm:text-base">{cust.name}</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">{cust.phone} • {cust.orders} orders</p>
-            </div>
-          )) : (
-            <p className="text-center text-muted-foreground text-sm">No customers yet</p>
-          )}
+      ) : categories.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-muted-foreground text-sm">No categories available</p>
+          <p className="text-muted-foreground text-xs mt-2">Create categories first in the Products section</p>
+          <button 
+            onClick={loadCategories}
+            className="mt-4 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700 transition-colors"
+          >
+            Retry Loading
+          </button>
         </div>
-      )}
-    </div>    {/* Offers */}
-    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Offers</h3>
-        <button 
-          onClick={() => setShowOfferModal(true)}
-          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
-        >
-          Create
-        </button>
-      </div>
-      {isLoadingOffers ? (
-        <p className="text-center text-muted-foreground">Loading...</p>
       ) : (
-        <div className="space-y-2">
-          {offers.length > 0 ? offers.map((offer, idx) => (
-            <div key={idx} className="p-3 bg-muted rounded-lg">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="font-medium text-foreground text-sm sm:text-base">{offer.code}</p>
-                  <p className="text-xs sm:text-sm text-muted-foreground">{offer.type} • {offer.value} • {offer.category}</p>
+        <>
+          <div className="space-y-2 max-h-[400px] overflow-y-auto">
+            {categories.map(cat => (
+              <label 
+                key={cat.id} 
+                className="flex items-center gap-3 p-3 bg-muted rounded-lg cursor-pointer hover:bg-secondary transition-colors"
+              >
+                <input 
+                  type="checkbox"
+                  checked={selectedCategoryIds.includes(cat.id)}
+                  onChange={() => toggleCategory(cat.id)}
+                  className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 accent-teal-600"
+                />
+                <div className="flex-1 min-w-0">
+                  <span className="text-foreground text-sm sm:text-base font-medium block">
+                    {cat.name}
+                  </span>
+                  {cat.description && (
+                    <span className="text-muted-foreground text-xs block mt-0.5">
+                      {cat.description}
+                    </span>
+                  )}
                 </div>
-                <button 
-                  onClick={() => alert(`Offer ${offer.code} disabled`)}
-                  className="text-xs text-red-400 hover:text-red-500"
-                >
-                  Disable
-                </button>
-              </div>
+              </label>
+            ))}
+          </div>
+          
+          {selectedCategoryIds.length > 0 && (
+            <div className="bg-teal-50 dark:bg-teal-950 border border-teal-200 dark:border-teal-800 rounded-lg p-3">
+              <p className="text-xs text-teal-700 dark:text-teal-300 font-medium">
+                {selectedCategoryIds.length} {selectedCategoryIds.length === 1 ? 'category' : 'categories'} selected
+              </p>
             </div>
-          )) : (
-            <p className="text-center text-muted-foreground text-sm">No offers yet</p>
           )}
-        </div>
+        </>
       )}
+      
+      <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
+        <button 
+          onClick={() => {
+            setShowCategoryModal(false);
+            setSelectedCategoryIds([]);
+            setSelectedCoupon(null);
+          }} 
+          className="flex-1 py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base hover:bg-secondary transition-colors"
+        >
+          Cancel
+        </button>
+        <button 
+          onClick={handleSaveCategories} 
+          disabled={selectedCategoryIds.length === 0 || categoriesLoading}
+          className="flex-1 py-2.5 bg-teal-600 text-white rounded-lg text-sm sm:text-base hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Assign to {selectedCategoryIds.length || 0} {selectedCategoryIds.length === 1 ? 'Category' : 'Categories'}
+        </button>
+      </div>
     </div>
-  </div>  {/* Staff, Expenses */}
-  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-    {/* Staff */}
-    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Staff</h3>
+  </Modal>
+
+  {/* Header */}
+  <div className="bg-card border-b border-border p-3 sm:p-4 lg:p-6 sticky top-0 z-10">
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <h1 className="text-foreground text-base sm:text-lg lg:text-xl font-semibold">Offers & Coupons</h1>
+      <div className="flex gap-2 flex-wrap w-full sm:w-auto">
         <button 
-          onClick={() => setShowStaffModal(true)}
-          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
+          onClick={handleExport}
+          className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-teal-600 text-white rounded-lg text-xs sm:text-sm lg:text-base hover:bg-teal-700 transition-colors"
         >
-          Add
+          <Download size={16} className="sm:w-[18px] sm:h-[18px]" />
+          <span>Export</span>
+        </button>
+        <button 
+          onClick={handleNewCoupon}
+          className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-teal-600 text-white rounded-lg text-xs sm:text-sm lg:text-base font-medium hover:bg-teal-700 transition-colors"
+        >
+          <Plus size={16} className="sm:w-[18px] sm:h-[18px]" />
+          New Coupon
         </button>
       </div>
-      {isLoadingStaff ? (
-        <p className="text-center text-muted-foreground">Loading...</p>
-      ) : (
-        <div className="space-y-2">
-          {staff.length > 0 ? staff.map((member, idx) => (
-            <div key={idx} className="p-3 bg-muted rounded-lg">
-              <div className="flex justify-between items-start">
-                <div>
-                  <p className="font-medium text-foreground text-sm sm:text-base">{member.name}</p>
-                  <p className="text-xs sm:text-sm text-muted-foreground">{member.role} • {member.payscale}</p>
-                </div>
-                <button 
-                  onClick={() => alert(`Edit ${member.name}`)}
-                  className="text-xs text-teal-400 hover:text-teal-500"
-                >
-                  Edit
-                </button>
-              </div>
-            </div>
-          )) : (
-            <p className="text-center text-muted-foreground text-sm">No staff members yet</p>
-          )}
-        </div>
-      )}
-    </div>    {/* Expenses */}
-    <div className="bg-white dark:bg-card border border-gray-200 dark:border-border shadow-sm hover:shadow-md rounded-xl p-4 sm:p-6 transition-shadow">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base sm:text-lg font-semibold text-card-foreground">Expenses</h3>
-        <button 
-          onClick={() => setShowExpenseModal(true)}
-          className="px-2 sm:px-3 py-1 bg-teal-600 text-white rounded text-xs sm:text-sm hover:bg-teal-700"
-        >
-          Add
-        </button>
-      </div>
-      {isLoadingExpenses ? (
-        <p className="text-center text-muted-foreground">Loading...</p>
-      ) : (
-        <div className="space-y-2">
-          {expenses.length > 0 ? expenses.slice(0, 5).map((exp, idx) => (
-            <div key={idx} className="p-3 bg-muted rounded-lg">
-              <p className="font-medium text-sm text-foreground">{exp.title}</p>
-              <div className="flex justify-between items-center mt-1">
-                <p className="text-xs sm:text-sm text-muted-foreground">{exp.date}</p>
-                <p className="font-semibold text-foreground text-sm sm:text-base">{exp.amount}</p>
-              </div>
-            </div>
-          )) : (
-            <p className="text-center text-muted-foreground text-sm">No expenses yet</p>
-          )}
-        </div>
-      )}
     </div>
   </div>
-</div>
-);
-};export default Dashboard;
+
+  <div className="p-3 sm:p-4 lg:p-6 max-w-[1600px] mx-auto">
+    <div className="flex flex-col gap-4 sm:gap-5 lg:gap-6">
+      
+      {/* Coupons List */}
+      <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 lg:p-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3">
+          <h2 className="text-foreground text-sm sm:text-base lg:text-lg font-semibold">Coupons List</h2>
+          <button 
+            onClick={handleSync}
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 border border-teal-600 text-teal-600 bg-transparent rounded-lg text-xs sm:text-sm lg:text-base hover:bg-teal-50 dark:hover:bg-teal-950 transition-colors"
+          >
+            <RefreshCw size={16} className="sm:w-[18px] sm:h-[18px]" />
+            Sync
+          </button>
+        </div>
+
+        {/* Filters */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          <div>
+            <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Search coupons</label>
+            <input
+              type="text"
+              placeholder="Code or description..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-xs sm:text-sm lg:text-base focus:border-teal-600"
+            />
+          </div>
+          <div>
+            <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Type</label>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-xs sm:text-sm lg:text-base focus:border-teal-600"
+            >
+              <option>All / Percentage / Flat</option>
+              <option>Percentage</option>
+              <option>Flat</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-xs sm:text-sm lg:text-base focus:border-teal-600"
+            >
+              <option>All / Active / Expired</option>
+              <option>Active</option>
+              <option>Expired</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Coupons Table - Desktop */}
+        <div className="hidden lg:block overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Code</th>
+                <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Type</th>
+                <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Value</th>
+                <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Min Order</th>
+                <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Used/Max</th>
+                <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Validity</th>
+                <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Status</th>
+                <th className="text-muted-foreground text-left py-3 px-2 text-xs font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredCoupons.map((coupon) => {
+                const isExpired = isCouponExpired(coupon);
+                const displayStatus = !coupon.is_active ? 'Inactive' : (isExpired ? 'Expired' : 'Active');
+                
+                return (
+                  <tr key={coupon.id} className="border-b border-border hover:bg-muted/50">
+                    <td className="text-foreground py-3 px-2 text-sm font-semibold">{coupon.code}</td>
+                    <td className="text-foreground py-3 px-2 text-sm capitalize">{coupon.discount_type}</td>
+                    <td className="text-foreground py-3 px-2 text-sm">
+                      {coupon.discount_type === 'percentage' ? `${coupon.discount_value}%` : `₹${coupon.discount_value}`}
+                    </td>
+                    <td className="text-foreground py-3 px-2 text-sm">
+                      {coupon.min_order_amount ? `₹${coupon.min_order_amount}` : '—'}
+                    </td>
+                    <td className="text-foreground py-3 px-2 text-sm">
+                      {coupon.used_count || 0} / {coupon.max_uses || '∞'}
+                    </td>
+                    <td className="text-foreground py-3 px-2 text-xs whitespace-nowrap">
+                      {formatValidity(coupon)}
+                    </td>
+                    <td className="py-3 px-2">
+                      <span className={`inline-block px-2.5 py-1 text-white text-xs rounded-full ${
+                        displayStatus === 'Active' ? 'bg-teal-600' : 'bg-red-500'
+                      }`}>
+                        {displayStatus}
+                      </span>
+                    </td>
+                    <td className="py-3 px-2">
+                      <div className="flex gap-1.5 flex-wrap">
+                        <button 
+                          onClick={() => handleEdit(coupon)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-teal-600 text-white rounded text-xs hover:bg-teal-700 transition-colors"
+                        >
+                          <Edit size={12} />
+                          Edit
+                        </button>
+                        <button 
+                          onClick={() => handleAssign(coupon)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-teal-600 text-white rounded text-xs hover:bg-teal-700 transition-colors"
+                        >
+                          <Link2 size={12} />
+                          Assign
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(coupon.id)}
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-red-600 text-white rounded text-xs hover:bg-red-700 transition-colors"
+                        >
+                          <Trash2 size={12} />
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Coupons Cards - Mobile/Tablet */}
+        <div className="lg:hidden space-y-3">
+          {filteredCoupons.map((coupon) => {
+            const isExpired = isCouponExpired(coupon);
+            const displayStatus = !coupon.is_active ? 'Inactive' : (isExpired ? 'Expired' : 'Active');
+            
+            return (
+              <div key={coupon.id} className="bg-muted rounded-lg p-3">
+                <div className="flex justify-between items-start mb-3 gap-2">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-foreground font-semibold text-sm mb-1 truncate">{coupon.code}</h3>
+                    <p className="text-muted-foreground text-xs">{coupon.description || 'No description'}</p>
+                  </div>
+                  <span className={`px-2 py-1 text-white text-xs rounded-full whitespace-nowrap flex-shrink-0 ${
+                    displayStatus === 'Active' ? 'bg-teal-600' : 'bg-red-500'
+                  }`}>
+                    {displayStatus}
+                  </span>
+                </div>
+                
+                <div className="space-y-1.5 mb-3 text-xs sm:text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Type:</span>
+                    <span className="text-foreground capitalize">{coupon.discount_type}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Value:</span>
+                    <span className="text-foreground font-semibold">
+                      {coupon.discount_type === 'percentage' ? `${coupon.discount_value}%` : `₹${coupon.discount_value}`}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Min Order:</span>
+                    <span className="text-foreground">
+                      {coupon.min_order_amount ? `₹${coupon.min_order_amount}` : '—'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Used:</span>
+                    <span className="text-foreground">
+                      {coupon.used_count || 0} / {coupon.max_uses || '∞'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Validity:</span>
+                    <span className="text-foreground text-xs text-right">{formatValidity(coupon)}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <button 
+                    onClick={() => handleEdit(coupon)}
+                    className="flex items-center justify-center gap-1 px-2 py-2 bg-teal-600 text-white rounded-lg text-xs hover:bg-teal-700 transition-colors"
+                  >
+                    <Edit size={12} />
+                    <span className="hidden sm:inline">Edit</span>
+                  </button>
+                  <button 
+                    onClick={() => handleAssign(coupon)}
+                    className="flex items-center justify-center gap-1 px-2 py-2 bg-teal-600 text-white rounded-lg text-xs hover:bg-teal-700 transition-colors"
+                  >
+                    <Link2 size={12} />
+                    <span className="hidden sm:inline">Assign</span>
+                  </button>
+                  <button 
+                    onClick={() => handleDelete(coupon.id)}
+                    className="flex items-center justify-center gap-1 px-2 py-2 bg-red-600 text-white rounded-lg text-xs hover:bg-red-700 transition-colors"
+                  >
+                    <Trash2 size={12} />
+                    <span className="hidden sm:inline">Delete</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {filteredCoupons.length === 0 && (
+          <div className="text-center py-8 text-muted-foreground text-xs sm:text-sm">
+            No coupons found matching your filters.
+          </div>
+        )}
+      </div>
+
+      {/* Quick Assign Section */}
+      <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 lg:p-6">
+        <h2 className="text-foreground text-sm sm:text-base lg:text-lg font-semibold mb-4">Quick Assign</h2>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="bg-muted rounded-lg p-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-2 flex-1">
+                <Link2 size={18} className="text-teal-600 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-foreground text-xs sm:text-sm lg:text-base font-medium mb-1">Assign Coupon to Order</h3>
+                  <p className="text-muted-foreground text-xs">Link coupon to a specific order ID quickly</p>
+                </div>
+              </div>
+              <button 
+                onClick={handleQuickAssignOrder}
+                disabled={coupons.length === 0}
+                className="w-full sm:w-auto px-3 py-2 bg-teal-600 text-white rounded-lg text-xs sm:text-sm hover:bg-teal-700 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Assign
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-muted rounded-lg p-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-2 flex-1">
+                <FolderOpen size={18} className="text-teal-600 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-foreground text-xs sm:text-sm lg:text-base font-medium mb-1">Assign to Categories</h3>
+                  <p className="text-muted-foreground text-xs">
+                    {categoriesLoading ? 'Loading categories...' : 
+                     categories.length > 0 ? `${categories.length} categories available` : 
+                     'No categories available'}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={handleQuickAssignCategories}
+                disabled={categoriesLoading}
+                className="w-full sm:w-auto px-3 py-2 bg-teal-600 text-white rounded-lg text-xs sm:text-sm hover:bg-teal-700 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Choose
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>);
+}
+export default Offers;

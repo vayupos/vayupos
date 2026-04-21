@@ -1,7 +1,3 @@
-import os
-import sys
-# FIX: Add backend folder to Python path for Windows
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
@@ -21,10 +17,7 @@ if config.config_file_name is not None:
 
 # Load app settings and set SQLAlchemy URL for Alembic
 settings = get_settings()
-# Alembic needs a sync driver (psycopg2) for these migration runners
-sqlalchemy_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
-config.set_main_option("sqlalchemy.url", sqlalchemy_url)
-
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 # Use your SQLAlchemy Base metadata for autogenerate
 target_metadata = Base.metadata

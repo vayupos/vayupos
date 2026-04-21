@@ -41,7 +41,10 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:4173",
 
     # production frontend
-    "https://restaurant-vayu-pos.vercel.app"
+    "https://restaurant-vayu-pos.vercel.app",
+    
+    # Allow all localhost variations and frontend access
+    "*"  # For development - allows any origin
 ]
 
 app.add_middleware(
@@ -139,6 +142,31 @@ async def health(db: Session = Depends(get_db)):
                 "error": str(e),
             },
         )
+
+@app.get("/api/v1/test-db")
+async def test_db():
+    """Test database connection"""
+    from app.core.database import engine
+    from sqlalchemy import text
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT 1"))
+            val = result.scalar()
+            return {
+                "status": "success",
+                "message": "Database connection established",
+                "result": val
+            }
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": f"Database connection failed: {str(e)}",
+                "traceback": traceback.format_exc() if settings.DEBUG else None
+            }
+        )
+
 
 # -------------------- ROUTERS --------------------
 print("[INFO] Including routers...")

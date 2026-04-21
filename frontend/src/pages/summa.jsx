@@ -1,858 +1,832 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Printer, Calendar, Filter, RotateCw, ChevronDown, AlertCircle } from 'lucide-react';
-import { LineChart, Line, PieChart, Pie, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import { Search, Plus, Minus, Printer, Database, Tag, Trash2, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
-// API Configuration - Using environment variables
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
 
-const ReportsPage = () => {
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  
-  // Helper function to get auth token from localStorage
-  const getAuthToken = () => {
-    return localStorage.getItem('access_token') || '';
-  };
+function POS() {
+  const [selectedCustomer, setSelectedCustomer] = useState('Ravi Kumar');
+  const [notes, setNotes] = useState('No onions, extra spicy');
+  const [searchMenu, setSearchMenu] = useState('');
+  const [searchCustomer, setSearchCustomer] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [couponCode, setCouponCode] = useState('');
+  const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
+  const [newCustomer, setNewCustomer] = useState({ name: '', phone: '', email: '' });
+  const [showCouponModal, setShowCouponModal] = useState(false);
+  const [inputCoupon, setInputCoupon] = useState('');
+  const [showSizeModal, setShowSizeModal] = useState(false);
+  const [selectedMenuItem, setSelectedMenuItem] = useState(null);
+  const [showSaveDraftModal, setShowSaveDraftModal] = useState(false);
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [draftBillNumber, setDraftBillNumber] = useState('');
+  const [menuItems, setMenuItems] = useState([]);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
 
-  const [filters, setFilters] = useState({
-    reportType: 'Sales',
-    view: 'day',
-    outlet: 'All',
-    paymentMode: 'All',
-    sort: 'Total Desc',
-    days: 30,
-    dateRange: { start: '2025-01', end: '2025-12' }
-  });
+  const customers = ['Ravi Kumar', 'Anita', 'Mohit', 'Guest'];
 
-  const [keyMetrics, setKeyMetrics] = useState({
-    totalSales: '₹0',
-    totalOrders: '0',
-    totalExpenses: '₹0',
-    avgOrderValue: '₹0',
-    grossMargin: '0%',
-    topCategory: '-'
-  });
+  const sizes = [
+    { name: 'Small', priceModifier: 0 },
+    { name: 'Medium', priceModifier: 10 },
+    { name: 'Large', priceModifier: 20 },
+    { name: 'Regular', priceModifier: 0 }
+  ];
 
-  const [salesData, setSalesData] = useState([]);
-  const [salesChartData, setSalesChartData] = useState([]);
-  const [ordersData, setOrdersData] = useState({
-    bySource: [],
-    byPayment: []
-  });
-  const [orderDistributionData, setOrderDistributionData] = useState([]);
-  const [expensesData, setExpensesData] = useState([]);
-  const [expensesChartData, setExpensesChartData] = useState([]);
-  const [productSalesData, setProductSalesData] = useState([]);
-
-  const COLORS = ['#14b8a6', '#0d9488', '#0f766e'];
-
-  // Helper function to make authenticated API calls
-  const fetchWithAuth = async (url, options = {}) => {
-    const token = getAuthToken();
-    
-    if (!token) {
-      throw new Error('No authentication token found. Please login again.');
+  // Available coupons with eligibility conditions
+  const availableCoupons = [
+    {
+      code: 'NEW20',
+      discount: 20,
+      type: 'percentage',
+      description: '20% off for new customers',
+      minOrder: 0
+    },
+    {
+      code: 'FLAT50',
+      discount: 50,
+      type: 'fixed',
+      description: '₹50 flat discount',
+      minOrder: 0
+    },
+    {
+      code: 'SAVE100',
+      discount: 100,
+      type: 'fixed',
+      description: '₹100 off on orders above ₹200',
+      minOrder: 200
+    },
+    {
+      code: 'WELCOME10',
+      discount: 10,
+      type: 'percentage',
+      description: '10% off welcome offer',
+      minOrder: 0
     }
+  ];
 
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,  // ADD THIS LINE - Authentication header
-        ...options.headers,
-      }
-    });
+  // Fetch menu items based on selected category
+  useEffect(() => {
+    fetchMenuItems();
+  }, [selectedCategory]);
 
-    // Handle 401 Unauthorized - token expired or invalid
-    if (response.status === 401) {
-      localStorage.removeItem('access_token');
-      throw new Error('Session expired. Please login again.');
-    }
-
-    return response;
-  };
-
-  // Fetch Sales Report
-  const fetchSalesReport = async () => {
+  const fetchMenuItems = async () => {
     try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await fetchWithAuth(
-        `${API_BASE_URL}/reports/sales?days=${filters.days}&group_by=${filters.view}`
-      );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Sales API Error:', response.status, errorText);
-        throw new Error(`Failed to fetch sales report (${response.status})`);
-      }
-      
-      const data = await response.json();
-      console.log('Sales data:', data);
-      
-      // Transform the API response to match your UI structure
-      if (data && Array.isArray(data)) {
-        const transformedData = data.map(item => ({
-          period: item.date || item.period,
-          orders: item.order_count || item.orders || 0,
-          grossSales: `₹${(item.gross_sales || item.total_sales || 0).toLocaleString('en-IN')}`,
-          discounts: `₹${(item.discounts || 0).toLocaleString('en-IN')}`,
-          net: `₹${(item.net_sales || (item.total_sales - item.discounts) || 0).toLocaleString('en-IN')}`
-        }));
-        
-        setSalesData(transformedData);
-        
-        // Prepare chart data
-        const chartData = data.map(item => ({
-          month: item.date || item.period,
-          sales: item.gross_sales || item.total_sales || 0,
-          net: item.net_sales || (item.total_sales - item.discounts) || 0
-        }));
-        setSalesChartData(chartData);
-
-        // Calculate key metrics
-        const totalSales = data.reduce((sum, item) => sum + (item.gross_sales || item.total_sales || 0), 0);
-        const totalOrders = data.reduce((sum, item) => sum + (item.order_count || item.orders || 0), 0);
-        const totalDiscounts = data.reduce((sum, item) => sum + (item.discounts || 0), 0);
-        
-        setKeyMetrics(prev => ({
-          ...prev,
-          totalSales: `₹${totalSales.toLocaleString('en-IN')}`,
-          totalOrders: totalOrders.toString(),
-          avgOrderValue: `₹${totalOrders > 0 ? Math.round(totalSales / totalOrders).toLocaleString('en-IN') : '0'}`
-        }));
-      }
-    } catch (err) {
-      setError(err.message);
-      console.error('Error fetching sales report:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fetch Payment Methods Report
-  const fetchPaymentMethodsReport = async () => {
-    try {
-      const response = await fetchWithAuth(
-        `${API_BASE_URL}/reports/payment-methods?days=${filters.days}`
-      );
-
-      if (!response.ok) {
-        console.error('Payment methods API error:', response.status);
-        throw new Error('Failed to fetch payment methods report');
-      }
-      
-      const data = await response.json();
-      console.log('Payment methods data:', data);
-      
-      if (data && Array.isArray(data)) {
-        const totalAmount = data.reduce((sum, item) => sum + (item.total_amount || 0), 0);
-        const totalCount = data.reduce((sum, item) => sum + (item.count || 0), 0);
-        
-        const transformedData = data.map((item, index) => ({
-          mode: item.payment_method || item.mode,
-          count: item.count || 0,
-          share: `${totalCount > 0 ? ((item.count / totalCount) * 100).toFixed(1) : 0}%`,
-          amount: `₹${(item.total_amount || 0).toLocaleString('en-IN')}`,
-          rank: index + 1
-        }));
-        
-        setOrdersData(prev => ({
-          ...prev,
-          byPayment: transformedData
-        }));
-      }
-    } catch (err) {
-      console.error('Error fetching payment methods report:', err);
-    }
-  };
-
-  // Fetch Product Sales Report
-  const fetchProductSalesReport = async () => {
-    try {
-      const response = await fetchWithAuth(
-        `${API_BASE_URL}/reports/products-sales?days=${filters.days}&limit=50`
-      );
-
-      if (!response.ok) {
-        console.error('Product sales API error:', response.status);
-        throw new Error('Failed to fetch product sales report');
-      }
-      
-      const data = await response.json();
-      console.log('Product sales data:', data);
-      
-      if (data && Array.isArray(data)) {
-        setProductSalesData(data);
-        
-        // Get top category if available
-        if (data.length > 0 && data[0].category) {
-          setKeyMetrics(prev => ({
-            ...prev,
-            topCategory: data[0].category
-          }));
+      // Mock data for demonstration
+      const allMenuItems = [
+        {
+          name: 'Masala Dosa',
+          price: 80,
+          category: 'South Indian',
+          image: 'https://images.unsplash.com/photo-1630383249896-424e482df921?w=300&h=300&fit=crop'
+        },
+        {
+          name: 'Idli (2 pcs)',
+          price: 40,
+          category: 'South Indian',
+          image: 'https://images.unsplash.com/photo-1589301773859-34462e28a3e6?w=300&h=300&fit=crop'
+        },
+        {
+          name: 'Vada',
+          price: 35,
+          category: 'South Indian',
+          image: 'https://images.unsplash.com/photo-1606491956689-2ea866880c84?w=300&h=300&fit=crop'
+        },
+        {
+          name: 'Filter Coffee',
+          price: 25,
+          category: 'Beverages',
+          image: 'https://images.unsplash.com/photo-1517487881594-2787fef5ebf7?w=300&h=300&fit=crop'
+        },
+        {
+          name: 'Lemon Soda',
+          price: 30,
+          category: 'Beverages',
+          image: 'https://images.unsplash.com/photo-1523677011781-c91d1bbe1f0b?w=300&h=300&fit=crop'
+        },
+        {
+          name: 'Veg Combo',
+          price: 150,
+          category: 'Combos',
+          image: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=300&h=300&fit=crop'
         }
-      }
-    } catch (err) {
-      console.error('Error fetching product sales report:', err);
+      ];
+
+      // Filter based on category
+      const filtered = selectedCategory === 'All'
+        ? allMenuItems
+        : allMenuItems.filter(item => item.category === selectedCategory);
+
+      setMenuItems(filtered);
+    } catch (error) {
+      console.error('Error fetching menu items:', error);
     }
   };
 
-  // Fetch Daily Summary (for expenses estimation)
-  const fetchDailySummary = async () => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const response = await fetchWithAuth(
-        `${API_BASE_URL}/reports/daily-summary?date=${today}`
-      );
+  // Filter customers based on search
+  const filteredCustomers = customers.filter(customer =>
+    customer.toLowerCase().includes(searchCustomer.toLowerCase())
+  );
 
-      if (!response.ok) {
-        console.error('Daily summary API error:', response.status);
-        throw new Error('Failed to fetch daily summary');
-      }
-      
-      const data = await response.json();
-      console.log('Daily summary data:', data);
-      
-      if (data) {
-        setKeyMetrics(prev => ({
-          ...prev,
-          totalExpenses: `₹${(data.total_expenses || 0).toLocaleString('en-IN')}`,
-          grossMargin: data.gross_margin ? `${data.gross_margin}%` : prev.grossMargin
-        }));
-      }
-    } catch (err) {
-      console.error('Error fetching daily summary:', err);
+  // Filter menu items based on search only (category filtering handled by API)
+  const filteredMenuItems = menuItems.filter(item =>
+    item.name.toLowerCase().includes(searchMenu.toLowerCase())
+  );
+
+  const [cartItems, setCartItems] = useState([
+    { name: 'Masala Dosa', size: 'Medium', qty: 2, price: 90 },
+    { name: 'Filter Coffee', size: 'Regular', qty: 1, price: 25 }
+  ]);
+
+  const updateQuantity = (index, change) => {
+    const newCart = [...cartItems];
+    newCart[index].qty += change;
+    if (newCart[index].qty <= 0) {
+      newCart.splice(index, 1);
     }
+    setCartItems(newCart);
   };
 
-  // Fetch all reports
-  const fetchAllReports = async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      await Promise.all([
-        fetchSalesReport(),
-        fetchPaymentMethodsReport(),
-        fetchProductSalesReport(),
-        fetchDailySummary()
+  const handleAddToCartClick = (item) => {
+    setSelectedMenuItem(item);
+    setShowSizeModal(true);
+  };
+
+  const addToCartWithSize = (size) => {
+    if (!selectedMenuItem) return;
+
+    const finalPrice = selectedMenuItem.price + size.priceModifier;
+    const itemKey = `${selectedMenuItem.name}-${size.name}`;
+
+    const existingIndex = cartItems.findIndex(
+      ci => ci.name === selectedMenuItem.name && ci.size === size.name
+    );
+
+    if (existingIndex >= 0) {
+      const newCart = [...cartItems];
+      newCart[existingIndex].qty += 1;
+      setCartItems(newCart);
+    } else {
+      setCartItems([
+        ...cartItems,
+        {
+          name: selectedMenuItem.name,
+          size: size.name,
+          qty: 1,
+          price: finalPrice
+        }
       ]);
-    } catch (err) {
-      setError(err.message || 'Failed to load reports. Please try again.');
-    } finally {
-      setLoading(false);
+    }
+
+    setShowSizeModal(false);
+    setSelectedMenuItem(null);
+  };
+
+  const updateMenuQuantity = (item, size, change) => {
+    const existingIndex = cartItems.findIndex(
+      ci => ci.name === item.name && ci.size === size.name
+    );
+
+    if (existingIndex >= 0) {
+      const newCart = [...cartItems];
+      newCart[existingIndex].qty += change;
+      if (newCart[existingIndex].qty <= 0) {
+        newCart.splice(existingIndex, 1);
+      }
+      setCartItems(newCart);
     }
   };
 
-  // Initial load
-  useEffect(() => {
-    const token = getAuthToken();
-    if (!token) {
-      setError('No authentication token found. Please login first.');
-      return;
+  const getMenuItemQuantity = (itemName) => {
+    return cartItems
+      .filter(ci => ci.name === itemName)
+      .reduce((sum, ci) => sum + ci.qty, 0);
+  };
+
+  const addCustomer = () => {
+    if (newCustomer.name) {
+      alert(`Customer ${newCustomer.name} added successfully!`);
+      setNewCustomer({ name: '', phone: '', email: '' });
+      setShowAddCustomerModal(false);
+    } else {
+      alert('Please enter customer name');
     }
-    fetchAllReports();
-  }, []);
+  };
 
-  // Mock data for order sources (since API doesn't provide this)
-  useEffect(() => {
-    // This would need to come from your backend if available
-    const mockOrderSources = [
-      { source: 'Dine-in', orders: 640, share: '49.8%', revenue: '₹2,38,400', rank: 1 },
-      { source: 'Takeaway', orders: 420, share: '32.7%', revenue: '₹1,28,100', rank: 2 },
-      { source: 'Delivery', orders: 224, share: '17.5%', revenue: '₹1,15,850', rank: 3 }
-    ];
-    
-    setOrdersData(prev => ({
-      ...prev,
-      bySource: mockOrderSources
-    }));
-    
-    setOrderDistributionData([
-      { name: 'Dine-in', value: 640 },
-      { name: 'Takeaway', value: 420 },
-      { name: 'Delivery', value: 224 }
-    ]);
-  }, []);
+  const applyCoupon = () => {
+    const coupon = availableCoupons.find(c => c.code.toUpperCase() === inputCoupon.toUpperCase());
+    if (coupon) {
+      if (subtotal >= coupon.minOrder) {
+        setCouponCode(coupon.code);
+        setInputCoupon('');
+        setShowCouponModal(false);
+        alert(`Coupon "${coupon.code}" applied successfully!`);
+      } else {
+        alert(`Minimum order of ₹${coupon.minOrder} required for this coupon`);
+      }
+    } else {
+      alert('Invalid coupon code');
+    }
+  };
 
-  // Mock expenses data (you'll need to add an expenses endpoint to your backend)
-  useEffect(() => {
-    const mockExpenses = [
-      { category: 'Salaries & Wages', transactions: 6, amount: '₹55,500', share: '49.5%', rank: 1 },
-      { category: 'Kitchen Supplies', transactions: 14, amount: '₹24,300', share: '21.7%', rank: 2 },
-      { category: 'Utilities', transactions: 10, amount: '₹12,350', share: '11.0%', rank: 3 },
-      { category: 'Rent', transactions: 1, amount: '₹18,000', share: '16.1%', rank: 4 }
-    ];
-    
-    setExpensesData(mockExpenses);
-    
-    setExpensesChartData([
-      { category: 'Salaries', amount: 55500 },
-      { category: 'Kitchen', amount: 24300 },
-      { category: 'Rent', amount: 18000 },
-      { category: 'Utilities', amount: 12350 }
-    ]);
-  }, []);
+  const removeCoupon = () => {
+    setCouponCode('');
+  };
 
-  const handleExportCSV = () => {
-    const csv = salesData.map(row => 
-      `${row.period},${row.orders},${row.grossSales},${row.discounts},${row.net}`
-    ).join('\n');
-    const blob = new Blob([`Period,Orders,Gross Sales,Discounts,Net\n${csv}`], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sales_report_${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    window.URL.revokeObjectURL(url);
+  const handleDatabaseClick = () => {
+    // Navigate to menu categories page
+    window.location.href = '/menu';
+    // Or if using React Router: navigate('/menu-categories');
+  };
+
+  const handleSaveDraft = () => {
+    const billNum = `DRAFT-${Date.now()}`;
+    setDraftBillNumber(billNum);
+    setShowSaveDraftModal(true);
+  };
+
+  const saveDraft = () => {
+    // Here you would save the draft to your backend
+    alert(`Draft saved with bill number: ${draftBillNumber}`);
+    setShowSaveDraftModal(false);
   };
 
   const handlePrint = () => {
-    window.print();
+    setShowPrintModal(true);
   };
 
-  const handleReset = () => {
-    setFilters({
-      reportType: 'Sales',
-      view: 'day',
-      outlet: 'All',
-      paymentMode: 'All',
-      sort: 'Total Desc',
-      days: 30,
-      dateRange: { start: '2025-01', end: '2025-12' }
-    });
+  const printBill = () => {
+    const printContent = document.getElementById('print-content');
+    const printWindow = window.open('', '', 'height=600,width=800');
+    printWindow.document.write('<html><head><title>Print Bill</title>');
+    printWindow.document.write('<style>body{font-family:Arial,sans-serif;padding:20px;}</style>');
+    printWindow.document.write('</head><body>');
+    printWindow.document.write(printContent.innerHTML);
+    printWindow.document.write('</body></html>');
+    printWindow.document.close();
+    printWindow.print();
   };
 
-  const handleApply = () => {
-    fetchAllReports();
+  // Payment Handlers - Simplified
+  const handlePaymentSelection = (method) => {
+    setSelectedPaymentMethod(method);
+    alert(`Payment method selected: ${method}\nTotal Amount: ₹${total.toFixed(2)}\n\nOrder will be processed with ${method} payment.`);
+    // Here you would typically save the order with the selected payment method
+    // and then clear the cart
+    setCartItems([]);
+    setSelectedPaymentMethod('');
   };
 
-  const formatDateRange = (dateStr) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-  };
+  const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
 
-  // Calculate days from date range
-  useEffect(() => {
-    const startDate = new Date(filters.dateRange.start);
-    const endDate = new Date(filters.dateRange.end);
-    const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
-    
-    if (daysDiff > 0 && daysDiff !== filters.days) {
-      setFilters(prev => ({ ...prev, days: daysDiff }));
+  // Calculate discount based on coupon
+  let discount = 0;
+  if (couponCode) {
+    const appliedCoupon = availableCoupons.find(c => c.code === couponCode);
+    if (appliedCoupon) {
+      if (appliedCoupon.type === 'percentage') {
+        discount = subtotal * (appliedCoupon.discount / 100);
+      } else {
+        discount = appliedCoupon.discount;
+      }
     }
-  }, [filters.dateRange]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <RotateCw className="animate-spin h-12 w-12 text-primary mx-auto mb-4" />
-          <p className="text-lg text-foreground">Loading reports...</p>
-        </div>
-      </div>
-    );
   }
 
-  return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
-      <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 lg:mb-8 gap-3">
-          <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Reports</h1>
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <button 
-              onClick={handleExportCSV}
-              disabled={loading || salesData.length === 0}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Download size={16} />
-              <span>Export</span>
-            </button>
-            <button 
-              onClick={handlePrint}
-              disabled={loading}
-              className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg font-medium transition-colors bg-teal-600 text-white hover:bg-teal-700 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Printer size={16} />
-              <span>Print</span>
-            </button>
-          </div>
-        </div>
+  const cgst = subtotal * 0.025;
+  const sgst = subtotal * 0.025;
+  const total = subtotal - discount + cgst + sgst;
 
-        {/* Error Message */}
-        {error && (
-          <div className="mb-4 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex items-start gap-3">
-            <AlertCircle className="text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" size={20} />
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold text-red-800 dark:text-red-300 mb-1">Error Loading Reports</h3>
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-              <button 
-                onClick={fetchAllReports}
-                className="mt-2 text-sm text-red-700 dark:text-red-300 underline hover:text-red-800 dark:hover:text-red-200"
-              >
-                Try Again
+  // Separate eligible and ineligible coupons
+  const eligibleCoupons = availableCoupons.filter(c => subtotal >= c.minOrder);
+  const ineligibleCoupons = availableCoupons.filter(c => subtotal < c.minOrder);
+
+  return (
+    <div className="min-h-screen bg-background text-foreground p-2 sm:p-4 md:p-5 max-w-[100vw] overflow-x-hidden" style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      
+      {/* Size Selection Modal */}
+      {showSizeModal && selectedMenuItem && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
+          <div className="bg-card rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-sm sm:text-lg md:text-xl font-semibold text-card-foreground">Select Size</h3>
+              <button onClick={() => { setShowSizeModal(false); setSelectedMenuItem(null); }} className="text-muted-foreground hover:text-foreground">
+                <X size={20} />
               </button>
             </div>
-          </div>
-        )}
-
-        {/* Filters and Key Metrics */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-4 sm:mb-6 lg:mb-8">
-          {/* Filters */}
-          <div className="lg:col-span-2 rounded-xl px-3 sm:px-4 py-4 bg-card border border-border">
-            <div className="flex flex-col xs:flex-row items-start xs:items-center justify-between mb-3 sm:mb-4 gap-2">
-              <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Filters</h2>
-              <span className="px-2 py-0.5 sm:py-1 rounded-full text-xs font-medium bg-teal-600 text-white whitespace-nowrap">
-                🔒 Authenticated
-              </span>
-            </div>
-
-            <div className="space-y-3">
-              {/* Row 1 */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-                <div>
-                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Report Type</label>
-                  <div className="relative">
-                    <select
-                      value={filters.reportType}
-                      onChange={(e) => setFilters({...filters, reportType: e.target.value})}
-                      className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
-                    >
-                      <option>Sales</option>
-                      <option>Orders</option>
-                      <option>Expenses</option>
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs mb-1 text-muted-foreground font-medium">View</label>
-                  <div className="relative">
-                    <select
-                      value={filters.view}
-                      onChange={(e) => setFilters({...filters, view: e.target.value})}
-                      className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
-                    >
-                      <option value="day">By Day</option>
-                      <option value="week">By Week</option>
-                      <option value="month">By Month</option>
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
-                  </div>
-                </div>
-                <div className="sm:col-span-2 lg:col-span-1">
-                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Days</label>
-                  <input
-                    type="number"
-                    value={filters.days}
-                    onChange={(e) => setFilters({...filters, days: parseInt(e.target.value) || 30})}
-                    className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    min="1"
-                    max="365"
-                  />
-                </div>
-              </div>
-
-              {/* Row 2 */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-                <div>
-                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Outlet</label>
-                  <div className="relative">
-                    <select
-                      value={filters.outlet}
-                      onChange={(e) => setFilters({...filters, outlet: e.target.value})}
-                      className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
-                    >
-                      <option>All</option>
-                      <option>Main Branch</option>
-                      <option>Downtown</option>
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Payment Mode</label>
-                  <div className="relative">
-                    <select
-                      value={filters.paymentMode}
-                      onChange={(e) => setFilters({...filters, paymentMode: e.target.value})}
-                      className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
-                    >
-                      <option>All</option>
-                      <option>UPI</option>
-                      <option>Cash</option>
-                      <option>Card</option>
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
-                  </div>
-                </div>
-                <div className="sm:col-span-2 lg:col-span-1">
-                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Sort</label>
-                  <div className="relative">
-                    <select
-                      value={filters.sort}
-                      onChange={(e) => setFilters({...filters, sort: e.target.value})}
-                      className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
-                    >
-                      <option>Total Desc</option>
-                      <option>Total Asc</option>
-                      <option>Date Desc</option>
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" size={14} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col xs:flex-row justify-end gap-2 pt-1">
+            <p className="text-sm text-muted-foreground mb-4">{selectedMenuItem.name}</p>
+            <div className="space-y-2">
+              {sizes.map((size, i) => (
                 <button
-                  onClick={handleReset}
-                  disabled={loading}
-                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-colors text-sm text-teal-600 border border-teal-600 hover:bg-teal-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  key={i}
+                  onClick={() => addToCartWithSize(size)}
+                  className="w-full p-3 bg-muted hover:bg-teal-600 hover:text-white rounded-lg transition-colors flex justify-between items-center"
                 >
-                  <RotateCw size={14} />
-                  Reset
+                  <span className="font-medium">{size.name}</span>
+                  <span>₹{selectedMenuItem.price + size.priceModifier}</span>
                 </button>
-                <button
-                  onClick={handleApply}
-                  disabled={loading}
-                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-colors text-sm bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Filter size={14} />
-                  Apply
-                </button>
-              </div>
+              ))}
             </div>
           </div>
-
-          {/* Key Metrics */}
-          <div className="rounded-xl px-3 sm:px-4 py-4 bg-card border border-border">
-            <h2 className="text-sm sm:text-base font-semibold mb-3 text-card-foreground">Key Metrics</h2>
-            
-            <div className="space-y-2.5">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <div className="text-center p-2 rounded-lg bg-muted">
-                  <div className="text-xs text-muted-foreground mb-0.5">Sales</div>
-                  <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalSales}</div>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-muted">
-                  <div className="text-xs text-muted-foreground mb-0.5">Orders</div>
-                  <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalOrders}</div>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-muted col-span-2 sm:col-span-1">
-                  <div className="text-xs text-muted-foreground mb-0.5">Expenses</div>
-                  <div className="text-sm sm:text-base font-bold text-foreground">{keyMetrics.totalExpenses}</div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <div className="text-center p-2 rounded-lg bg-muted">
-                  <div className="text-xs text-muted-foreground mb-0.5">Avg</div>
-                  <div className="text-xs sm:text-sm font-bold text-foreground">{keyMetrics.avgOrderValue}</div>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-muted">
-                  <div className="text-xs text-muted-foreground mb-0.5">Margin</div>
-                  <div className="text-xs sm:text-sm font-bold text-foreground">{keyMetrics.grossMargin}</div>
-                </div>
-                <div className="text-center p-2 rounded-lg bg-muted">
-                  <div className="text-xs text-muted-foreground mb-0.5">Top</div>
-                  <div className="text-xs font-bold text-foreground">{keyMetrics.topCategory}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Sales Report with Line Chart */}
-        <div className="rounded-xl px-3 sm:px-4 py-4 mb-4 sm:mb-6 lg:mb-8 bg-card border border-border overflow-hidden">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
-            <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Sales Report</h2>
-            <span className="text-xs text-muted-foreground">By selected view</span>
-          </div>
-
-          {/* Line Chart */}
-          {salesChartData.length > 0 && (
-            <div className="mb-6">
-              <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Sales Trend</h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={salesChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#6b7280" />
-                  <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))', 
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                      fontSize: '12px'
-                    }} 
-                  />
-                  <Legend wrapperStyle={{ fontSize: '12px' }} />
-                  <Line type="monotone" dataKey="sales" stroke="#14b8a6" strokeWidth={2} name="Gross Sales" />
-                  <Line type="monotone" dataKey="net" stroke="#0d9488" strokeWidth={2} name="Net Sales" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          <div className="overflow-x-auto -mx-3 sm:-mx-4">
-            <div className="inline-block min-w-full align-middle">
-              <table className="min-w-full">
-                <thead>
-                  <tr className="bg-muted border-b border-border">
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Period</th>
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Gross</th>
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Discount</th>
-                    <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Net</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {salesData.length === 0 ? (
-                    <tr><td colSpan="5" className="py-8 text-center text-sm text-muted-foreground">
-                    No sales data available
-                  </td>
-                </tr>
-              ) : (
-                salesData.map((row, index) => (
-                  <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.period}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs text-foreground">{row.orders}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs text-foreground whitespace-nowrap">{row.grossSales}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs text-foreground whitespace-nowrap">{row.discounts}</span>
-                    </td>
-                    <td className="py-2.5 px-2 sm:px-3">
-                      <span className="text-xs font-semibold text-foreground whitespace-nowrap">{row.net}</span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    {/* Orders Report with Pie Chart */}
-    <div className="rounded-xl px-3 sm:px-4 py-4 mb-4 sm:mb-6 lg:mb-8 bg-card border border-border overflow-hidden">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
-        <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Orders Report</h2>
-        <span className="text-xs text-muted-foreground">Mix & payments</span>
-      </div>
-
-      {/* Pie Chart */}
-      {orderDistributionData.length > 0 && (
-        <div className="mb-6">
-          <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Order Distribution by Source</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={orderDistributionData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-              >
-                {orderDistributionData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'hsl(var(--card))', 
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: '8px',
-                  fontSize: '12px'
-                }} 
-              />
-              <Legend wrapperStyle={{ fontSize: '12px' }} />
-            </PieChart>
-          </ResponsiveContainer>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Orders by Source */}
-        <div className="overflow-hidden">
-          <div className="flex items-center justify-between mb-2.5">
-            <h3 className="text-xs sm:text-sm font-semibold text-card-foreground">By Source</h3>
-            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Desc</span>
+      {/* Save Draft Modal */}
+      {showSaveDraftModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
+          <div className="bg-card rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-md">
+            <h3 className="text-sm sm:text-lg md:text-xl font-semibold text-card-foreground mb-4">Save Draft Order</h3>
+            <div className="mb-4">
+              <label className="text-muted-foreground text-sm mb-2 block">Bill Number</label>
+              <input
+                type="text"
+                value={draftBillNumber}
+                onChange={(e) => setDraftBillNumber(e.target.value)}
+                className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="text-muted-foreground text-sm mb-2 block">Customer</label>
+              <input
+                type="text"
+                value={selectedCustomer}
+                readOnly
+                className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground"
+              />
+            </div>
+            <div className="mb-4">
+              <label className="text-muted-foreground text-sm mb-2 block">Total Amount</label>
+              <input
+                type="text"
+                value={`₹${total.toFixed(2)}`}
+                readOnly
+                className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground font-semibold"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={saveDraft} className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium">Save Draft</button>
+              <button onClick={() => setShowSaveDraftModal(false)} className="flex-1 py-2 sm:py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base font-medium">Cancel</button>
+            </div>
           </div>
-          <div className="overflow-x-auto -mx-3 sm:-mx-4 lg:mx-0">
-            <div className="inline-block min-w-full align-middle">
-              <table className="min-w-full">
+        </div>
+      )}
+
+      {/* Print Preview Modal */}
+      {showPrintModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
+          <div className="bg-white rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-sm sm:text-lg md:text-xl font-semibold">Print Preview</h3>
+              <button onClick={() => setShowPrintModal(false)} className="text-gray-600 hover:text-gray-900">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div id="print-content" className="bg-white p-6 text-black">
+              <div className="text-center mb-6">
+                <h1 className="text-2xl font-bold">Restaurant Name</h1>
+                <p className="text-sm">123 Main Street, City</p>
+                <p className="text-sm">Phone: +91 1234567890</p>
+                <p className="text-sm">GSTIN: 29XXXXX1234X1ZX</p>
+              </div>
+
+              <div className="border-t border-b border-gray-300 py-2 mb-4">
+                <div className="flex justify-between text-sm">
+                  <span>Bill No: {Date.now()}</span>
+                  <span>Date: {new Date().toLocaleDateString()}</span>
+                </div>
+                <div className="text-sm">Customer: {selectedCustomer}</div>
+              </div>
+              
+              <table className="w-full mb-4">
                 <thead>
-                  <tr className="bg-muted border-b border-border">
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Source</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Orders</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Share</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Revenue</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
+                  <tr className="border-b border-gray-300">
+                    <th className="text-left py-2">Item</th>
+                    <th className="text-center py-2">Qty</th>
+                    <th className="text-right py-2">Price</th>
+                    <th className="text-right py-2">Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {ordersData.bySource.map((row, index) => (
-                    <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                      <td className="py-2 px-2">
-                        <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.source}</span>
-                      </td>
-                      <td className="py-2 px-2">
-                        <span className="text-xs text-foreground">{row.orders}</span>
-                      </td>
-                      <td className="py-2 px-2">
-                        <span className="text-xs text-foreground">{row.share}</span>
-                      </td>
-                      <td className="py-2 px-2">
-                        <span className="text-xs text-foreground whitespace-nowrap">{row.revenue}</span>
-                      </td>
-                      <td className="py-2 px-2">
-                        <span className="text-xs text-foreground">{row.rank}</span>
-                      </td>
+                  {cartItems.map((item, i) => (
+                    <tr key={i} className="border-b border-gray-200">
+                      <td className="py-2">{item.name} ({item.size})</td>
+                      <td className="text-center py-2">{item.qty}</td>
+                      <td className="text-right py-2">₹{item.price}</td>
+                      <td className="text-right py-2">₹{(item.price * item.qty).toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+
+              <div className="border-t border-gray-300 pt-2 space-y-1">
+                <div className="flex justify-between">
+                  <span>Subtotal:</span>
+                  <span>₹{subtotal.toFixed(2)}</span>
+                </div>
+                {discount > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Discount ({couponCode}):</span>
+                    <span>- ₹{discount.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-sm">
+                  <span>CGST (2.5%):</span>
+                  <span>₹{cgst.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>SGST (2.5%):</span>
+                  <span>₹{sgst.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-bold text-lg border-t border-gray-300 pt-2">
+                  <span>Total:</span>
+                  <span>₹{total.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="text-center mt-6 text-sm">
+                <p>Thank you for your visit!</p>
+                <p>Please visit again</p>
+              </div>
+            </div>
+
+            <div className="flex gap-2 mt-4">
+              <button onClick={printBill} className="flex-1 py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium">Print</button>
+              <button onClick={() => setShowPrintModal(false)} className="flex-1 py-2.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium">Cancel</button>
             </div>
           </div>
-        </div>
-
-        {/* Payments by Mode */}
-        <div className="overflow-hidden">
-          <div className="flex items-center justify-between mb-2.5">
-            <h3 className="text-xs sm:text-sm font-semibold text-card-foreground">By Payment</h3>
-            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Desc</span>
-          </div>
-          <div className="overflow-x-auto -mx-3 sm:-mx-4 lg:mx-0">
-            <div className="inline-block min-w-full align-middle">
-              <table className="min-w-full">
-                <thead>
-                  <tr className="bg-muted border-b border-border">
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Mode</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Count</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Share</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Amount</th>
-                    <th className="text-left font-semibold py-2 px-2 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ordersData.byPayment.length === 0 ? (
-                    <tr>
-                      <td colSpan="5" className="py-4 text-center text-sm text-muted-foreground">
-                        No payment data available
-                      </td>
-                    </tr>
-                  ) : (
-                    ordersData.byPayment.map((row, index) => (
-                      <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                        <td className="py-2 px-2">
-                          <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.mode}</span>
-                        </td>
-                        <td className="py-2 px-2">
-                          <span className="text-xs text-foreground">{row.count}</span>
-                        </td>
-                        <td className="py-2 px-2">
-                          <span className="text-xs text-foreground">{row.share}</span>
-                        </td>
-                        <td className="py-2 px-2">
-                          <span className="text-xs text-foreground whitespace-nowrap">{row.amount}</span>
-                        </td>
-                        <td className="py-2 px-2">
-                          <span className="text-xs text-foreground">{row.rank}</span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    {/* Expenses Report with Bar Chart */}
-    <div className="rounded-xl px-3 sm:px-4 py-4 bg-card border border-border overflow-hidden">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
-        <h2 className="text-sm sm:text-base font-semibold text-card-foreground">Expenses Report</h2>
-        <span className="text-xs text-muted-foreground">By category</span>
-      </div>
-
-      {/* Bar Chart */}
-      {expensesChartData.length > 0 && (
-        <div className="mb-6">
-          <h3 className="text-xs sm:text-sm font-semibold mb-3 text-card-foreground">Expenses by Category</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={expensesChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-              <XAxis dataKey="category" tick={{ fontSize: 12 }} stroke="#6b7280" />
-              <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" />
-              <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: 'hsl(var(--card))', 
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: '8px',
-                  fontSize: '12px'
-                }} 
-              />
-              <Legend wrapperStyle={{ fontSize: '12px' }} />
-              <Bar dataKey="amount" fill="#14b8a6" name="Amount (₹)" />
-            </BarChart>
-          </ResponsiveContainer>
         </div>
       )}
 
-      <div className="overflow-x-auto -mx-3 sm:-mx-4">
-        <div className="inline-block min-w-full align-middle">
-          <table className="min-w-full">
-            <thead>
-              <tr className="bg-muted border-b border-border">
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Category</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Trans.</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Amount</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Share</th>
-                <th className="text-left font-semibold py-2 px-2 sm:px-3 text-xs text-muted-foreground whitespace-nowrap">Rank</th>
-              </tr>
-            </thead>
-            <tbody>
-              {expensesData.map((row, index) => (
-                <tr key={index} className="border-b border-border hover:bg-muted/50 transition-colors">
-                  <td className="py-2.5 px-2 sm:px-3">
-                    <span className="text-xs font-medium text-foreground whitespace-nowrap">{row.category}</span>
-                  </td>
-                  <td className="py-2.5 px-2 sm:px-3">
-                    <span className="text-xs text-foreground">{row.transactions}</span>
-                  </td>
-                  <td className="py-2.5 px-2 sm:px-3">
-                    <span className="text-xs text-foreground whitespace-nowrap">{row.amount}</span>
-                  </td>
-                  <td className="py-2.5 px-2 sm:px-3">
-                    <span className="text-xs text-foreground">{row.share}</span>
-                  </td>
-                  <td className="py-2.5 px-2 sm:px-3">
-                    <span className="text-xs text-foreground">{row.rank}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Coupon Modal with Eligibility */}
+      {showCouponModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
+          <div className="bg-card rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
+            <h3 className="text-sm sm:text-lg md:text-xl font-semibold text-card-foreground mb-3 sm:mb-4">Apply Coupon</h3>
+            <input
+              type="text"
+              placeholder="Enter coupon code"
+              value={inputCoupon}
+              onChange={(e) => setInputCoupon(e.target.value.toUpperCase())}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-3 sm:mb-4"
+            />
+
+            {/* Eligible Coupons */}
+            {eligibleCoupons.length > 0 && (
+              <div className="mb-4">
+                <p className="text-sm font-semibold text-foreground mb-2">✓ Eligible Coupons:</p>
+                <div className="space-y-2">
+                  {eligibleCoupons.map((coupon, i) => (
+                    <div
+                      key={i}
+                      className="bg-muted rounded p-2 sm:p-3 cursor-pointer hover:bg-teal-600 hover:text-white transition-colors"
+                      onClick={() => setInputCoupon(coupon.code)}
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-sm sm:text-base">{coupon.code}</span>
+                        <span className="text-xs sm:text-sm">{coupon.type === 'percentage' ? `${coupon.discount}% off` : `₹${coupon.discount} off`}</span>
+                      </div>
+                      <p className="text-xs sm:text-sm mt-1 opacity-80">{coupon.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Ineligible Coupons */}
+            {ineligibleCoupons.length > 0 && (
+              <div className="mb-3 sm:mb-4">
+                <p className="text-sm font-semibold text-muted-foreground mb-2">Available Coupons:</p>
+                <div className="space-y-2">
+                  {ineligibleCoupons.map((coupon, i) => (
+                    <div key={i} className="bg-muted rounded p-2 sm:p-3 opacity-60">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-sm sm:text-base">{coupon.code}</span>
+                        <span className="text-xs sm:text-sm">{coupon.type === 'percentage' ? `${coupon.discount}% off` : `₹${coupon.discount} off`}</span>
+                      </div>
+                      <p className="text-xs sm:text-sm mt-1">{coupon.description}</p>
+                      <p className="text-xs text-red-500 mt-1">Minimum order ₹{coupon.minOrder} required (Current: ₹{subtotal.toFixed(2)})</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button onClick={applyCoupon} className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium">Apply</button>
+              <button onClick={() => { setShowCouponModal(false); setInputCoupon(''); }} className="flex-1 py-2 sm:py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base font-medium">Cancel</button>
+            </div>
+          </div>
         </div>
+      )}
+
+      {/* Add Customer Modal */}
+      {showAddCustomerModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
+          <div className="bg-card rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-md">
+            <h3 className="text-sm sm:text-lg md:text-xl font-semibold text-card-foreground mb-3 sm:mb-4">Add New Customer</h3>
+            <input
+              type="text"
+              placeholder="Full name"
+              value={newCustomer.name}
+              onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
+            />
+            <input
+              type="text"
+              placeholder="+91 Phone number"
+              value={newCustomer.phone}
+              onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
+            />
+            <input
+              type="email"
+              placeholder="example@mail.com (optional)"
+              value={newCustomer.email}
+              onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
+              className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-3 sm:mb-4"
+            />
+            <div className="flex gap-2">
+              <button onClick={addCustomer} className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium">Add</button>
+              <button onClick={() => setShowAddCustomerModal(false)} className="flex-1 py-2 sm:py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base font-medium">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-5">
+        <h2 className="text-base sm:text-xl md:text-2xl font-semibold text-foreground">POS System</h2>
+      </div>
+
+      {/* Customer Panel - Full Width */}
+      <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full mb-3 sm:mb-4 md:mb-5">
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
+          <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">Customer</h2>
+          <button
+            onClick={() => setShowAddCustomerModal(true)}
+            className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
+          >
+            <Plus size={16} />
+            <span>Add</span>
+          </button>
+        </div>
+        <div className="mb-3 sm:mb-4">
+          <label className="text-muted-foreground text-sm mb-2 block">Select customer</label>
+          <div className="relative">
+            <Search size={16} className="text-muted-foreground absolute left-3 top-1/2 transform -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search name, phone..."
+              value={searchCustomer}
+              onChange={(e) => setSearchCustomer(e.target.value)}
+              className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-4 py-2 pl-10 text-sm sm:text-base"
+            />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2 mb-3 sm:mb-4">
+          {filteredCustomers.map((customer, i) => {
+            const initial = customer.charAt(0).toUpperCase();
+            const colors = ['#4A5568', '#2D5A7B', '#8B6F47', '#6B7280'];
+            const bgColor = colors[i % colors.length];
+            const isSelected = selectedCustomer === customer;
+            return (
+              <button
+                key={i}
+                onClick={() => setSelectedCustomer(customer)}
+                className="px-2.5 py-1.5 sm:px-3 sm:py-2 border border-teal-600 rounded-full text-sm cursor-pointer flex items-center gap-1.5 sm:gap-2 transition-colors flex-shrink-0"
+                style={{
+                  backgroundColor: isSelected ? '#1ABC9C' : 'transparent',
+                  color: isSelected ? 'white' : 'inherit'
+                }}
+                onMouseEnter={(e) => {
+                  if (!isSelected) {
+                    e.currentTarget.style.backgroundColor = '#1ABC9C';
+                    e.currentTarget.style.color = 'white';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSelected) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = 'inherit';
+                  }
+                }}
+              >
+                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0" style={{ backgroundColor: bgColor }}>
+                  {customer === 'Guest' ? '👤' : initial}
+                </div>
+                <span className="text-smwhitespace-nowrap">{customer}</span>
+</button>
+);
+})}
+</div>
+<div>
+<label className="text-muted-foreground text-sm mb-2 block">Notes</label>
+<textarea
+value={notes}
+onChange={(e) => setNotes(e.target.value)}
+rows="2"
+className="w-full bg-muted text-foreground border border-border rounded-md outline-none resize-y px-3 py-2 text-sm sm:text-base"
+/>
+</div>
+</div>{/* Menu and Cart Side by Side */}
+  <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-3 sm:gap-4 md:gap-5">
+    {/* Menu Panel */}
+    <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full">
+      <div className="flex items-center justify-between mb-3 sm:mb-4 flex-wrap gap-2">
+        <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">Menu</h2>
+        <button
+          onClick={handleDatabaseClick}
+          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0">
+          <Database size={16} />
+          <span>DB</span>
+        </button>
+      </div>
+      <div className="mb-3 sm:mb-4">
+        <label className="text-muted-foreground text-sm mb-2 block">Search items</label>
+        <div className="relative">
+          <Search size={16} className="text-muted-foreground absolute left-3 top-1/2 transform -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search..."
+            value={searchMenu}
+            onChange={(e) => setSearchMenu(e.target.value)}
+            className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-4 py-2 pl-10 text-sm sm:text-base"
+          />
+        </div>
+      </div>
+      <div className="mb-3 sm:mb-4">
+        <label className="text-muted-foreground text-sm mb-2 block">Categories</label>
+        <select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base"
+        >
+          <option>All</option>
+          <option>South Indian</option>
+          <option>Beverages</option>
+          <option>Breads</option>
+          <option>Combos</option>
+        </select>
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+        {filteredMenuItems.map((item, i) => {
+          const quantity = getMenuItemQuantity(item.name);
+          return (
+            <div key={i} className="bg-secondary rounded-lg overflow-hidden flex flex-col shadow-sm">
+              <div className="aspect-square w-full overflow-hidden bg-gray-200">
+                <img
+                  src={item.image}
+                  alt={item.name}
+                  className="w-full h-full object-cover hover:scale-110 transition-transform duration-300"
+                  loading="lazy"
+                  onError={(e) => {
+                    e.target.src = 'https://via.placeholder.com/200x200/1ABC9C/FFFFFF?text=' + encodeURIComponent(item.name.substring(0, 3));
+                  }}
+                />
+              </div>
+              <div className="p-2 sm:p-2.5 flex flex-col gap-1.5 sm:gap-2">
+                <div>
+                  <h3 className="text-foreground text-sm font-semibold mb-0.5 sm:mb-1 line-clamp-2 leading-tight">{item.name}</h3>
+                  <p className="text-foreground text-sm font-medium">₹{item.price}</p>
+                </div>
+                {quantity === 0 ? (
+                  <button
+                    onClick={() => handleAddToCartClick(item)}
+                    className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-full text-sm cursor-pointer flex items-center justify-center gap-1 hover:bg-teal-700 w-full"
+                  >
+                    <Plus size={14} />
+                    <span>Add</span>
+                  </button>
+                ) : (
+                  <div className="text-center py-1.5 bg-teal-600 text-white rounded-full text-sm font-semibold">
+                    {quantity} in cart
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+
+    {/* Cart & Billing Panel */}
+    <div className="bg-card rounded-lg shadow-sm p-3 sm:p-4 md:p-5 w-full h-fit">
+      <div className="flex items-center justify-between mb-3 sm:mb-4 flex-wrap gap-2">
+        <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">Cart & Billing</h2>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowCouponModal(true)}
+            className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0">
+            <Tag size={16} />
+            <span>Coupon</span>
+          </button>
+          <button
+            onClick={() => setCartItems([])}
+            className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
+          >
+            <Trash2 size={16} />
+            <span>Clear</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Cart Items Table */}
+      <div className="mb-4">
+        <div className="border-b border-border text-muted-foreground grid grid-cols-[2fr_1fr_1fr_1fr] gap-2 p-2 text-xs sm:text-sm">
+          <div>Item</div>
+          <div>Qty</div>
+          <div>Price</div>
+          <div>Total</div>
+        </div>
+        <div className="max-h-[200px] overflow-y-auto">
+          {cartItems.map((item, i) => (
+            <div key={i} className="border-b border-border grid grid-cols-[2fr_1fr_1fr_1fr] gap-2 p-2 sm:p-2.5 items-center">
+              <div className="text-foreground text-xs sm:text-sm">
+                <div className="truncate">{item.name}</div>
+                <div className="text-muted-foreground text-xs">({item.size})</div>
+              </div>
+              <div className="text-foreground text-xs sm:text-sm">{item.qty}</div>
+              <div className="text-foreground text-xs sm:text-sm">₹{item.price}</div>
+              <div className="text-foreground text-xs sm:text-sm">₹{item.price * item.qty}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Billing Summary */}
+      <div className="border-t border-border pt-3 sm:pt-4 flex flex-col gap-2">
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Subtotal</span>
+          <span className="text-foreground font-semibold">₹{subtotal.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-muted-foreground">Discount</span>
+            {couponCode && (
+              <span className="px-2 py-0.5 bg-teal-600 text-white text-xs rounded cursor-pointer hover:bg-red-600 transition-colors" onClick={removeCoupon} title="Click to remove">
+                {couponCode} ×
+              </span>
+            )}
+          </div>
+          <span className="text-foreground font-semibold">{discount > 0 ? `- ₹${discount.toFixed(2)}` : '₹0.00'}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">CGST 2.5%</span>
+          <span className="text-foreground">₹{cgst.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">SGST 2.5%</span>
+          <span className="text-foreground">₹{sgst.toFixed(2)}</span>
+        </div>
+        <div className="border-t border-border flex justify-between text-base font-semibold pt-2 sm:pt-3">
+          <span className="text-foreground">Total</span>
+          <span className="text-foreground">₹{total.toFixed(2)}</span>
+        </div>
+      </div>
+
+      {/* Payment Buttons - Simplified */}
+      <div className="mt-4">
+        <div className="flex justify-between items-center mb-3">
+          <span className="text-foreground text-sm">To collect</span>
+          <span className="text-foreground font-semibold text-lg">₹{total.toFixed(2)}</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          <button
+            onClick={() => handlePaymentSelection('UPI')}
+            className="px-2 py-2 sm:py-2.5 bg-teal-600 text-white border-none rounded-lg text-xs sm:text-sm cursor-pointer font-medium hover:bg-teal-700">
+            UPI
+          </button>
+          <button
+            onClick={() => handlePaymentSelection('Cash')}
+            className="px-2 py-2 sm:py-2.5 bg-teal-600 text-white border-none rounded-lg text-xs sm:text-sm cursor-pointer font-medium hover:bg-teal-700">
+            Cash
+          </button>
+          <button
+            onClick={() => handlePaymentSelection('Card')}
+            className="px-2 py-2 sm:py-2.5 bg-teal-600 text-white border-none rounded-lg text-xs sm:text-sm cursor-pointer font-medium hover:bg-teal-700">
+            Card
+          </button>
+        </div>
+
+        {/* Save Draft and Print Buttons */}
+        <div className="space-y-2">
+          <button
+            onClick={handleSaveDraft}
+            className="w-full py-2.5 bg-gray-600 text-white border-none rounded-lg text-sm cursor-pointer font-medium hover:bg-gray-700 transition-colors">
+            Save Draft
+          </button>
+          <button
+            onClick={handlePrint}
+            className="w-full py-2.5 bg-teal-600 text-white border-none rounded-lg text-sm cursor-pointer flex items-center justify-center gap-2 font-medium hover:bg-teal-700 transition-colors">
+            <Printer size={16} />
+            <span>Print Bill</span>
+          </button>
+        </div>
+
+        <p className="text-muted-foreground text-xs mt-2 leading-relaxed">
+          Select payment method to complete the order. Print sends bill to printer and logs to Past Orders.
+        </p>
       </div>
     </div>
   </div>
 </div>);
-};
-export default ReportsPage;
+}
+export default POS;

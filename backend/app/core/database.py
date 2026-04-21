@@ -9,7 +9,10 @@ settings = get_settings()
 # Database URL from settings
 DATABASE_URL = settings.DATABASE_URL
 
-# Create engine
+# Clean the URL from whitespace
+DATABASE_URL = DATABASE_URL.strip()
+
+# Create sync engine only (avoid async greenlet issues)
 engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {},
@@ -18,7 +21,7 @@ engine = create_engine(
     max_overflow=20
 )
 
-# Create SessionLocal class
+# Create SessionLocal class for existing sync logic
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Import Base from models (models.user creates it to avoid circular dependency)
@@ -38,7 +41,7 @@ from app.models.expense import Expense
 from app.models.order_coupon import OrderCoupon
 from app.models.staff import Staff
 
-# Dependency to get DB session
+# Dependency to get DB session (Sync)
 def get_db():
     db = SessionLocal()
     try:
@@ -46,7 +49,6 @@ def get_db():
     finally:
         db.close()
 
-
 def init_db():
-    """Initialize database by creating all tables"""
+    """Initialize database by creating all tables (Sync)"""
     Base.metadata.create_all(bind=engine)
