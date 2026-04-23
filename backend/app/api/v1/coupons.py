@@ -43,7 +43,7 @@ def create_coupon(
     current_user=Depends(get_current_user),
 ):
     """Create a new coupon (Admin only)"""
-    return CouponService.create_coupon(db, coupon_data)
+    return CouponService.create_coupon(db, coupon_data, int(current_user["client_id"]))
 
 
 @router.get("", response_model=List[CouponResponse])
@@ -52,10 +52,11 @@ def list_coupons(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=100),
     active_only: bool = Query(False),
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get all coupons with optional filtering"""
-    return CouponService.get_all_coupons(db, skip, limit, active_only)
+    return CouponService.get_all_coupons(db, int(current_user["client_id"]), skip, limit, active_only)
 
 
 # ✅ FIXED: Changed from Query parameter to request body
@@ -63,10 +64,16 @@ def list_coupons(
 def get_available_coupons(
     subtotal: float = Query(0.0, ge=0),
     customer_id: Optional[int] = Query(None),
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get all available coupons based on subtotal and customer eligibility"""
-    eligible, ineligible = CouponService.get_available_coupons(db, subtotal=subtotal, customer_id=customer_id)
+    eligible, ineligible = CouponService.get_available_coupons(
+        db,
+        int(current_user["client_id"]),
+        subtotal=subtotal,
+        customer_id=customer_id,
+    )
     
     # Convert Coupon objects to CouponResponse dicts
     eligible_response = [CouponResponse.model_validate(coupon).model_dump() for coupon in eligible]
@@ -105,6 +112,7 @@ def get_available_coupons(
 @router.post("/validate", response_model=CouponValidateResponse)
 def validate_coupon(
     request: CouponValidateRequest,  # ✅ Now accepts body with code + order_total
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -138,6 +146,7 @@ def validate_coupon(
         db,
         coupon_code,
         order_total,
+        client_id=int(current_user["client_id"]),
         customer_id=customer_id
     )
     return {
@@ -156,7 +165,7 @@ def get_coupon(
     current_user=Depends(get_current_user),
 ):
     """Get a specific coupon by ID"""
-    coupon = CouponService.get_coupon_by_id(db, coupon_id)
+    coupon = CouponService.get_coupon_by_id(db, coupon_id, int(current_user["client_id"]))
     if not coupon:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -173,7 +182,7 @@ def update_coupon(
     current_user=Depends(get_current_user),
 ):
     """Update an existing coupon (Admin only)"""
-    updated = CouponService.update_coupon(db, coupon_id, coupon_data)
+    updated = CouponService.update_coupon(db, coupon_id, coupon_data, int(current_user["client_id"]))
     if not updated:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -189,7 +198,7 @@ def delete_coupon(
     current_user=Depends(get_current_user),
 ):
     """Delete (deactivate) a coupon (Admin only)"""
-    ok = CouponService.delete_coupon(db, coupon_id)
+    ok = CouponService.delete_coupon(db, coupon_id, int(current_user["client_id"]))
     if not ok:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -213,7 +222,8 @@ def assign_coupon_to_order(
 ):
     """Assign a coupon to a specific order"""
     # Check if coupon exists
-    coupon = db.query(Coupon).filter(Coupon.id == coupon_id).first()
+    client_id = int(current_user["client_id"])
+    coupon = db.query(Coupon).filter(Coupon.id == coupon_id, Coupon.client_id == client_id).first()
     if not coupon:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -221,7 +231,7 @@ def assign_coupon_to_order(
         )
 
     # Check if order exists
-    order = db.query(Order).filter(Order.id == payload.order_id).first()
+    order = db.query(Order).filter(Order.id == payload.order_id, Order.client_id == client_id).first()
     if not order:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -230,6 +240,7 @@ def assign_coupon_to_order(
 
     # Check if this coupon is already assigned to this order
     existing = db.query(OrderCoupon).filter(
+        OrderCoupon.client_id == client_id,
         OrderCoupon.order_id == order.id,
         OrderCoupon.coupon_id == coupon.id
     ).first()
@@ -241,7 +252,7 @@ def assign_coupon_to_order(
         )
 
     # Create the assignment
-    link = OrderCoupon(order_id=order.id, coupon_id=coupon.id)
+    link = OrderCoupon(client_id=client_id, order_id=order.id, coupon_id=coupon.id)
     db.add(link)
     db.commit()
 
@@ -266,7 +277,8 @@ def assign_coupon_to_categories(
 ):
     """Assign a coupon to multiple menu categories"""
     # Check if coupon exists
-    coupon = db.query(Coupon).filter(Coupon.id == coupon_id).first()
+    client_id = int(current_user["client_id"])
+    coupon = db.query(Coupon).filter(Coupon.id == coupon_id, Coupon.client_id == client_id).first()
     if not coupon:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -281,7 +293,7 @@ def assign_coupon_to_categories(
         )
 
     for cat_id in payload.category_ids:
-        category = db.query(Category).filter(Category.id == cat_id).first()
+        category = db.query(Category).filter(Category.id == cat_id, Category.client_id == client_id).first()
         if not category:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -289,17 +301,21 @@ def assign_coupon_to_categories(
             )
 
     # Remove existing category assignments for this coupon
-    db.query(CouponCategory).filter(CouponCategory.coupon_id == coupon_id).delete()
+    db.query(CouponCategory).filter(
+        CouponCategory.coupon_id == coupon_id,
+        CouponCategory.client_id == client_id,
+    ).delete()
 
     # Assign new categories
     for cat_id in payload.category_ids:
-        link = CouponCategory(coupon_id=coupon_id, category_id=cat_id)
+        link = CouponCategory(client_id=client_id, coupon_id=coupon_id, category_id=cat_id)
         db.add(link)
 
     db.commit()
 
     # Get category names for the response message
     assigned_categories = db.query(Category).filter(
+        Category.client_id == client_id,
         Category.id.in_(payload.category_ids)
     ).all()
     category_names = ", ".join([cat.name for cat in assigned_categories])

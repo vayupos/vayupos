@@ -14,9 +14,10 @@ class InventoryService:
         product_id: int,
         user_id: int,
         data: InventoryLogCreate,
+        client_id: int,
     ):
         # 1. Load product
-        product = db.query(Product).filter(Product.id == product_id).first()
+        product = db.query(Product).filter(Product.id == product_id, Product.client_id == client_id).first()
         if not product:
             raise ValueError("Product not found")
 
@@ -37,6 +38,7 @@ class InventoryService:
 
         # 5. Create log row
         log = InventoryLog(
+            client_id=client_id,
             product_id=product_id,
             user_id=user_id,
             action=data.action.upper(),  # store as STOCK_IN / STOCK_OUT
@@ -67,7 +69,8 @@ class InventoryService:
         reference_id: int = None,
         reference_number: str = None,
         notes: str = None,
-        user_id: int = None
+        user_id: int = None,
+        client_id: int = None,
     ):
         """
         Log inventory changes when orders are created
@@ -81,7 +84,10 @@ class InventoryService:
             ref_number = reference_number or (f"ORDER-{reference_id}" if reference_id else None)
             
             # Load product to get current stock
-            product = db.query(Product).filter(Product.id == product_id).first()
+            product = db.query(Product).filter(
+                Product.id == product_id,
+                Product.client_id == client_id,
+            ).first()
             if not product:
                 print(f"⚠️ Product {product_id} not found, skipping inventory log")
                 return None
@@ -91,6 +97,7 @@ class InventoryService:
 
             # Create log entry
             log = InventoryLog(
+                client_id=client_id,
                 product_id=product_id,
                 user_id=user_id,
                 action=log_action.upper(),
@@ -113,33 +120,34 @@ class InventoryService:
             return None
 
     @staticmethod
-    def get_all_logs(db: Session):
+    def get_all_logs(db: Session, client_id: int):
         return (
             db.query(InventoryLog)
+            .filter(InventoryLog.client_id == client_id)
             .order_by(InventoryLog.created_at.desc())
             .all()
         )
 
     @staticmethod
-    def get_log_by_id(db: Session, log_id: int):
+    def get_log_by_id(db: Session, log_id: int, client_id: int):
         return (
             db.query(InventoryLog)
-            .filter(InventoryLog.id == log_id)
+            .filter(InventoryLog.id == log_id, InventoryLog.client_id == client_id)
             .first()
         )
 
     @staticmethod
-    def get_product_history(db: Session, product_id: int):
+    def get_product_history(db: Session, product_id: int, client_id: int):
         return (
             db.query(InventoryLog)
-            .filter(InventoryLog.product_id == product_id)
+            .filter(InventoryLog.product_id == product_id, InventoryLog.client_id == client_id)
             .order_by(InventoryLog.created_at.desc())
             .all()
         )
 
     @staticmethod
-    def get_inventory_summary(db: Session):
-        products = db.query(Product).all()
+    def get_inventory_summary(db: Session, client_id: int):
+        products = db.query(Product).filter(Product.client_id == client_id).all()
         return [
             {
                 "product_id": p.id,

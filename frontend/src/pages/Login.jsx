@@ -8,7 +8,7 @@ const Login = () => {
   const location = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    username: "",
+    identifier: "",
     password: "",
   });
   const [errors, setErrors] = useState({});
@@ -30,8 +30,8 @@ const Login = () => {
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.username.trim()) {
-      newErrors.username = "Username is required";
+    if (!formData.identifier.trim()) {
+      newErrors.identifier = "Username, email or phone is required";
     }
 
     if (!formData.password) {
@@ -52,8 +52,10 @@ const Login = () => {
     }
 
     try {
+      const normalizedIdentifier = formData.identifier.trim().toLowerCase();
       const res = await loginUser({
-        username: formData.username,
+        identifier: normalizedIdentifier,
+        username: normalizedIdentifier,
         password: formData.password,
       });
 
@@ -84,25 +86,25 @@ const Login = () => {
           </div>
 
           <form onSubmit={handleSubmit}>
-            {/* Username Field */}
+            {/* Identifier Field */}
             <div className="mb-6">
               <label className="block text-white font-medium mb-2">
-                Username
+                Username / Email / Phone
               </label>
               <input
                 type="text"
-                name="username"
-                value={formData.username}
+                name="identifier"
+                value={formData.identifier}
                 onChange={handleInputChange}
-                placeholder="Your username"
+                placeholder="Enter username, email, or phone"
                 className={`w-full px-4 py-3 bg-[#0f1419] border rounded-lg text-white placeholder-gray-500 focus:outline-none transition-colors ${
-                  errors.username
+                  errors.identifier
                     ? "border-red-500 focus:border-red-500"
                     : "border-gray-700 focus:border-[#14b8a6]"
                 }`}
               />
-              {errors.username && (
-                <p className="text-red-500 text-sm mt-1">{errors.username}</p>
+              {errors.identifier && (
+                <p className="text-red-500 text-sm mt-1">{errors.identifier}</p>
               )}
             </div>
 

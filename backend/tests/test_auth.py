@@ -10,7 +10,7 @@ def test_register():
         json={
             "username": "testuser",
             "email": "test@example.com",
-            "password": "testpassword123",
+            "password": "Test@1234",
             "full_name": "Test User",
             "phone_number": "1234567890",
         },
@@ -27,7 +27,7 @@ def test_login():
         json={
             "username": "logintest",
             "email": "login@example.com",
-            "password": "testpassword123",
+            "password": "Login@1234",
             "full_name": "Login Test",
         },
     )
@@ -35,7 +35,7 @@ def test_login():
     # Then login
     response = client.post(
         "/api/v1/auth/login",
-        json={"username": "logintest", "password": "testpassword123"},
+        json={"identifier": "logintest", "password": "Login@1234"},
     )
     assert response.status_code == 200
     assert "access_token" in response.json()
@@ -45,6 +45,6 @@ def test_invalid_login():
     """Test login with invalid credentials"""
     response = client.post(
         "/api/v1/auth/login",
-        json={"username": "nonexistent", "password": "wrongpassword"},
+        json={"identifier": "nonexistent", "password": "wrongpassword"},
     )
     assert response.status_code == 401

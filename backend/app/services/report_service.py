@@ -13,6 +13,7 @@ class ReportService:
     @staticmethod
     def get_sales_report(
         db: Session,
+        client_id: int,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         group_by: str = "day",  # day, month, year
@@ -24,6 +25,7 @@ class ReportService:
             end_date = datetime.utcnow()
 
         query = db.query(Order).filter(
+            Order.client_id == client_id,
             (Order.created_at >= start_date) & (Order.created_at <= end_date)
         )
 
@@ -60,7 +62,7 @@ class ReportService:
         return list(sales_data.values())
 
     @staticmethod
-    def get_product_sales_report(db: Session, days: int = 30, limit: int = 50) -> List[Dict]:
+    def get_product_sales_report(db: Session, client_id: int, days: int = 30, limit: int = 50) -> List[Dict]:
         """Get top selling products"""
         start_date = datetime.utcnow() - timedelta(days=days)
 
@@ -73,6 +75,8 @@ class ReportService:
         ).join(
             InventoryLog, InventoryLog.product_id == Product.id
         ).filter(
+            Product.client_id == client_id,
+            InventoryLog.client_id == client_id,
             (InventoryLog.action == "sale") & (InventoryLog.created_at >= start_date)
         ).group_by(
             Product.id, Product.name, Product.sku
@@ -92,7 +96,7 @@ class ReportService:
         ]
 
     @staticmethod
-    def get_payment_method_report(db: Session, days: int = 30) -> Dict:
+    def get_payment_method_report(db: Session, client_id: int, days: int = 30) -> Dict:
         """Get payment methods breakdown"""
         start_date = datetime.utcnow() - timedelta(days=days)
 
@@ -101,6 +105,7 @@ class ReportService:
             func.count(Payment.id).label("count"),
             func.sum(Payment.amount).label("total_amount"),
         ).filter(
+            Payment.client_id == client_id,
             (Payment.status == PaymentStatus.COMPLETED) & (Payment.created_at >= start_date)
         ).group_by(
             Payment.payment_method
@@ -116,21 +121,23 @@ class ReportService:
         ]
 
     @staticmethod
-    def get_inventory_report(db: Session) -> Dict:
+    def get_inventory_report(db: Session, client_id: int) -> Dict:
         """Get current inventory status"""
-        total_products = db.query(Product).filter(Product.is_active == True).count()
+        total_products = db.query(Product).filter(Product.client_id == client_id, Product.is_active == True).count()
         
         low_stock = db.query(Product).filter(
+            Product.client_id == client_id,
             (Product.stock_quantity <= Product.min_stock_level) & (Product.is_active == True)
         ).count()
         
         out_of_stock = db.query(Product).filter(
+            Product.client_id == client_id,
             (Product.stock_quantity == 0) & (Product.is_active == True)
         ).count()
         
         total_inventory_value = db.query(
             func.sum(Product.stock_quantity * Product.cost_price)
-        ).filter(Product.is_active == True).scalar() or Decimal(0)
+        ).filter(Product.client_id == client_id, Product.is_active == True).scalar() or Decimal(0)
 
         return {
             "total_products": total_products,
@@ -140,7 +147,7 @@ class ReportService:
         }
 
     @staticmethod
-    def get_daily_summary(db: Session, date: Optional[datetime] = None) -> Dict:
+    def get_daily_summary(db: Session, client_id: int, date: Optional[datetime] = None) -> Dict:
         """Get daily sales summary"""
         from app.models.expense import Expense
         if not date:
@@ -150,6 +157,7 @@ class ReportService:
         end_of_day = datetime.combine(date, datetime.max.time())
 
         orders = db.query(Order).filter(
+            Order.client_id == client_id,
             (Order.created_at >= start_of_day) & (Order.created_at <= end_of_day)
         ).all()
 
@@ -158,6 +166,7 @@ class ReportService:
         completed_orders = sum(1 for order in orders if order.status == OrderStatus.COMPLETED)
 
         payments = db.query(Payment).filter(
+            Payment.client_id == client_id,
             (Payment.status == PaymentStatus.COMPLETED) &
             (Payment.created_at >= start_of_day) &
             (Payment.created_at <= end_of_day)
@@ -169,7 +178,7 @@ class ReportService:
         # Query expenses for this date
         # Expense date field is a string, so we match it format "YYYY-MM-DD" or similar, or just parse
         date_str = date.strftime("%Y-%m-%d")
-        expenses = db.query(Expense).filter(Expense.date == date_str).all()
+        expenses = db.query(Expense).filter(Expense.client_id == client_id, Expense.date == date_str).all()
         total_expenses = sum(float(expense.amount) for expense in expenses)
 
         return {
@@ -185,7 +194,7 @@ class ReportService:
         }
 
     @staticmethod
-    def get_customer_report(db: Session, limit: int = 20) -> List[Dict]:
+    def get_customer_report(db: Session, client_id: int, limit: int = 20) -> List[Dict]:
         """Get top customers by spending"""
         from app.models import Customer
 
@@ -199,6 +208,8 @@ class ReportService:
             func.count(Order.id).label("order_count"),
         ).join(
             Order, Order.customer_id == Customer.id, isouter=True
+        ).filter(
+            Customer.client_id == client_id
         ).group_by(
             Customer.id,
             Customer.first_name,

@@ -53,5 +53,8 @@ __all__ = [
     "ResponseSchema",
     "PaginationParams",
     "LoginRequest",
+    "ChangePasswordRequest",
+    "ForgotPasswordRequest",
+    "ResetPasswordRequest",
     "TokenResponse",
 ]

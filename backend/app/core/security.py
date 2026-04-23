@@ -2,8 +2,13 @@ import bcrypt
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 from typing import Optional
+import hashlib
+import re
+import secrets
 
 from app.core.config import settings
+
+PASSWORD_REGEX = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$")
 
 
 def hash_password(password: str) -> str:
@@ -68,6 +73,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         str: Encoded JWT token
     """
     to_encode = data.copy()
+    if "user_id" not in to_encode and "sub" in to_encode:
+        try:
+            to_encode["user_id"] = int(to_encode["sub"])
+        except (TypeError, ValueError):
+            pass
     
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
@@ -132,3 +142,18 @@ def decode_token(token: str) -> Optional[dict]:
         return payload
     except JWTError:
         return None
+
+
+def validate_password_strength(password: str) -> bool:
+    """Validate password against required complexity policy."""
+    return bool(PASSWORD_REGEX.match(password))
+
+
+def hash_reset_token(token: str) -> str:
+    """Return SHA-256 hash of a reset token."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def generate_password_reset_token() -> str:
+    """Generate a cryptographically secure random reset token."""
+    return secrets.token_urlsafe(48)

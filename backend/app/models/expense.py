@@ -5,6 +5,7 @@ class Expense(Base):
     __tablename__ = "expenses"
     
     id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, nullable=False, index=True)
     title = Column(String(255), nullable=False)
     subtitle = Column(String(255))
     category = Column(String(100), nullable=False)

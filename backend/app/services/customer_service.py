@@ -11,15 +11,19 @@ class CustomerService:
     """Service for customer operations"""
 
     @staticmethod
-    def create_customer(db: Session, customer_create: CustomerCreate) -> Customer:
+    def create_customer(db: Session, customer_create: CustomerCreate, client_id: int) -> Customer:
         """Create a new customer"""
         # Check if email already exists
         if customer_create.email:
-            existing = db.query(Customer).filter(Customer.email == customer_create.email).first()
+            existing = db.query(Customer).filter(
+                Customer.client_id == client_id,
+                Customer.email == customer_create.email,
+            ).first()
             if existing:
                 raise conflict_exception("Customer with this email already exists")
 
         db_customer = Customer(
+            client_id=client_id,
             first_name=customer_create.first_name,
             last_name=customer_create.last_name,
             email=customer_create.email,
@@ -37,24 +41,24 @@ class CustomerService:
         return db_customer
 
     @staticmethod
-    def get_customer_by_id(db: Session, customer_id: int) -> Optional[Customer]:
+    def get_customer_by_id(db: Session, customer_id: int, client_id: int) -> Optional[Customer]:
         """Get customer by ID"""
-        return db.query(Customer).filter(Customer.id == customer_id).first()
+        return db.query(Customer).filter(Customer.id == customer_id, Customer.client_id == client_id).first()
 
     @staticmethod
-    def get_customer_by_email(db: Session, email: str) -> Optional[Customer]:
+    def get_customer_by_email(db: Session, email: str, client_id: int) -> Optional[Customer]:
         """Get customer by email"""
-        return db.query(Customer).filter(Customer.email == email).first()
+        return db.query(Customer).filter(Customer.email == email, Customer.client_id == client_id).first()
 
     @staticmethod
-    def get_customer_by_phone(db: Session, phone: str) -> Optional[Customer]:
+    def get_customer_by_phone(db: Session, phone: str, client_id: int) -> Optional[Customer]:
         """Get customer by phone"""
-        return db.query(Customer).filter(Customer.phone == phone).first()
+        return db.query(Customer).filter(Customer.phone == phone, Customer.client_id == client_id).first()
 
     @staticmethod
-    def update_customer(db: Session, customer_id: int, customer_update: CustomerUpdate) -> Customer:
+    def update_customer(db: Session, customer_id: int, customer_update: CustomerUpdate, client_id: int) -> Customer:
         """Update customer"""
-        customer = CustomerService.get_customer_by_id(db, customer_id)
+        customer = CustomerService.get_customer_by_id(db, customer_id, client_id)
         if not customer:
             raise not_found_exception("Customer not found")
 
@@ -67,9 +71,9 @@ class CustomerService:
         return customer
 
     @staticmethod
-    def delete_customer(db: Session, customer_id: int) -> bool:
+    def delete_customer(db: Session, customer_id: int, client_id: int) -> bool:
         """Soft delete customer (deactivate)"""
-        customer = CustomerService.get_customer_by_id(db, customer_id)
+        customer = CustomerService.get_customer_by_id(db, customer_id, client_id)
         if not customer:
             raise not_found_exception("Customer not found")
 
@@ -79,10 +83,10 @@ class CustomerService:
 
     @staticmethod
     def list_customers(
-        db: Session, skip: int = 0, limit: int = 100, is_active: Optional[bool] = True
+        db: Session, client_id: int, skip: int = 0, limit: int = 100, is_active: Optional[bool] = True
     ) -> Tuple[list[Customer], int]:
         """List customers"""
-        query = db.query(Customer)
+        query = db.query(Customer).filter(Customer.client_id == client_id)
 
         if is_active is not None:
             query = query.filter(Customer.is_active == is_active)
@@ -92,9 +96,9 @@ class CustomerService:
         return customers, total
 
     @staticmethod
-    def add_loyalty_points(db: Session, customer_id: int, points: int) -> Customer:
+    def add_loyalty_points(db: Session, customer_id: int, points: int, client_id: int) -> Customer:
         """Add loyalty points to customer"""
-        customer = CustomerService.get_customer_by_id(db, customer_id)
+        customer = CustomerService.get_customer_by_id(db, customer_id, client_id)
         if not customer:
             raise not_found_exception("Customer not found")
 
@@ -104,9 +108,9 @@ class CustomerService:
         return customer
 
     @staticmethod
-    def update_total_spent(db: Session, customer_id: int, amount: Decimal) -> Customer:
+    def update_total_spent(db: Session, customer_id: int, amount: Decimal, client_id: int) -> Customer:
         """Update customer total spent"""
-        customer = CustomerService.get_customer_by_id(db, customer_id)
+        customer = CustomerService.get_customer_by_id(db, customer_id, client_id)
         if not customer:
             raise not_found_exception("Customer not found")
 
@@ -116,9 +120,10 @@ class CustomerService:
         return customer
 
     @staticmethod
-    def search_customers(db: Session, search_term: str) -> list[Customer]:
+    def search_customers(db: Session, search_term: str, client_id: int) -> list[Customer]:
         """Search customers by name, email, or phone"""
         return db.query(Customer).filter(
+            Customer.client_id == client_id,
             (Customer.first_name.ilike(f"%{search_term}%"))
             | (Customer.last_name.ilike(f"%{search_term}%"))
             | (Customer.email.ilike(f"%{search_term}%"))

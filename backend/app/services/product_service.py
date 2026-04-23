@@ -11,12 +11,16 @@ from app.core.exceptions import conflict_exception, not_found_exception
 class ProductService:
 
     @staticmethod
-    def create_product(db: Session, product_create: ProductCreate, user_id: int) -> Product:
-        existing = db.query(Product).filter(Product.sku == product_create.sku).first()
+    def create_product(db: Session, product_create: ProductCreate, user_id: int, client_id: int) -> Product:
+        existing = db.query(Product).filter(
+            Product.client_id == client_id,
+            Product.sku == product_create.sku,
+        ).first()
         if existing:
             raise conflict_exception("Product with this SKU already exists")
 
         db_product = Product(
+            client_id=client_id,
             sku=product_create.sku,
             name=product_create.name,
             description=product_create.description,
@@ -37,17 +41,20 @@ class ProductService:
         return db_product
 
     @staticmethod
-    def get_product_by_id(db: Session, product_id: int) -> Optional[Product]:
-        return db.query(Product).filter(Product.id == product_id).first()
+    def get_product_by_id(db: Session, product_id: int, client_id: int) -> Optional[Product]:
+        return db.query(Product).filter(Product.id == product_id, Product.client_id == client_id).first()
 
     @staticmethod
-    def update_product(db: Session, product_id: int, product_update: ProductUpdate) -> Product:
-        product = ProductService.get_product_by_id(db, product_id)
+    def update_product(db: Session, product_id: int, product_update: ProductUpdate, client_id: int) -> Product:
+        product = ProductService.get_product_by_id(db, product_id, client_id)
         if not product:
             raise not_found_exception("Product not found")
 
         if product_update.sku and product_update.sku != product.sku:
-            existing = db.query(Product).filter(Product.sku == product_update.sku).first()
+            existing = db.query(Product).filter(
+                Product.client_id == client_id,
+                Product.sku == product_update.sku,
+            ).first()
             if existing:
                 raise conflict_exception("Product with this SKU already exists")
 
@@ -68,8 +75,8 @@ class ProductService:
         return product
 
     @staticmethod
-    def delete_product(db: Session, product_id: int) -> bool:
-        product = ProductService.get_product_by_id(db, product_id)
+    def delete_product(db: Session, product_id: int, client_id: int) -> bool:
+        product = ProductService.get_product_by_id(db, product_id, client_id)
         if not product:
             raise not_found_exception("Product not found")
 
@@ -84,13 +91,14 @@ class ProductService:
     @staticmethod
     def list_products(
         db: Session,
+        client_id: int,
         skip: int = 0,
         limit: int = 100,
         category_id: Optional[int] = None,
         is_active: Optional[bool] = None,
     ) -> Tuple[List[Product], int]:
 
-        query = db.query(Product)
+        query = db.query(Product).filter(Product.client_id == client_id)
 
         if category_id is not None:
             query = query.filter(Product.category_id == category_id)
@@ -107,12 +115,16 @@ class ProductService:
 class CategoryService:
 
     @staticmethod
-    def create_category(db: Session, category_create: CategoryCreate) -> Category:
-        existing = db.query(Category).filter(Category.name == category_create.name).first()
+    def create_category(db: Session, category_create: CategoryCreate, client_id: int) -> Category:
+        existing = db.query(Category).filter(
+            Category.client_id == client_id,
+            Category.name == category_create.name,
+        ).first()
         if existing:
             raise conflict_exception("Category with this name already exists")
 
         db_category = Category(
+            client_id=client_id,
             name=category_create.name,
             description=category_create.description,
             icon_name=getattr(category_create, 'icon_name', 'Coffee'),
@@ -126,12 +138,12 @@ class CategoryService:
         return db_category
 
     @staticmethod
-    def get_category_by_id(db: Session, category_id: int) -> Optional[Category]:
-        return db.query(Category).filter(Category.id == category_id).first()
+    def get_category_by_id(db: Session, category_id: int, client_id: int) -> Optional[Category]:
+        return db.query(Category).filter(Category.id == category_id, Category.client_id == client_id).first()
 
     @staticmethod
-    def update_category(db: Session, category_id: int, category_update: CategoryUpdate) -> Category:
-        category = CategoryService.get_category_by_id(db, category_id)
+    def update_category(db: Session, category_id: int, category_update: CategoryUpdate, client_id: int) -> Category:
+        category = CategoryService.get_category_by_id(db, category_id, client_id)
         if not category:
             raise not_found_exception("Category not found")
 
@@ -145,8 +157,8 @@ class CategoryService:
         return category
 
     @staticmethod
-    def delete_category(db: Session, category_id: int) -> bool:
-        category = CategoryService.get_category_by_id(db, category_id)
+    def delete_category(db: Session, category_id: int, client_id: int) -> bool:
+        category = CategoryService.get_category_by_id(db, category_id, client_id)
         if not category:
             raise not_found_exception("Category not found")
 
@@ -158,11 +170,12 @@ class CategoryService:
     @staticmethod
     def list_categories(
         db: Session,
+        client_id: int,
         skip: int = 0,
         limit: int = 100
     ) -> Tuple[List[Category], int]:
 
-        query = db.query(Category)
+        query = db.query(Category).filter(Category.client_id == client_id)
         total = query.count()
         categories = query.offset(skip).limit(limit).all()
 

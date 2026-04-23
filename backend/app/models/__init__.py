@@ -12,6 +12,7 @@ from app.models.dish_template import DishTemplate
 from app.models.expense import Expense  # ← ADD THIS
 from app.models.notification import Notification  # ← ADD THIS
 from app.models.print_job import PrintJob
+from app.models.password_reset_token import PasswordResetToken
 
 
 __all__ = [
@@ -32,5 +33,6 @@ __all__ = [
      "DishTemplate",
       "Expense",
       "Notification",
-      "PrintJob"
+      "PrintJob",
+      "PasswordResetToken"
 ]

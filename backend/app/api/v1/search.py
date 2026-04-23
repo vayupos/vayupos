@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 
-from app.api.dependencies import get_db
+from app.api.dependencies import get_db, get_current_user
 from app.services import ProductService, CustomerService, OrderService
 from app.schemas.customer import CustomerResponse
 from app.schemas.order import OrderResponse
@@ -12,6 +12,7 @@ router = APIRouter(prefix="/search", tags=["Search"])
 @router.get("/global")
 def global_search(
     q: str = Query(..., min_length=1),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Search across products, customers, and orders"""
@@ -28,7 +29,7 @@ def global_search(
     } for p in products[:5]]
     
     # Search Customers
-    customers = CustomerService.search_customers(db, q)
+    customers = CustomerService.search_customers(db, q, int(current_user["client_id"]))
     customer_results = [{
         "id": c.id,
         "name": f"{c.first_name} {c.last_name}",
@@ -40,6 +41,7 @@ def global_search(
     # Search Orders (Adding method to OrderService)
     from app.models import Order, Customer
     orders = db.query(Order).join(Customer, Order.customer_id == Customer.id, isouter=True).filter(
+        Order.client_id == int(current_user["client_id"]),
         (Order.order_number.ilike(f"%{q}%")) |
         (Customer.first_name.ilike(f"%{q}%")) |
         (Customer.last_name.ilike(f"%{q}%"))

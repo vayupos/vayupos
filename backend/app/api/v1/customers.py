@@ -23,7 +23,7 @@ def create_customer(
     db: Session = Depends(get_db),
 ):
     """Create a new customer"""
-    customer = CustomerService.create_customer(db, customer_create)
+    customer = CustomerService.create_customer(db, customer_create, int(current_user["client_id"]))
     return customer
 
 
@@ -32,11 +32,13 @@ def list_customers(
     skip: int = 0,
     limit: int = 100,
     is_active: bool = True,
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """List all customers with pagination"""
     customers, total = CustomerService.list_customers(
         db=db,
+        client_id=int(current_user["client_id"]),
         skip=skip,
         limit=limit,
         is_active=is_active,
@@ -53,20 +55,22 @@ def list_customers(
 @router.get("/search", response_model=List[CustomerResponse])
 def search_customers(
     q: str,
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Search customers by name, email, or phone"""
-    customers = CustomerService.search_customers(db, q)
+    customers = CustomerService.search_customers(db, q, int(current_user["client_id"]))
     return customers
 
 
 @router.get("/{customer_id}", response_model=CustomerResponse)
 def get_customer(
     customer_id: int,
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get customer by ID"""
-    customer = CustomerService.get_customer_by_id(db, customer_id)
+    customer = CustomerService.get_customer_by_id(db, customer_id, int(current_user["client_id"]))
     if not customer:
         raise HTTPException(status_code=404, detail="Customer not found")
     return customer
@@ -84,6 +88,7 @@ def update_customer(
         db=db,
         customer_id=customer_id,
         customer_update=customer_update,
+        client_id=int(current_user["client_id"]),
     )
     return customer
 
@@ -95,7 +100,7 @@ def delete_customer(
     db: Session = Depends(get_db),
 ):
     """Deactivate customer"""
-    CustomerService.delete_customer(db, customer_id)
+    CustomerService.delete_customer(db, customer_id, int(current_user["client_id"]))
     return {"message": "Customer deleted successfully"}
 
 
@@ -107,7 +112,7 @@ def add_loyalty_points(
     db: Session = Depends(get_db),
 ):
     """Add loyalty points to customer"""
-    customer = CustomerService.add_loyalty_points(db, customer_id, points)
+    customer = CustomerService.add_loyalty_points(db, customer_id, points, int(current_user["client_id"]))
     return {
         "customer_id": customer.id,
         "loyalty_points": customer.loyalty_points,

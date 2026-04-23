@@ -18,7 +18,13 @@ def get_sales_report(
     """Get sales report"""
     start_date = datetime.utcnow() - timedelta(days=days)
     end_date = datetime.utcnow()
-    sales = ReportService.get_sales_report(db, start_date, end_date, group_by)
+    sales = ReportService.get_sales_report(
+        db,
+        int(current_user["client_id"]),
+        start_date,
+        end_date,
+        group_by,
+    )
     return {"data": sales, "days": days, "group_by": group_by}
 
 
@@ -30,7 +36,7 @@ def get_product_sales_report(
     db: Session = Depends(get_db),
 ):
     """Get top selling products"""
-    products = ReportService.get_product_sales_report(db, days, limit)
+    products = ReportService.get_product_sales_report(db, int(current_user["client_id"]), days, limit)
     return {"data": products, "days": days}
 
 
@@ -41,7 +47,7 @@ def get_payment_method_report(
     db: Session = Depends(get_db),
 ):
     """Get payment methods breakdown"""
-    methods = ReportService.get_payment_method_report(db, days)
+    methods = ReportService.get_payment_method_report(db, int(current_user["client_id"]), days)
     return {"data": methods, "days": days}
 
 
@@ -51,7 +57,7 @@ def get_inventory_report(
     db: Session = Depends(get_db),
 ):
     """Get inventory report"""
-    inventory = ReportService.get_inventory_report(db)
+    inventory = ReportService.get_inventory_report(db, int(current_user["client_id"]))
     return {"data": inventory}
 
 
@@ -64,7 +70,7 @@ def get_daily_summary(
     """Get daily sales summary"""
     if date:
         date = datetime.strptime(date, "%Y-%m-%d").date()
-    summary = ReportService.get_daily_summary(db, date)
+    summary = ReportService.get_daily_summary(db, int(current_user["client_id"]), date)
     return {"data": summary}
 
 
@@ -75,5 +81,5 @@ def get_customer_report(
     db: Session = Depends(get_db),
 ):
     """Get top customers"""
-    customers = ReportService.get_customer_report(db, limit)
+    customers = ReportService.get_customer_report(db, int(current_user["client_id"]), limit)
     return {"data": customers}

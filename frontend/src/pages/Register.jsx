@@ -8,6 +8,7 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
+    username: "",
     name: "",
     email: "",
     number: "",
@@ -32,6 +33,12 @@ const Register = () => {
 
   const validateForm = () => {
     const newErrors = {};
+
+    if (!formData.username.trim()) {
+      newErrors.username = "Username is required";
+    } else if (formData.username.trim().length < 3) {
+      newErrors.username = "Username must be at least 3 characters";
+    }
 
     if (!formData.name.trim()) {
       newErrors.name = "Name is required";
@@ -67,14 +74,6 @@ const Register = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const buildUsername = () => {
-    const fromEmail = formData.email.trim().split("@")[0] || "user";
-    let username = fromEmail.replace(/[^a-zA-Z0-9_.-]/g, "");
-    if (username.length < 3) username = (username + "user").slice(0, 3);
-    if (username.length > 50) username = username.slice(0, 50);
-    return username;
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -83,7 +82,7 @@ const Register = () => {
       setSubmitting(true);
 
       const payload = {
-        username: buildUsername(),
+        username: formData.username.trim().toLowerCase(),
         email: formData.email.trim(),
         full_name: formData.name.trim(),
         phone_number: formData.number.trim(),
@@ -124,6 +123,28 @@ const Register = () => {
           </div>
 
           <form onSubmit={handleSubmit}>
+            {/* Username */}
+            <div className="mb-6">
+              <label className="block text-white font-medium mb-2">
+                Username
+              </label>
+              <input
+                type="text"
+                name="username"
+                value={formData.username}
+                onChange={handleInputChange}
+                placeholder="Choose a username"
+                className={`w-full px-4 py-3 bg-[#0f1419] border rounded-lg text-white placeholder-gray-500 focus:outline-none transition-colors ${
+                  errors.username
+                    ? "border-red-500 focus:border-red-500"
+                    : "border-gray-700 focus:border-[#14b8a6]"
+                }`}
+              />
+              {errors.username && (
+                <p className="text-red-500 text-sm mt-1">{errors.username}</p>
+              )}
+            </div>
+
             {/* Name */}
             <div className="mb-6">
               <label className="block text-white font-medium mb-2">

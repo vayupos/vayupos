@@ -9,6 +9,7 @@ class Product(Base):
     __tablename__ = "products"
 
     id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, nullable=False, index=True)
     sku = Column(String(50), unique=True, nullable=False, index=True)
     name = Column(String(200), nullable=False, index=True)
     description = Column(Text, nullable=True)

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.api.dependencies import get_current_user
 from app.schemas.inventory import InventoryLogCreate, InventoryLogResponse
 from app.services.inventory_service import InventoryService
 
@@ -23,8 +23,9 @@ def create_inventory_log(
         return InventoryService.create_inventory_log(
             db,
             product_id,
-            int(current_user["id"]),          # current_user is dict
+            int(current_user["user_id"]),
             data,
+            int(current_user["client_id"]),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -36,7 +37,7 @@ def list_inventory_logs(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    return InventoryService.get_all_logs(db)
+    return InventoryService.get_all_logs(db, int(current_user["client_id"]))
 
 
 # -------- GET ONE LOG BY ID --------
@@ -46,7 +47,7 @@ def get_inventory_log(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    log = InventoryService.get_log_by_id(db, log_id)
+    log = InventoryService.get_log_by_id(db, log_id, int(current_user["client_id"]))
     if not log:
         raise HTTPException(status_code=404, detail="Log not found")
     return log
@@ -59,7 +60,7 @@ def get_product_inventory_history(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    return InventoryService.get_product_history(db, product_id)
+    return InventoryService.get_product_history(db, product_id, int(current_user["client_id"]))
 
 
 # -------- INVENTORY SUMMARY --------
@@ -68,4 +69,4 @@ def get_inventory_summary(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    return InventoryService.get_inventory_summary(db)
+    return InventoryService.get_inventory_summary(db, int(current_user["client_id"]))

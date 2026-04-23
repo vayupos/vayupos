@@ -13,10 +13,10 @@ from app.schemas.coupon import CouponCreate, CouponUpdate
 class CouponService:
 
     @staticmethod
-    def create_coupon(db: Session, coupon_data: CouponCreate) -> Coupon:
+    def create_coupon(db: Session, coupon_data: CouponCreate, client_id: int) -> Coupon:
         """Create a new coupon"""
         # Check for duplicate code first (friendly error)
-        existing = db.query(Coupon).filter(Coupon.code == coupon_data.code).first()
+        existing = db.query(Coupon).filter(Coupon.client_id == client_id, Coupon.code == coupon_data.code).first()
         if existing:
             raise HTTPException(
                 status_code=409,
@@ -24,7 +24,7 @@ class CouponService:
                        f"Please use a different code or edit the existing coupon."
             )
 
-        coupon = Coupon(**coupon_data.dict())
+        coupon = Coupon(client_id=client_id, **coupon_data.dict())
         db.add(coupon)
         try:
             db.commit()
@@ -38,37 +38,38 @@ class CouponService:
         return coupon
 
     @staticmethod
-    def get_coupon_by_id(db: Session, coupon_id: int) -> Optional[Coupon]:
+    def get_coupon_by_id(db: Session, coupon_id: int, client_id: int) -> Optional[Coupon]:
         """Get coupon by ID"""
-        return db.query(Coupon).filter(Coupon.id == coupon_id).first()
+        return db.query(Coupon).filter(Coupon.id == coupon_id, Coupon.client_id == client_id).first()
 
     @staticmethod
-    def get_coupon_by_code(db: Session, code: str) -> Optional[Coupon]:
+    def get_coupon_by_code(db: Session, code: str, client_id: int) -> Optional[Coupon]:
         """Get coupon by code"""
-        return db.query(Coupon).filter(Coupon.code == code).first()
+        return db.query(Coupon).filter(Coupon.code == code, Coupon.client_id == client_id).first()
 
     @staticmethod
     def get_all_coupons(
         db: Session,
+        client_id: int,
         skip: int = 0,
         limit: int = 100,
         active_only: bool = False,
     ) -> List[Coupon]:
         """Get all coupons with optional filtering"""
-        query = db.query(Coupon)
+        query = db.query(Coupon).filter(Coupon.client_id == client_id)
         if active_only:
             query = query.filter(Coupon.is_active == True)
         return query.offset(skip).limit(limit).all()
 
     @staticmethod
     def get_available_coupons(
-        db: Session, subtotal: float, customer_id: Optional[int] = None
+        db: Session, client_id: int, subtotal: float, customer_id: Optional[int] = None
     ) -> Tuple[List[Coupon], List[Coupon]]:
         """Get available coupons split into eligible and ineligible based on subtotal"""
         from app.models.order import Order
         now = datetime.now(timezone.utc)
 
-        all_coupons = db.query(Coupon).all()
+        all_coupons = db.query(Coupon).filter(Coupon.client_id == client_id).all()
 
         eligible: List[Coupon] = []
         ineligible: List[Coupon] = []
@@ -103,7 +104,10 @@ class CouponService:
                     ineligible.append(coupon)
                     continue
                 
-                order_count = db.query(Order).filter(Order.customer_id == customer_id).count()
+                order_count = db.query(Order).filter(
+                    Order.customer_id == customer_id,
+                    Order.client_id == client_id,
+                ).count()
                 if order_count > 0:
                     ineligible.append(coupon)
                     continue
@@ -114,10 +118,10 @@ class CouponService:
 
     @staticmethod
     def update_coupon(
-        db: Session, coupon_id: int, coupon_data: CouponUpdate
+        db: Session, coupon_id: int, coupon_data: CouponUpdate, client_id: int
     ) -> Optional[Coupon]:
         """Update a coupon"""
-        coupon = db.query(Coupon).filter(Coupon.id == coupon_id).first()
+        coupon = db.query(Coupon).filter(Coupon.id == coupon_id, Coupon.client_id == client_id).first()
         if not coupon:
             return None
 
@@ -129,14 +133,14 @@ class CouponService:
         return coupon
 
     @staticmethod
-    def delete_coupon(db: Session, coupon_id: int) -> bool:
+    def delete_coupon(db: Session, coupon_id: int, client_id: int) -> bool:
         """
         Soft delete a coupon.
 
         - Always keeps row in DB.
         - Just marks coupon as inactive (and optionally expired).
         """
-        coupon = db.query(Coupon).filter(Coupon.id == coupon_id).first()
+        coupon = db.query(Coupon).filter(Coupon.id == coupon_id, Coupon.client_id == client_id).first()
         if not coupon:
             return False
 
@@ -155,6 +159,7 @@ class CouponService:
         db: Session,
         code: str,
         order_amount: float,
+        client_id: int,
         customer_id: Optional[int] = None,
         apply_discount: bool = False,
     ) -> Tuple[bool, bool, Optional[str], Optional[Coupon], float]:
@@ -162,7 +167,7 @@ class CouponService:
         # Import Order here to avoid circular imports if any, or at the top
         from app.models.order import Order
 
-        coupon = db.query(Coupon).filter(Coupon.code == code).first()
+        coupon = db.query(Coupon).filter(Coupon.code == code, Coupon.client_id == client_id).first()
 
         if not coupon:
             return False, False, "Coupon not found", None, 0.0
@@ -201,7 +206,10 @@ class CouponService:
                     0.0,
                 )
 
-            order_count = db.query(Order).filter(Order.customer_id == customer_id).count()
+            order_count = db.query(Order).filter(
+                Order.customer_id == customer_id,
+                Order.client_id == client_id,
+            ).count()
             if order_count > 0:
                 return (
                     False,
@@ -229,9 +237,9 @@ class CouponService:
         return min(discount, order_amount)
 
     @staticmethod
-    def increment_usage(db: Session, coupon_id: int) -> bool:
+    def increment_usage(db: Session, coupon_id: int, client_id: int) -> bool:
         """Increment coupon usage count"""
-        coupon = db.query(Coupon).filter(Coupon.id == coupon_id).first()
+        coupon = db.query(Coupon).filter(Coupon.id == coupon_id, Coupon.client_id == client_id).first()
         if not coupon:
             return False
         coupon.used_count += 1

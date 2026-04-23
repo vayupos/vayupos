@@ -6,6 +6,7 @@ class Coupon(Base):
     __tablename__ = "coupons"
 
     id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, nullable=False, index=True)
     code = Column(String(50), unique=True, nullable=False, index=True)
     discount_type = Column(String(20), nullable=False)  # "percentage" or "fixed"
     discount_value = Column(Float, nullable=False)

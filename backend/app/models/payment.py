@@ -27,6 +27,7 @@ class Payment(Base):
     __tablename__ = "payments"
 
     id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, nullable=False, index=True)
     order_id = Column(Integer, ForeignKey("orders.id", ondelete="CASCADE"), nullable=False)
     payment_method = Column(Enum(PaymentMethod), nullable=False)
     status = Column(Enum(PaymentStatus), nullable=False, default=PaymentStatus.PENDING)

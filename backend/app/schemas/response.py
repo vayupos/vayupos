@@ -12,15 +12,27 @@ from app.models.inventory_log import InventoryAction
 
 # Common decimal type for money (2 decimal places)
 Money = condecimal(max_digits=10, decimal_places=2)
+PASSWORD_REGEX = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$")
 
 # ============= User Schemas =============
 class UserBase(BaseModel):
     """Base user schema"""
+    client_id: int = Field(default=1, ge=1)
     username: str = Field(..., min_length=3, max_length=50)
     email: EmailStr
     full_name: str = Field(..., min_length=2, max_length=100)
     phone_number: Optional[str] = Field(None, max_length=20)
     role: UserRole = UserRole.CASHIER
+
+    @field_validator("username")
+    @classmethod
+    def normalize_username(cls, value: str) -> str:
+        return value.strip().lower()
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: EmailStr) -> str:
+        return str(value).strip().lower()
 
 
 class UserCreate(UserBase):
@@ -36,6 +48,10 @@ class UserCreate(UserBase):
             raise ValueError(
                 f"Password is too long ({len(password_bytes)} bytes). "
                 "Must be 72 bytes or less when UTF-8 encoded."
+            )
+        if not PASSWORD_REGEX.match(v):
+            raise ValueError(
+                "Password must have at least 8 characters with uppercase, lowercase, number, and special character (@$!%*?&)."
             )
         return v
 
@@ -394,8 +410,54 @@ class PaginationParams(BaseModel):
 
 class LoginRequest(BaseModel):
     """User login request schema"""
-    username: str
+    identifier: str
     password: str
+
+    @field_validator("identifier")
+    @classmethod
+    def normalize_identifier(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str = Field(..., min_length=8, max_length=72)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password is too long. Must be 72 bytes or less when UTF-8 encoded.")
+        if not PASSWORD_REGEX.match(value):
+            raise ValueError(
+                "Password must have at least 8 characters with uppercase, lowercase, number, and special character (@$!%*?&)."
+            )
+        return value
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: EmailStr) -> str:
+        return str(value).strip().lower()
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=8, max_length=72)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password is too long. Must be 72 bytes or less when UTF-8 encoded.")
+        if not PASSWORD_REGEX.match(value):
+            raise ValueError(
+                "Password must have at least 8 characters with uppercase, lowercase, number, and special character (@$!%*?&)."
+            )
+        return value
 
 
 class TokenResponse(BaseModel):

@@ -58,7 +58,12 @@ def create_product(
     db: Session = Depends(get_db),
 ):
     """Create a new product"""
-    product = ProductService.create_product(db, product_create, int(current_user["sub"]))
+    product = ProductService.create_product(
+        db,
+        product_create,
+        int(current_user["user_id"]),
+        int(current_user["client_id"]),
+    )
     return product_to_dict(product)
 
 
@@ -69,11 +74,12 @@ def list_products(
     limit: int = 100,
     category_id: int | None = None,
     is_active: bool | None = None,
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """List all products"""
     products, total = ProductService.list_products(
-        db, skip, limit, category_id, is_active
+        db, int(current_user["client_id"]), skip, limit, category_id, is_active
     )
     return {
         "total": total,
@@ -104,9 +110,13 @@ def search_products(
 
 
 @router.get("/{product_id}")
-def get_product(product_id: int, db: Session = Depends(get_db)):
+def get_product(
+    product_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Get product by ID"""
-    product = ProductService.get_product_by_id(db, product_id)
+    product = ProductService.get_product_by_id(db, product_id, int(current_user["client_id"]))
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     return product_to_dict(product)
@@ -120,7 +130,7 @@ def update_product(
     db: Session = Depends(get_db),
 ):
     """Update product"""
-    product = ProductService.update_product(db, product_id, product_update)
+    product = ProductService.update_product(db, product_id, product_update, int(current_user["client_id"]))
     return product_to_dict(product)
 
 
@@ -131,5 +141,5 @@ def delete_product(
     db: Session = Depends(get_db),
 ):
     """Delete product"""
-    ProductService.delete_product(db, product_id)
+    ProductService.delete_product(db, product_id, int(current_user["client_id"]))
     return {"message": "Product deleted successfully"}

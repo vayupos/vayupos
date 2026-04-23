@@ -44,4 +44,23 @@ def get_current_user(credentials: Optional[dict] = Depends(security)) -> dict:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return payload
+    user_id = payload.get("user_id")
+    if user_id is None and payload.get("sub") is not None:
+        try:
+            user_id = int(payload["sub"])
+        except (TypeError, ValueError):
+            user_id = None
+
+    client_id = payload.get("client_id")
+    if user_id is None or client_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return {
+        "sub": str(user_id),
+        "user_id": user_id,
+        "client_id": int(client_id),
+    }

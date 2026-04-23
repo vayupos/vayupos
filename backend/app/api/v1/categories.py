@@ -32,7 +32,7 @@ def create_category(
     db: Session = Depends(get_db),
 ):
     """Create a new category"""
-    category = CategoryService.create_category(db, category_create)
+    category = CategoryService.create_category(db, category_create, int(current_user["client_id"]))
     return category_to_dict(category)
 
 
@@ -41,10 +41,11 @@ def create_category(
 def list_categories(
     skip: int = 0,
     limit: int = 100,
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """List all categories"""
-    categories, total = CategoryService.list_categories(db, skip, limit)
+    categories, total = CategoryService.list_categories(db, int(current_user["client_id"]), skip, limit)
     return {
         "total": total,
         "skip": skip,
@@ -54,9 +55,13 @@ def list_categories(
 
 
 @router.get("/{category_id}")
-def get_category(category_id: int, db: Session = Depends(get_db)):
+def get_category(
+    category_id: int,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Get category by ID"""
-    category = CategoryService.get_category_by_id(db, category_id)
+    category = CategoryService.get_category_by_id(db, category_id, int(current_user["client_id"]))
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
     return category_to_dict(category)
@@ -70,7 +75,7 @@ def update_category(
     db: Session = Depends(get_db),
 ):
     """Update category"""
-    category = CategoryService.update_category(db, category_id, category_update)
+    category = CategoryService.update_category(db, category_id, category_update, int(current_user["client_id"]))
     return category_to_dict(category)
 
 
@@ -81,5 +86,5 @@ def delete_category(
     db: Session = Depends(get_db),
 ):
     """Delete category"""
-    CategoryService.delete_category(db, category_id)
+    CategoryService.delete_category(db, category_id, int(current_user["client_id"]))
     return {"message": "Category deleted successfully"}
