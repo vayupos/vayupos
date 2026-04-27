@@ -14,9 +14,12 @@ class PaymentService:
     """Service for payment operations"""
 
     @staticmethod
-    def create_payment(db: Session, payment_create: PaymentCreate) -> Payment:
+    def create_payment(db: Session, payment_create: PaymentCreate, client_id: int) -> Payment:
         """Create a new payment"""
-        order = db.query(Order).filter(Order.id == payment_create.order_id).first()
+        order = db.query(Order).filter(
+            Order.id == payment_create.order_id,
+            Order.client_id == client_id
+        ).first()
         if not order:
             raise not_found_exception("Order not found")
 
@@ -25,6 +28,7 @@ class PaymentService:
             db.query(func.coalesce(func.sum(Payment.amount), 0))
             .filter(
                 Payment.order_id == payment_create.order_id,
+                Payment.client_id == client_id,
                 Payment.status.in_(
                     [PaymentStatus.COMPLETED, PaymentStatus.PARTIALLY_REFUNDED]
                 ),
@@ -42,6 +46,7 @@ class PaymentService:
 
         # ----- Create payment -----
         db_payment = Payment(
+            client_id=client_id,
             order_id=payment_create.order_id,
             payment_method=payment_create.payment_method,
             status=PaymentStatus.COMPLETED,  # or PENDING if you want async capture
@@ -57,23 +62,26 @@ class PaymentService:
         return db_payment
 
     @staticmethod
-    def get_payment_by_id(db: Session, payment_id: int) -> Optional[Payment]:
+    def get_payment_by_id(db: Session, payment_id: int, client_id: int) -> Optional[Payment]:
         """Get payment by ID"""
-        return db.query(Payment).filter(Payment.id == payment_id).first()
+        return db.query(Payment).filter(Payment.id == payment_id, Payment.client_id == client_id).first()
 
-    @staticmethod
+    @classmethod
     def get_payment_by_transaction_id(
-        db: Session, transaction_id: str
+        cls, db: Session, transaction_id: str, client_id: int
     ) -> Optional[Payment]:
         """Get payment by transaction ID"""
-        return db.query(Payment).filter(Payment.transaction_id == transaction_id).first()
+        return db.query(Payment).filter(
+            Payment.transaction_id == transaction_id,
+            Payment.client_id == client_id
+        ).first()
 
     @staticmethod
     def update_payment(
-        db: Session, payment_id: int, payment_update: PaymentUpdate
+        db: Session, payment_id: int, payment_update: PaymentUpdate, client_id: int
     ) -> Payment:
         """Update payment"""
-        payment = PaymentService.get_payment_by_id(db, payment_id)
+        payment = PaymentService.get_payment_by_id(db, payment_id, client_id)
         if not payment:
             raise not_found_exception("Payment not found")
 
@@ -87,10 +95,10 @@ class PaymentService:
 
     @staticmethod
     def refund_payment(
-        db: Session, payment_id: int, reason: Optional[str] = None
+        db: Session, payment_id: int, client_id: int, reason: Optional[str] = None
     ) -> Payment:
         """Refund a payment"""
-        payment = PaymentService.get_payment_by_id(db, payment_id)
+        payment = PaymentService.get_payment_by_id(db, payment_id, client_id)
         if not payment:
             raise not_found_exception("Payment not found")
 
@@ -108,13 +116,14 @@ class PaymentService:
     @staticmethod
     def list_payments(
         db: Session,
+        client_id: int,
         skip: int = 0,
         limit: int = 100,
         order_id: Optional[int] = None,
         status: Optional[PaymentStatus] = None,
     ) -> Tuple[list[Payment], int]:
         """List payments"""
-        query = db.query(Payment)
+        query = db.query(Payment).filter(Payment.client_id == client_id)
 
         if order_id is not None:
             query = query.filter(Payment.order_id == order_id)
@@ -128,9 +137,12 @@ class PaymentService:
         return payments, total
 
     @staticmethod
-    def get_order_payment_status(db: Session, order_id: int) -> dict:
+    def get_order_payment_status(db: Session, order_id: int, client_id: int) -> dict:
         """Get payment status for an order"""
-        order = db.query(Order).filter(Order.id == order_id).first()
+        order = db.query(Order).filter(
+            Order.id == order_id,
+            Order.client_id == client_id
+        ).first()
         if not order:
             raise not_found_exception("Order not found")
 
@@ -138,6 +150,7 @@ class PaymentService:
             db.query(func.coalesce(func.sum(Payment.amount), 0))
             .filter(
                 Payment.order_id == order_id,
+                Payment.client_id == client_id,
                 Payment.status == PaymentStatus.COMPLETED,
             )
             .scalar()

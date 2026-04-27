@@ -11,7 +11,14 @@ export const formatDateTime = (dateStr) => {
     if (!dateStr) return "--:--";
 
     try {
-        const d = new Date(dateStr);
+        // If the date string doesn't have a timezone indicator, assume it's UTC from backend
+        let normalizedDate = dateStr;
+        if (typeof dateStr === 'string' && !dateStr.includes('Z') && !dateStr.includes('+')) {
+            // Replace space with T for ISO compliance and add Z for UTC
+            normalizedDate = dateStr.replace(' ', 'T') + 'Z';
+        }
+
+        const d = new Date(normalizedDate);
 
         // Check if valid date
         if (isNaN(d.getTime())) {

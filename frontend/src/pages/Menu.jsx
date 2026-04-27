@@ -76,7 +76,12 @@ function groupProducts(rawProducts, categoriesById) {
         categoryId: category.id,
         categoryName: category.name,
         sizes: [],
+        ingredients: p.ingredients || [],
         imageUrl: p.image_url,
+        food_type: p.food_type || 'veg',
+        is_time_restricted: p.is_time_restricted || false,
+        available_from: p.available_from || "00:00",
+        available_to: p.available_to || "23:59",
       };
     }
     groups[key].sizes.push({
@@ -99,6 +104,7 @@ const Menu = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [categorySearchTerm, setCategorySearchTerm] = useState("");
   const [sortBy, setSortBy] = useState("name");
+  const [foodTypeFilter, setFoodTypeFilter] = useState("all");
 
   const [showNewCategoryModal, setShowNewCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -126,7 +132,12 @@ const Menu = () => {
   const [newProductData, setNewProductData] = useState({
     baseName: "",
     sizes: [{ size: "Regular", price: "" }],
+    ingredients: [],
     imageUrl: null,
+    food_type: "veg",
+    is_time_restricted: false,
+    available_from: "00:00",
+    available_to: "23:59",
   });
 
   const [editingCategory, setEditingCategory] = useState(null);
@@ -135,6 +146,12 @@ const Menu = () => {
   const [editingProductGroup, setEditingProductGroup] = useState(null);
   const [showEditProductModal, setShowEditProductModal] = useState(false);
   const [editingRowIndex, setEditingRowIndex] = useState(null);
+
+  // CSV Upload States
+  const [showCSVUploadModal, setShowCSVUploadModal] = useState(false);
+  const [uploadingCSV, setUploadingCSV] = useState(false);
+  const [csvResult, setCsvResult] = useState(null);
+  const fileInputRef = React.useRef(null);
 
   const [recentEdits, setRecentEdits] = useState(() => {
     try {
@@ -171,13 +188,19 @@ const Menu = () => {
   // NEW STATE FOR IMAGE UPLOAD
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  // Load categories and products
+  const [loading, setLoading] = useState(true);
+
+  const [allIngredients, setAllIngredients] = useState([]);
+
+  // Load categories, products, and ingredients
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [catRes, prodRes] = await Promise.all([
-          api.get("/categories/", { params: { skip: 0, limit: 100 } }),
+        setLoading(true);
+        const [catRes, prodRes, ingRes] = await Promise.all([
+          api.get("/categories", { params: { skip: 0, limit: 100 } }),
           api.get("/products", { params: { skip: 0, limit: 100 } }),
+          api.get("/ingredients", { params: { skip: 0, limit: 100 } }),
         ]);
 
         const catData = catRes.data.data || [];
@@ -188,13 +211,18 @@ const Menu = () => {
         });
         setCategoriesById(byId);
 
-        setSelectedCategoryId(catData[0]?.id || null);
+        if (catData.length > 0) {
+          setSelectedCategoryId(catData[0].id);
+        }
 
         const prodData = prodRes.data.data || [];
         setRawProducts(prodData);
+        
+        setAllIngredients(ingRes.data || []);
       } catch (err) {
         console.error("LOAD MENU DATA ERROR:", err?.response?.data || err);
-        alert("Failed to load menu data.");
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -257,6 +285,10 @@ const Menu = () => {
       list = list.filter((g) => g.baseName.toLowerCase().includes(s));
     }
 
+    if (foodTypeFilter !== "all") {
+      list = list.filter((g) => g.food_type === foodTypeFilter);
+    }
+
     if (sortBy === "name") {
       list.sort((a, b) => a.baseName.localeCompare(b.baseName));
     } else if (sortBy === "price-low") {
@@ -274,7 +306,7 @@ const Menu = () => {
     }
 
     return list;
-  }, [groupedProducts, selectedCategoryId, searchTerm, sortBy]);
+  }, [groupedProducts, selectedCategoryId, searchTerm, sortBy, foodTypeFilter]);
 
   // Filter categories based on search
   const filteredCategories = categories.filter((cat) =>
@@ -430,6 +462,46 @@ const Menu = () => {
     }
   };
 
+  const handleCSVUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      alert("Please upload a CSV file");
+      return;
+    }
+
+    setUploadingCSV(true);
+    setCsvResult(null);
+    setShowCSVUploadModal(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await api.post("/products/csv-upload", formData, {
+        headers: {
+          "Content-Type": undefined,
+        }
+      });
+
+      setCsvResult(res.data);
+      if (res.data.success_count > 0) {
+        // Refresh products
+        const prodRes = await api.get("/products", { params: { skip: 0, limit: 100 } });
+        setRawProducts(prodRes.data.data || []);
+        addRecentEdit(`Imported ${res.data.success_count} products via CSV`);
+      }
+    } catch (err) {
+      console.error("❌ CSV UPLOAD ERROR:", err);
+      alert(`Failed to upload CSV: ${err?.response?.data?.detail || err?.message || "Unknown error"}`);
+      setShowCSVUploadModal(false);
+    } finally {
+      setUploadingCSV(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   // HANDLE DISH SELECTION FROM AUTOCOMPLETE - UPDATED TO NOT CLOSE DROPDOWN
   const handleSelectDishFromAutocomplete = (dish) => {
     setNewProductData({
@@ -560,6 +632,19 @@ const Menu = () => {
   };
 
   // PRODUCT / SIZE ACTIONS
+  const handleAddNewIngredientRow = () => {
+    setNewProductData((prev) => ({
+      ...prev,
+      ingredients: [...prev.ingredients, { ingredient_id: "", quantity: "" }],
+    }));
+  };
+
+  const handleDeleteNewIngredientRow = (idx) => {
+    setNewProductData((prev) => ({
+      ...prev,
+      ingredients: prev.ingredients.filter((_, i) => i !== idx),
+    }));
+  };
   const handleAddProduct = async () => {
     if (!selectedCategoryId) {
       alert("Select a category first");
@@ -588,6 +673,14 @@ const Menu = () => {
       return;
     }
 
+    const invalidIngredients = newProductData.ingredients.filter(
+      (ing) => !ing.ingredient_id || !ing.quantity || Number(ing.quantity) <= 0
+    );
+    if (invalidIngredients.length > 0) {
+      alert("All ingredients must have a valid selection and a positive quantity.");
+      return;
+    }
+
     try {
       const createdProducts = [];
       for (const s of validSizes) {
@@ -606,6 +699,11 @@ const Menu = () => {
           category_id: selectedCategoryId,
           image_url: newProductData.imageUrl || null,
           stock_quantity: 0,
+          ingredients: newProductData.ingredients, // NEW
+          food_type: newProductData.food_type,
+          is_time_restricted: newProductData.is_time_restricted,
+          available_from: newProductData.available_from || null,
+          available_to: newProductData.available_to || null,
         };
         const res = await api.post("/products", body);
         createdProducts.push(res.data);
@@ -615,7 +713,9 @@ const Menu = () => {
       setNewProductData({
         baseName: "",
         sizes: [{ size: "Regular", price: "" }],
+        ingredients: [],
         imageUrl: null,
+        food_type: "veg",
       });
       setShowNewProductModal(false);
       setShowAutocomplete(false);
@@ -631,9 +731,27 @@ const Menu = () => {
     setEditingProductGroup({
       ...group,
       sizes: group.sizes.map((s) => ({ ...s })),
+      ingredients: (group.ingredients || []).map((i) => ({ ...i })),
+      is_time_restricted: group.is_time_restricted,
+      available_from: group.available_from ? group.available_from.slice(0, 5) : "00:00",
+      available_to: group.available_to ? group.available_to.slice(0, 5) : "23:59",
     });
     setEditingRowIndex(null);
     setShowEditProductModal(true);
+  };
+
+  const handleAddNewEditIngredientRow = () => {
+    setEditingProductGroup((prev) => ({
+      ...prev,
+      ingredients: [...prev.ingredients, { ingredient_id: "", quantity: "" }],
+    }));
+  };
+
+  const handleDeleteEditIngredientRow = (idx) => {
+    setEditingProductGroup((prev) => ({
+      ...prev,
+      ingredients: prev.ingredients.filter((_, i) => i !== idx),
+    }));
   };
 
   const handleSaveEditProduct = async () => {
@@ -653,6 +771,15 @@ const Menu = () => {
       alert("Need at least one size with price");
       return;
     }
+
+    const invalidIngredients = editingProductGroup.ingredients.filter(
+      (ing) => !ing.ingredient_id || !ing.quantity || Number(ing.quantity) <= 0
+    );
+    if (invalidIngredients.length > 0) {
+      alert("All ingredients must have a valid selection and a positive quantity.");
+      return;
+    }
+
     try {
       const updatedProducts = [];
       const createdProducts = [];
@@ -664,6 +791,11 @@ const Menu = () => {
           const body = {
             name,
             price: Number(s.price),
+            ingredients: editingProductGroup.ingredients, // NEW
+            food_type: editingProductGroup.food_type,
+            is_time_restricted: editingProductGroup.is_time_restricted,
+            available_from: editingProductGroup.available_from || null,
+            available_to: editingProductGroup.available_to || null,
           };
           const res = await api.put(`/products/${s.productId}`, body);
           updatedProducts.push(res.data);
@@ -682,6 +814,11 @@ const Menu = () => {
             category_id: editingProductGroup.categoryId,
             image_url: editingProductGroup.imageUrl || null,
             stock_quantity: 0,
+            ingredients: editingProductGroup.ingredients, // NEW
+            food_type: editingProductGroup.food_type,
+            is_time_restricted: editingProductGroup.is_time_restricted,
+            available_from: editingProductGroup.available_from || null,
+            available_to: editingProductGroup.available_to || null,
           };
           const res = await api.post("/products", body);
           createdProducts.push(res.data);
@@ -817,10 +954,11 @@ const Menu = () => {
     return `${days}d ago`;
   };
 
-  if (!categories.length) {
+  if (loading && categories.length === 0) {
     return (
-      <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
-        <p>Loading menu...</p>
+      <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4">
+        <div className="w-12 h-12 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p className="text-muted-foreground animate-pulse font-medium">Preparing your menu...</p>
       </div>
     );
   }
@@ -834,6 +972,20 @@ const Menu = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-4">
         <h1 className="text-2xl font-semibold">Menu Categories</h1>
         <div className="flex gap-2 sm:gap-3 flex-wrap">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleCSVUpload}
+            accept=".csv"
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white transition-colors px-3 sm:px-4 py-2 rounded-lg text-sm border-none"
+          >
+            <Upload size={16} />
+            <span className="hidden sm:inline">Import CSV</span>
+          </button>
           <div className="relative flex-1 sm:flex-none" ref={exportRef}>
             <button
               onClick={() => setIsExportOpen(!isExportOpen)}
@@ -1022,6 +1174,21 @@ const Menu = () => {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
+                Food Type
+              </p>
+              <select
+                value={foodTypeFilter}
+                onChange={(e) => setFoodTypeFilter(e.target.value)}
+                className="w-full bg-muted text-foreground border-none outline-none cursor-pointer px-3 py-2 rounded-lg text-sm"
+              >
+                <option value="all">All</option>
+                <option value="veg">Veg</option>
+                <option value="non_veg">Non-Veg</option>
+                <option value="egg">Egg</option>
+              </select>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
                 Tax
               </p>
               <select
@@ -1052,7 +1219,12 @@ const Menu = () => {
                     />
                   </div>
                 )}
-                <h3 className="text-foreground font-medium mb-3 text-sm sm:text-base">
+                <h3 className="text-foreground font-medium mb-3 text-sm sm:text-base flex items-center gap-2">
+                  <span className={`w-3 h-3 rounded-full flex-shrink-0 border ${
+                    g.food_type === 'non_veg' ? 'bg-red-500 border-red-700' : 
+                    g.food_type === 'egg' ? 'bg-yellow-500 border-yellow-700' : 
+                    'bg-green-500 border-green-700'
+                  }`} title={g.food_type}></span>
                   {g.baseName}
                 </h3>
                 <div className="flex items-center gap-2 mb-3 flex-wrap">
@@ -1482,6 +1654,53 @@ const Menu = () => {
                   className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-2.5 text-sm outline-none"
                 />
 
+                <div className="mb-4 mt-4">
+                  <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                    Food Type*
+                  </label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="food_type"
+                        value="veg"
+                        checked={newProductData.food_type === "veg"}
+                        onChange={(e) => setNewProductData({...newProductData, food_type: e.target.value})}
+                        className="accent-teal-600"
+                      />
+                      <span className="text-sm text-foreground flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-green-500"></span> Veg
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="food_type"
+                        value="non_veg"
+                        checked={newProductData.food_type === "non_veg"}
+                        onChange={(e) => setNewProductData({...newProductData, food_type: e.target.value})}
+                        className="accent-teal-600"
+                      />
+                      <span className="text-sm text-foreground flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-red-500"></span> Non-Veg
+                      </span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="food_type"
+                        value="egg"
+                        checked={newProductData.food_type === "egg"}
+                        onChange={(e) => setNewProductData({...newProductData, food_type: e.target.value})}
+                        className="accent-teal-600"
+                      />
+                      <span className="text-sm text-foreground flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-yellow-500"></span> Egg
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
                 {/* Autocomplete Dropdown */}
                 {showAutocomplete && filteredDishes.length > 0 && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto z-10">
@@ -1603,6 +1822,108 @@ const Menu = () => {
                   </div>
                 ))}
               </div>
+
+              {/* NEW INGREDIENTS SECTION */}
+              <div className="mb-5 bg-background p-4 rounded-lg border border-border">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-semibold text-card-foreground">
+                    Ingredients (Recipe)
+                  </h4>
+                  <button
+                    onClick={handleAddNewIngredientRow}
+                    className="text-teal-500 hover:text-teal-400 p-1 bg-teal-500/10 rounded-lg transition-colors"
+                    title="Add Ingredient"
+                  >
+                    <Plus size={18} />
+                  </button>
+                </div>
+                {newProductData.ingredients.map((ing, idx) => (
+                  <div key={idx} className="flex items-center gap-2 mb-3">
+                    <select
+                      value={ing.ingredient_id}
+                      onChange={(e) => {
+                        const copy = [...newProductData.ingredients];
+                        copy[idx].ingredient_id = e.target.value;
+                        setNewProductData({ ...newProductData, ingredients: copy });
+                      }}
+                      className="flex-[2] bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                    >
+                      <option value="" disabled>Select Ingredient</option>
+                      {allIngredients.map(i => (
+                        <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      placeholder="Qty"
+                      value={ing.quantity}
+                      onChange={(e) => {
+                        const copy = [...newProductData.ingredients];
+                        copy[idx].quantity = e.target.value;
+                        setNewProductData({ ...newProductData, ingredients: copy });
+                      }}
+                      className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                    />
+                    <button
+                      onClick={() => handleDeleteNewIngredientRow(idx)}
+                      className="text-red-500 hover:text-red-600 transition-colors p-1"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+                {newProductData.ingredients.length === 0 && (
+                  <p className="text-xs text-muted-foreground italic">No ingredients added.</p>
+                )}
+              </div>
+
+              {/* TIME RESTRICTION SECTION */}
+              <div className="mb-5 bg-background p-4 rounded-lg border border-border">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="is_time_restricted_new"
+                      checked={newProductData.is_time_restricted}
+                      onChange={(e) => setNewProductData({ ...newProductData, is_time_restricted: e.target.checked })}
+                      className="w-4 h-4 accent-teal-600"
+                    />
+                    <label htmlFor="is_time_restricted_new" className="text-sm font-semibold text-card-foreground cursor-pointer">
+                      Time Restricted Availability
+                    </label>
+                  </div>
+                </div>
+                {newProductData.is_time_restricted && (
+                  <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">
+                        Available From
+                      </label>
+                      <input
+                        type="time"
+                        value={newProductData.available_from}
+                        onChange={(e) => setNewProductData({ ...newProductData, available_from: e.target.value })}
+                        className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">
+                        Available To
+                      </label>
+                      <input
+                        type="time"
+                        value={newProductData.available_to}
+                        onChange={(e) => setNewProductData({ ...newProductData, available_to: e.target.value })}
+                        className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+                {!newProductData.is_time_restricted && (
+                  <p className="text-xs text-muted-foreground italic">Available 24/7 (POS only shows active categories).</p>
+                )}
+              </div>
+
               <div className="flex gap-3">
                 <button
                   onClick={() => {
@@ -1716,6 +2037,53 @@ const Menu = () => {
                 }
                 className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-2.5 text-sm outline-none"
               />
+
+              <div className="mb-4 mt-4">
+                <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                  Food Type*
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="edit_food_type"
+                      value="veg"
+                      checked={editingProductGroup.food_type === "veg"}
+                      onChange={(e) => setEditingProductGroup({...editingProductGroup, food_type: e.target.value})}
+                      className="accent-teal-600"
+                    />
+                    <span className="text-sm text-foreground flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-green-500"></span> Veg
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="edit_food_type"
+                      value="non_veg"
+                      checked={editingProductGroup.food_type === "non_veg"}
+                      onChange={(e) => setEditingProductGroup({...editingProductGroup, food_type: e.target.value})}
+                      className="accent-teal-600"
+                    />
+                    <span className="text-sm text-foreground flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-red-500"></span> Non-Veg
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="edit_food_type"
+                      value="egg"
+                      checked={editingProductGroup.food_type === "egg"}
+                      onChange={(e) => setEditingProductGroup({...editingProductGroup, food_type: e.target.value})}
+                      className="accent-teal-600"
+                    />
+                    <span className="text-sm text-foreground flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-yellow-500"></span> Egg
+                    </span>
+                  </label>
+                </div>
+              </div>
             </div>
 
             <div className="mb-5">
@@ -1836,6 +2204,104 @@ const Menu = () => {
               ))}
             </div>
 
+            {/* EDIT INGREDIENTS SECTION */}
+            <div className="mb-5 bg-background p-4 rounded-lg border border-border">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-card-foreground">
+                  Ingredients (Recipe)
+                </h4>
+                <button
+                  onClick={handleAddNewEditIngredientRow}
+                  className="text-teal-500 hover:text-teal-400 p-1 bg-teal-500/10 rounded-lg transition-colors"
+                  title="Add Ingredient"
+                >
+                  <Plus size={18} />
+                </button>
+              </div>
+              {editingProductGroup.ingredients.map((ing, idx) => (
+                <div key={idx} className="flex items-center gap-2 mb-3">
+                  <select
+                    value={ing.ingredient_id}
+                    onChange={(e) => {
+                      const copy = [...editingProductGroup.ingredients];
+                      copy[idx].ingredient_id = e.target.value;
+                      setEditingProductGroup({ ...editingProductGroup, ingredients: copy });
+                    }}
+                    className="flex-[2] bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                  >
+                    <option value="" disabled>Select Ingredient</option>
+                    {allIngredients.map(i => (
+                      <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    placeholder="Qty"
+                    value={ing.quantity}
+                    onChange={(e) => {
+                      const copy = [...editingProductGroup.ingredients];
+                      copy[idx].quantity = e.target.value;
+                      setEditingProductGroup({ ...editingProductGroup, ingredients: copy });
+                    }}
+                    className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                  />
+                  <button
+                    onClick={() => handleDeleteEditIngredientRow(idx)}
+                    className="text-red-500 hover:text-red-600 transition-colors p-1"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+              {editingProductGroup.ingredients.length === 0 && (
+                <p className="text-xs text-muted-foreground italic">No ingredients added.</p>
+              )}
+            </div>
+
+            {/* EDIT TIME RESTRICTION SECTION */}
+            <div className="mb-5 bg-background p-4 rounded-lg border border-border">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="is_time_restricted_edit"
+                    checked={editingProductGroup.is_time_restricted}
+                    onChange={(e) => setEditingProductGroup({ ...editingProductGroup, is_time_restricted: e.target.checked })}
+                    className="w-4 h-4 accent-teal-600"
+                  />
+                  <label htmlFor="is_time_restricted_edit" className="text-sm font-semibold text-card-foreground cursor-pointer">
+                    Time Restricted Availability
+                  </label>
+                </div>
+              </div>
+              {editingProductGroup.is_time_restricted && (
+                <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">
+                      Available From
+                    </label>
+                    <input
+                      type="time"
+                      value={editingProductGroup.available_from}
+                      onChange={(e) => setEditingProductGroup({ ...editingProductGroup, available_from: e.target.value })}
+                      className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">
+                      Available To
+                    </label>
+                    <input
+                      type="time"
+                      value={editingProductGroup.available_to}
+                      onChange={(e) => setEditingProductGroup({ ...editingProductGroup, available_to: e.target.value })}
+                      className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex gap-3">
               <button
                 onClick={() => {
@@ -1923,6 +2389,63 @@ const Menu = () => {
           </div>
         </div>
       )}
+      {showCSVUploadModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-xl p-6 max-w-lg w-full max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-semibold text-card-foreground">CSV Import Results</h3>
+              <button
+                onClick={() => setShowCSVUploadModal(false)}
+                className="bg-transparent border-none text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            {uploadingCSV ? (
+              <div className="flex flex-col items-center py-12">
+                <div className="w-12 h-12 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                <p className="text-muted-foreground">Processing CSV file...</p>
+              </div>
+            ) : csvResult ? (
+              <div className="flex-1 overflow-y-auto space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-green-500/10 border border-green-500/20 p-4 rounded-lg text-center">
+                    <p className="text-2xl font-bold text-green-500">{csvResult.success_count}</p>
+                    <p className="text-xs text-green-600 uppercase tracking-wide">Successfully Imported</p>
+                  </div>
+                  <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-lg text-center">
+                    <p className="text-2xl font-bold text-red-500">{csvResult.failed_rows?.length || 0}</p>
+                    <p className="text-xs text-red-600 uppercase tracking-wide">Failed Rows</p>
+                  </div>
+                </div>
+
+                {csvResult.failed_rows && csvResult.failed_rows.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-semibold mb-2">Error Details</h4>
+                    <div className="space-y-2">
+                      {csvResult.failed_rows.map((fail, i) => (
+                        <div key={i} className="bg-muted p-3 rounded-lg text-xs border border-border">
+                          <span className="font-bold text-red-500">Row {fail.row}:</span> {fail.reason}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowCSVUploadModal(false)}
+                className="bg-teal-600 hover:bg-teal-700 text-white px-6 py-2 rounded-lg text-sm transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>);
 };
-export default Menu;
+export default Menu;/* TEST */

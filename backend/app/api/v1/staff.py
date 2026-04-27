@@ -26,7 +26,7 @@ def create_staff(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return StaffService.create_staff(db, staff_data)
+    return StaffService.create_staff(db, staff_data, int(current_user["client_id"]))
 
 
 # =========================
@@ -45,6 +45,7 @@ def list_staff(
 ):
     return StaffService.get_staff_list(
         db=db,
+        client_id=int(current_user["client_id"]),
         skip=skip,
         limit=limit,
         search=search,
@@ -61,7 +62,7 @@ def get_upcoming_salaries(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    return StaffService.get_upcoming_salaries(db)
+    return StaffService.get_upcoming_salaries(db, int(current_user["client_id"]))
 
 
 # =========================
@@ -73,7 +74,7 @@ def get_staff(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    staff = StaffService.get_staff_by_id(db, staff_id)
+    staff = StaffService.get_staff_by_id(db, staff_id, int(current_user["client_id"]))
     if not staff:
         raise HTTPException(status_code=404, detail="Staff not found")
     return staff
@@ -89,7 +90,7 @@ def update_staff(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    updated = StaffService.update_staff(db, staff_id, staff_data)
+    updated = StaffService.update_staff(db, staff_id, staff_data, int(current_user["client_id"]))
     if not updated:
         raise HTTPException(status_code=404, detail="Staff not found")
     return updated
@@ -105,7 +106,7 @@ def delete_staff(
     current_user=Depends(get_current_user),
 ):
     try:
-        success = StaffService.delete_staff(db, staff_id)
+        success = StaffService.delete_staff(db, staff_id, int(current_user["client_id"]))
         if not success:
             raise HTTPException(status_code=404, detail="Staff not found")
         return None
@@ -127,7 +128,7 @@ def add_salary_entry(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    success = StaffService.mark_salary_paid(db, staff_id)
+    success = StaffService.mark_salary_paid(db, staff_id, int(current_user["client_id"]))
     if not success:
         raise HTTPException(status_code=404, detail="Staff not found")
     return {"success": True, "message": "Salary entry added to expenses"}

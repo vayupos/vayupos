@@ -210,7 +210,13 @@ const OrderDetail = () => {
                             </p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => navigate('/pos', { state: { addToOrderId: order.id, orderNumber: order.order_number } })}
+                            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-amber-500 text-white rounded-xl font-semibold hover:bg-amber-600 transition-all shadow-lg hover:shadow-amber-500/20"
+                        >
+                            <ShoppingBag size={18} />
+                            <span>Add Items</span>
+                        </button>
                         <button
                             onClick={handlePrint}
                             className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-background border border-border rounded-xl font-semibold hover:bg-muted transition-all shadow-sm text-foreground"
@@ -218,14 +224,6 @@ const OrderDetail = () => {
                             <Printer size={18} />
                             <span>Print Bill</span>
                         </button>
-                        <button
-                            onClick={handleDownloadPDF}
-                            className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl font-semibold hover:bg-primary/90 transition-all shadow-lg hover:shadow-primary/20"
-                        >
-                            <Download size={18} />
-                            <span>Download PDF</span>
-                        </button>
-                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

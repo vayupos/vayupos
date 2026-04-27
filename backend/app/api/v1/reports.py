@@ -83,3 +83,12 @@ def get_customer_report(
     """Get top customers"""
     customers = ReportService.get_customer_report(db, int(current_user["client_id"]), limit)
     return {"data": customers}
+@router.get("/order-type-stats")
+def get_order_type_stats(
+    days: int = 30,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get order type breakdown (dine-in vs takeaway)"""
+    stats = ReportService.get_order_type_stats(db, int(current_user["client_id"]), days)
+    return stats

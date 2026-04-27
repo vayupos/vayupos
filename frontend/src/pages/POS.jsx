@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Search, Plus, Database, Eye, ArrowLeft, Minus, Tag, Trash2, Printer, X } from 'lucide-react';
+import { Search, Plus, Database, Eye, ArrowLeft, Minus, Tag, Trash2, Printer, X, Zap } from 'lucide-react';
 import api from '../api/axios';
 
 function POS() {
   const location = useLocation();
   const [selectedCustomer, setSelectedCustomer] = useState('Guest');
   const [selectedCustomerId, setSelectedCustomerId] = useState(0);
+  const [selectedCustomerObj, setSelectedCustomerObj] = useState(null);
+  const [isWelcomeOfferApplied, setIsWelcomeOfferApplied] = useState(false);
   const [notes, setNotes] = useState('');
   const [searchMenu, setSearchMenu] = useState('');
   const [searchCustomer, setSearchCustomer] = useState('');
@@ -39,6 +41,10 @@ function POS() {
   const [cartItems, setCartItems] = useState([]);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
+  const [isQuickBillMode, setIsQuickBillMode] = useState(false);
+  const [orderType, setOrderType] = useState('dine_in');
+  const [addToOrderId, setAddToOrderId] = useState(null);
+  const [addToOrderNumber, setAddToOrderNumber] = useState(null);
 
   // Pagination states
   const [visibleRows, setVisibleRows] = useState(3);
@@ -58,6 +64,12 @@ function POS() {
       const { id, name } = location.state.customer;
       setSelectedCustomerId(id);
       setSelectedCustomer(name);
+    }
+
+    // Check if we are in "Add Items" mode
+    if (location.state?.addToOrderId) {
+      setAddToOrderId(location.state.addToOrderId);
+      setAddToOrderNumber(location.state.orderNumber);
     }
   }, [location.state]);
 
@@ -132,6 +144,25 @@ function POS() {
       setLoading(false);
     }
   };
+
+  // Welcome Offer Logic: Apply 10% discount for first-time customers
+  useEffect(() => {
+    if (selectedCustomerObj && selectedCustomerObj.orders_count === 0 && !couponCode) {
+      setIsWelcomeOfferApplied(true);
+    } else {
+      setIsWelcomeOfferApplied(false);
+    }
+  }, [selectedCustomerObj, couponCode]);
+
+  // Derived Billing Totals
+  const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
+  const welcomeDiscount = isWelcomeOfferApplied ? subtotal * 0.1 : 0;
+  const totalDiscount = discount + welcomeDiscount;
+  const cgstPct = 2.5;
+  const sgstPct = 2.5;
+  const cgst = (subtotal - totalDiscount) * (cgstPct / 100);
+  const sgst = (subtotal - totalDiscount) * (sgstPct / 100);
+  const total = subtotal - totalDiscount + cgst + sgst;
 
   const fetchCategories = async () => {
     try {
@@ -620,14 +651,14 @@ function POS() {
       const orderItems = cartItems.map(item => ({
         product_id: item.product_id,
         quantity: item.qty,
-        price: item.price,
-        name: item.name,
-        size: item.size
+        unit_price: item.price,
+        discount: 0 // We can add per-item discount logic later if needed
       }));
 
       // Calculate totals
       const orderSubtotal = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
-      const orderDiscount = discount;
+      const orderWelcomeDiscount = isWelcomeOfferApplied ? orderSubtotal * 0.1 : 0;
+      const orderDiscount = discount + orderWelcomeDiscount;
       const discountedSubtotal = orderSubtotal - orderDiscount;
       const orderCgst = discountedSubtotal * 0.025;
       const orderSgst = discountedSubtotal * 0.025;
@@ -636,26 +667,31 @@ function POS() {
       // ✅ CRITICAL FIX: Ensure payment_method is in snake_case (NOT camelCase)
       const orderPayload = {
         customer_id: selectedCustomerId || null,
-        order_items: orderItems,  // ✅ Correct: snake_case
-        subtotal: parseFloat(orderSubtotal.toFixed(2)),
+        order_items: orderItems,
+        tax: parseFloat((orderCgst + orderSgst).toFixed(2)),
         discount: parseFloat(orderDiscount.toFixed(2)),
-        cgst: parseFloat(orderCgst.toFixed(2)),
-        sgst: parseFloat(orderSgst.toFixed(2)),
-        total: parseFloat(orderTotal.toFixed(2)),
-        payment_method: paymentMethod,  // ✅ CRITICAL: snake_case (NOT paymentMethod)
-        payment_status: paymentMethod === 'cash' ? 'paid' : 'pending',
-        order_status: 'confirmed',
+        payment_method: paymentMethod,
         notes: notes || '',
-        coupon_code: couponCode || null
+        coupon_code: couponCode || null,
+        is_quick_bill: isQuickBillMode,
+        order_type: orderType
       };
 
       console.log('📤 Sending order payload:', orderPayload);
       console.log('🔍 Payment method being sent:', orderPayload.payment_method);
+      console.log('🔄 Mode:', addToOrderId ? `Adding to order ${addToOrderId}` : 'Creating new order');
 
       // Make API request
-      const res = await api.post('/orders/', orderPayload);
+      let res;
+      if (addToOrderId) {
+        // Adding items to existing order
+        res = await api.post(`/orders/${addToOrderId}/items`, orderPayload.order_items);
+      } else {
+        // Normal order creation
+        res = await api.post('/orders/', orderPayload);
+      }
 
-      console.log('✅ Order created successfully:', res.data);
+      console.log('✅ Order processed successfully:', res.data);
 
       // Extract order ID from response
       let orderId = null;
@@ -676,6 +712,11 @@ function POS() {
       setIsPreviewMode(false);
       setSelectedCustomer('Guest');
       setSelectedCustomerId(0);
+      setAddToOrderId(null);
+      setAddToOrderNumber(null);
+      
+      // Clear location state to prevent re-triggering on refresh
+      window.history.replaceState({}, document.title);
 
       return { success: true, orderId, data: res.data };
 
@@ -713,6 +754,9 @@ function POS() {
     const result = await createOrder('upi');  // ✅ Lowercase string
 
     if (result && result.success) {
+      if (isQuickBillMode) {
+        handlePrint();
+      }
       alert(`✅ Order #${result.orderId} created successfully!\n💳 Payment Method: UPI\n💰 Total: ₹${total.toFixed(2)}`);
     }
   };
@@ -722,6 +766,9 @@ function POS() {
     const result = await createOrder('cash');  // ✅ Lowercase string
 
     if (result && result.success) {
+      if (isQuickBillMode) {
+        handlePrint();
+      }
       alert(`✅ Order #${result.orderId} created successfully!\n💵 Payment Method: Cash\n💰 Total: ₹${total.toFixed(2)}`);
     }
   };
@@ -731,6 +778,9 @@ function POS() {
     const result = await createOrder('card');  // ✅ Lowercase string
 
     if (result && result.success) {
+      if (isQuickBillMode) {
+        handlePrint();
+      }
       alert(`✅ Order #${result.orderId} created successfully!\n💳 Payment Method: Card\n💰 Total: ₹${total.toFixed(2)}`);
     }
   };
@@ -749,13 +799,13 @@ function POS() {
       const orderItems = cartItems.map(item => ({
         product_id: item.product_id,
         quantity: item.qty,
-        price: item.price,
-        name: item.name,
-        size: item.size
+        unit_price: item.price,
+        discount: 0
       }));
 
       const orderSubtotal = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
-      const orderDiscount = discount;
+      const orderWelcomeDiscount = isWelcomeOfferApplied ? orderSubtotal * 0.1 : 0;
+      const orderDiscount = discount + orderWelcomeDiscount;
       const discountedSubtotal = orderSubtotal - orderDiscount;
       const orderCgst = discountedSubtotal * 0.025;
       const orderSgst = discountedSubtotal * 0.025;
@@ -765,14 +815,9 @@ function POS() {
       const draftPayload = {
         customer_id: selectedCustomerId || null,
         order_items: orderItems,  // ✅ Correct: snake_case
-        subtotal: parseFloat(orderSubtotal.toFixed(2)),
+        tax: parseFloat((orderCgst + orderSgst).toFixed(2)),
         discount: parseFloat(orderDiscount.toFixed(2)),
-        cgst: parseFloat(orderCgst.toFixed(2)),
-        sgst: parseFloat(orderSgst.toFixed(2)),
-        total: parseFloat(orderTotal.toFixed(2)),
         payment_method: 'pending',  // ✅ CRITICAL: snake_case
-        payment_status: 'pending',
-        order_status: 'draft',
         notes: notes || '',
         coupon_code: couponCode || null
       };
@@ -988,7 +1033,32 @@ function POS() {
     const fullName = `${firstName} ${lastName}`.trim();
     setSelectedCustomer(fullName || 'Guest');
     setSelectedCustomerId(customer.id || 0);
+    setSelectedCustomerObj(customer);
+    setSearchCustomer(''); // Clear search after selection
     console.log('✅ Customer selected:', fullName, 'ID:', customer.id);
+  };
+
+  const clearCustomer = () => {
+    setSelectedCustomer('Guest');
+    setSelectedCustomerId(0);
+    setSelectedCustomerObj(null);
+    setIsWelcomeOfferApplied(false);
+    setIsQuickBillMode(false);
+  };
+
+  const toggleQuickBillMode = () => {
+    if (!isQuickBillMode) {
+      // Enter Quick Bill
+      setSelectedCustomer('Guest');
+      setSelectedCustomerId(0);
+      setSelectedCustomerObj({ id: null, first_name: 'Guest', last_name: '', phone: 'N/A', orders_count: 100 }); // Prevent welcome offer
+      setIsWelcomeOfferApplied(false);
+      setIsQuickBillMode(true);
+      setSearchCustomer('');
+    } else {
+      // Exit Quick Bill
+      clearCustomer();
+    }
   };
   const handleLoadMore = () => {
     setVisibleRows((prev) => prev + rowsToLoadMore);
@@ -1001,28 +1071,40 @@ function POS() {
   };
   const visibleItems = allMenuItems.slice(0, visibleRows * itemsPerRow);
   const hasMoreToLoad = visibleItems.length < allMenuItems.length;
-  const subtotal = cartItems.reduce(
-    (sum, item) => sum + (item.price || 0) * (item.qty || 0),
-    0
-  );
-  const discountedSubtotal = subtotal - discount;
-  // Dynamic GST: weighted average tax rate across cart items
   const avgTaxRate = cartItems.length > 0
     ? cartItems.reduce((sum, item) => sum + ((item.tax_rate ?? 5) * (item.price || 0) * (item.qty || 0)), 0) /
     (subtotal || 1)
     : 5;
-  const halfTaxRate = avgTaxRate / 2 / 100;
-  const cgst = discountedSubtotal * halfTaxRate;
-  const sgst = discountedSubtotal * halfTaxRate;
-  const total = discountedSubtotal + cgst + sgst;
-  const cgstPct = (avgTaxRate / 2).toFixed(1);
-  const sgstPct = (avgTaxRate / 2).toFixed(1);
   // ---------------- RENDER ----------------
   return (
     <div
       className="min-h-screen bg-background text-foreground p-2 sm:p-4 md:p-5 max-w-[100vw] overflow-x-hidden"
       style={{ fontFamily: 'system-ui, -apple-system, sans-serif' }}
     >
+      {/* Add Items to Order Banner */}
+      {addToOrderId && (
+        <div className="bg-amber-500 text-white px-4 py-3 rounded-lg mb-4 flex items-center justify-between shadow-lg animate-in fade-in slide-in-from-top duration-500">
+          <div className="flex items-center gap-3">
+            <div className="bg-white/20 p-2 rounded-full">
+              <Plus className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="font-bold text-sm sm:text-base">Mode: Adding to Order {addToOrderNumber || `#${addToOrderId}`}</p>
+              <p className="text-xs opacity-90">Selected items will be added to the existing KOT.</p>
+            </div>
+          </div>
+          <button 
+            onClick={() => {
+              setAddToOrderId(null);
+              setAddToOrderNumber(null);
+              window.history.replaceState({}, document.title);
+            }}
+            className="bg-white/20 hover:bg-white/30 px-3 py-1 rounded-md text-xs font-bold transition-colors"
+          >
+            Cancel Mode
+          </button>
+        </div>
+      )}
       {/* Size Selection Modal */}
       {showSizeModal && selectedMenuItem && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
@@ -1317,63 +1399,154 @@ function POS() {
           <h2 className="text-foreground text-sm sm:text-base md:text-lg font-semibold">
             Customer
           </h2>
-          <button
-            onClick={() => setShowAddCustomerModal(true)}
-            className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
-          >
-            <Plus size={16} />
-            <span>Add</span>
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={toggleQuickBillMode}
+              className={`px-3 py-1.5 sm:px-4 sm:py-2 border rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 transition-all font-medium ${
+                isQuickBillMode 
+                ? 'bg-teal-600 text-white border-teal-600' 
+                : 'bg-muted text-foreground border-border hover:bg-muted/80'
+              }`}
+            >
+              <Zap size={16} fill={isQuickBillMode ? "currentColor" : "none"} />
+              <span>Quick Bill</span>
+            </button>
+            <button
+              onClick={() => setShowAddCustomerModal(true)}
+              className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
+            >
+              <Plus size={16} />
+              <span>Add</span>
+            </button>
+          </div>
         </div>
         <div className="mb-3 sm:mb-4">
           <label className="text-muted-foreground text-sm mb-2 block">
             Select customer
           </label>
-          <div className="relative">
-            <Search
-              size={16}
-              className="text-muted-foreground absolute left-3 top-1/2 transform -translate-y-1/2"
-            />
-            <input
-              type="text"
-              placeholder="Search name, phone..."
-              value={searchCustomer}
-              onChange={(e) => setSearchCustomer(e.target.value)}
-              className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-4 py-2 pl-10 text-sm sm:text-base"
-            />
-          </div>
-          <div className="flex flex-wrap gap-2 mb-3 sm:mb-4">
-            {customers.map((customer, i) => {
-              if (!customer) return null;
-              const firstName = customer.first_name || '';
-              const lastName = customer.last_name || '';
-              const initial = firstName.charAt(0)?.toUpperCase() || '?';
-              const colors = ['#4A5568', '#2D5A7B', '#8B6F47', '#6B7280'];
-              const bgColor = colors[i % colors.length];
-              const displayName = `${firstName} ${lastName}`.trim() || 'Unknown';
-              const isSelected = selectedCustomerId === customer.id;
+          <div className={`flex flex-wrap items-center gap-2 p-2 border rounded-md min-h-[48px] transition-all ${
+            isQuickBillMode 
+            ? 'bg-teal-50/30 border-teal-200 cursor-not-allowed opacity-80' 
+            : 'bg-muted border-border focus-within:border-teal-500'
+          }`}>
+            {/* Quick Bill Indicator */}
+            {isQuickBillMode && (
+              <div className="flex items-center gap-2 bg-teal-600 text-white px-3 py-1.5 rounded-full text-sm shadow-sm">
+                <Zap size={14} fill="currentColor" />
+                <span className="font-bold uppercase tracking-wider text-[10px]">Quick Bill Mode</span>
+              </div>
+            )}
 
-              return (
+            {/* Selected Customer Chip */}
+            {selectedCustomerId > 0 && !isQuickBillMode && (
+              <div className="flex items-center gap-2 bg-teal-600 text-white px-3 py-1.5 rounded-full text-sm animate-in fade-in zoom-in duration-200 shadow-sm">
+                <span className="font-medium">{selectedCustomer}</span>
+                {selectedCustomerObj?.orders_count === 0 && (
+                  <span className="bg-yellow-400 text-teal-900 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">New</span>
+                )}
                 <button
-                  key={i}
-                  onClick={() => handleCustomerSelect(customer)}
-                  className="px-2.5 py-1.5 sm:px-3 sm:py-2 border border-teal-600 rounded-full text-sm cursor-pointer flex items-center gap-1.5 sm:gap-2 transition-colors flex-shrink-0"
-                  style={{
-                    backgroundColor: isSelected ? '#1ABC9C' : 'transparent',
-                    color: isSelected ? 'white' : 'inherit',
-                  }}
+                  onClick={clearCustomer}
+                  className="hover:bg-teal-700 rounded-full p-0.5 transition-colors"
+                  title="Remove customer"
                 >
-                  <div
-                    className="w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-xs font-semibold text-white flex-shrink-0"
-                    style={{ backgroundColor: bgColor }}
-                  >
-                    {firstName === 'Guest' ? '👤' : initial}
-                  </div>
-                  <span className="text-sm whitespace-nowrap">{displayName}</span>
+                  <X size={14} />
                 </button>
-              );
-            })}
+              </div>
+            )}
+
+            {/* Search Input */}
+            {!isQuickBillMode && (
+              <div className="relative flex-1 min-w-[120px]">
+                <Search
+                  size={16}
+                  className="text-muted-foreground absolute left-2 top-1/2 transform -translate-y-1/2"
+                />
+                <input
+                  type="text"
+                  placeholder={selectedCustomerId > 0 ? "Change customer..." : "Search name, phone..."}
+                  value={searchCustomer}
+                  onChange={(e) => setSearchCustomer(e.target.value)}
+                  className="w-full bg-transparent text-foreground border-none outline-none px-2 py-1 pl-8 text-sm sm:text-base placeholder:text-muted-foreground/50"
+                />
+              </div>
+            )}
+            
+            {isQuickBillMode && (
+              <div className="text-muted-foreground text-sm px-2 font-medium">
+                Guest Customer assigned automatically
+              </div>
+            )}
           </div>
+
+          {/* Search Results Dropdown */}
+          {searchCustomer && (
+            <div className="mt-1 bg-card border border-border rounded-md shadow-xl max-h-60 overflow-y-auto z-50 absolute w-[calc(100%-2.5rem)] sm:w-[calc(100%-3rem)] md:w-[calc(100%-3.5rem)] lg:w-[calc(100%-4rem)]">
+              {customers.length > 0 ? (
+                customers.map((customer, i) => (
+                  <div
+                    key={customer.id || i}
+                    onClick={() => handleCustomerSelect(customer)}
+                    className="p-3 hover:bg-muted cursor-pointer border-b border-border last:border-b-0 flex items-center justify-between group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-xs uppercase">
+                        {customer.first_name?.[0] || '?'}{customer.last_name?.[0] || ''}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">{customer.first_name} {customer.last_name}</p>
+                        <p className="text-xs text-muted-foreground">{customer.phone}</p>
+                      </div>
+                    </div>
+                    {customer.orders_count === 0 && (
+                      <span className="text-[10px] text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full font-bold uppercase">First Order</span>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="p-4 text-center text-muted-foreground text-sm">
+                  No customers found matching "{searchCustomer}"
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Welcome Offer Alert */}
+          {isWelcomeOfferApplied && (
+            <div className="mt-3 flex items-center gap-2 bg-teal-50 border border-teal-200 text-teal-700 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium animate-pulse">
+              <Tag size={16} className="text-teal-600" />
+              <span>Welcome Offer Applied: 10% First-Order Discount!</span>
+            </div>
+          )}
+
+          {/* Order Type Selection */}
+          <div className="mt-4 mb-4">
+            <label className="text-muted-foreground text-sm mb-2 block font-medium">Order Type</label>
+            <div className="flex gap-2 p-1 bg-muted rounded-xl">
+              <button
+                onClick={() => setOrderType('dine_in')}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+                  orderType === 'dine_in'
+                    ? 'bg-teal-600 text-white shadow-md scale-[1.02]'
+                    : 'text-muted-foreground hover:bg-secondary/50'
+                }`}
+              >
+                <div className={`w-2 h-2 rounded-full ${orderType === 'dine_in' ? 'bg-teal-200 animate-pulse' : 'bg-teal-500'}`}></div>
+                Dine-in
+              </button>
+              <button
+                onClick={() => setOrderType('takeaway')}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+                  orderType === 'takeaway'
+                    ? 'bg-teal-600 text-white shadow-md scale-[1.02]'
+                    : 'text-muted-foreground hover:bg-secondary/50'
+                }`}
+              >
+                <div className={`w-2 h-2 rounded-full ${orderType === 'takeaway' ? 'bg-amber-200 animate-pulse' : 'bg-amber-500'}`}></div>
+                Takeaway
+              </button>
+            </div>
+          </div>
+
           <div>
             <label className="text-muted-foreground text-sm mb-2 block">Notes</label>
             <textarea
@@ -1656,9 +1829,14 @@ function POS() {
                       {couponCode}
                     </span>
                   )}
+                  {isWelcomeOfferApplied && (
+                    <span className="px-2 py-0.5 bg-yellow-400 text-teal-900 text-[10px] rounded font-bold uppercase tracking-wider animate-pulse">
+                      Welcome Offer
+                    </span>
+                  )}
                 </div>
                 <span className="text-card-foreground font-semibold">
-                  {discount > 0 ? `- ₹${discount.toFixed(2)}` : '₹0.00'}
+                  {totalDiscount > 0 ? `- ₹${totalDiscount.toFixed(2)}` : '₹0.00'}
                 </span>
               </div>
 

@@ -1,12 +1,12 @@
 import re
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, time
 from decimal import Decimal
 
 from pydantic import BaseModel, Field, EmailStr, validator, field_validator, condecimal
 
 from app.models.user import UserRole
-from app.models.order import OrderStatus
+from app.models.order import OrderStatus, OrderType
 from app.models.payment import PaymentMethod, PaymentStatus
 from app.models.inventory_log import InventoryAction
 
@@ -123,11 +123,27 @@ class ProductBase(BaseModel):
     min_stock_level: int = Field(default=0, ge=0)
     category_id: Optional[int] = None
     image_url: Optional[str] = None
+    food_type: str = Field(default="veg")
+    is_time_restricted: bool = False
+    available_from: Optional[time] = None
+    available_to: Optional[time] = None
 
+class ProductIngredientRequest(BaseModel):
+    ingredient_id: int
+    quantity: Money
+
+class ProductIngredientView(BaseModel):
+    id: int
+    ingredient_id: int
+    quantity: Money
+
+    class Config:
+        from_attributes = True
 
 class ProductCreate(ProductBase):
     """Product creation schema"""
     stock_quantity: int = Field(default=0, ge=0)
+    ingredients: Optional[List[ProductIngredientRequest]] = None
 
 
 class ProductUpdate(BaseModel):
@@ -142,6 +158,11 @@ class ProductUpdate(BaseModel):
     category_id: Optional[int] = None
     image_url: Optional[str] = None
     is_active: Optional[bool] = None
+    food_type: Optional[str] = None
+    is_time_restricted: Optional[bool] = None
+    available_from: Optional[time] = None
+    available_to: Optional[time] = None
+    ingredients: Optional[List[ProductIngredientRequest]] = None
 
 
 class ProductResponse(ProductBase):
@@ -151,6 +172,7 @@ class ProductResponse(ProductBase):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    ingredients: List[ProductIngredientView] = Field(default_factory=list)
 
     class Config:
         from_attributes = True
@@ -269,11 +291,13 @@ class OrderCreate(BaseModel):
     """Order creation schema"""
     customer_id: Optional[int] = None
     order_items: List[OrderItemCreate]
-    discount: Money = Field(default=0, ge=0)
+    discount: Money = Field(default=Decimal("0"), ge=0)
     coupon_code: Optional[str] = None
-    tax: Money = Field(default=0, ge=0)
+    tax: Money = Field(default=Decimal("0"), ge=0)
     notes: Optional[str] = None
+    is_quick_bill: bool = Field(default=False)
     payment_method: PaymentMethod = Field(default=PaymentMethod.CASH, description="cash, upi, card")
+    order_type: OrderType = Field(default=OrderType.DINE_IN)
 
 
 class OrderUpdate(BaseModel):
@@ -299,6 +323,8 @@ class OrderResponse(BaseModel):
     notes: Optional[str] = None
     order_items: List[OrderItemResponse] = Field(default_factory=list)
     payment_method: Optional[str] = None
+    is_quick_bill: bool = False
+    order_type: OrderType = OrderType.DINE_IN
     created_at: datetime
     updated_at: datetime
     completed_at: Optional[datetime] = None
@@ -420,7 +446,7 @@ class LoginRequest(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
-    old_password: str
+    current_password: str
     new_password: str = Field(..., min_length=8, max_length=72)
 
     @field_validator("new_password")
@@ -465,3 +491,43 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: Optional[str] = None
     token_type: str = "bearer"
+
+
+# ============= KOT (Kitchen Order Ticket) Schemas =============
+class KOTItemUpdateStatus(BaseModel):
+    status: str
+
+class KOTItemUpdatePriority(BaseModel):
+    priority: str
+
+class KOTItemCancel(BaseModel):
+    reason: str
+
+class KOTItemResponse(BaseModel):
+    id: int
+    kot_id: int
+    order_item_id: int
+    product_name: str
+    quantity: int
+    status: str
+    priority: str
+    is_cancelled: bool
+    cancel_reason: Optional[str] = None
+    printer_category: str
+    created_at: datetime
+    notes: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class KOTResponse(BaseModel):
+    id: int
+    order_id: int
+    order_number: str
+    kot_number: str
+    table_number: Optional[str] = None
+    items: List[KOTItemResponse]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

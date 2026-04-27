@@ -6,8 +6,7 @@ import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 import { formatDateTime, formatPaymentMethod } from '../utils/formatters';
 
-// API Configuration - Using environment variables
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
+import api from '../api/axios';
 
 const PastOrders = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,38 +34,27 @@ const PastOrders = () => {
     setError(null);
 
     try {
-      const params = new URLSearchParams({
-        skip: '0',
-        limit: '100'
-      });
+      const params = {
+        skip: 0,
+        limit: 100
+      };
 
       // Add filters to API call (no status filter)
       if (paymentFilter !== 'All') {
-        params.append('payment_method', paymentFilter.toLowerCase());
+        params.payment_method = paymentFilter.toLowerCase();
       }
       if (selectedDate) {
-        params.append('date', selectedDate);
+        params.date = selectedDate;
       }
       if (debouncedSearch) {
-        params.append('search', debouncedSearch);
+        params.search = debouncedSearch;
       }
 
-      console.log('Fetching with params:', params.toString());
+      console.log('Fetching with params:', params);
 
-      const response = await fetch(`${API_BASE_URL}/orders?${params.toString()}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('API Error:', response.status, errorText);
-        throw new Error(`API failed (${response.status}): ${errorText}`);
-      }
-
-      const data = await response.json();
+      const response = await api.get('/orders', { params });
+      
+      const data = response.data;
       console.log('Fetched orders:', data);
 
       const ordersArray = data.data || [];
@@ -76,7 +64,7 @@ const PastOrders = () => {
 
     } catch (err) {
       console.error('Fetch error:', err);
-      setError(err.message || 'Failed to load orders');
+      setError(err.response?.data?.detail || err.message || 'Failed to load orders');
     } finally {
       if (showLoader) setLoading(false);
     }
@@ -85,19 +73,8 @@ const PastOrders = () => {
   // Fetch single order details
   const fetchOrderDetails = async (orderId) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/orders/${orderId}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch order details: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data;
+      const response = await api.get(`/orders/${orderId}`);
+      return response.data;
     } catch (err) {
       console.error('Error fetching order details:', err);
       return null;

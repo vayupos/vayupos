@@ -25,6 +25,7 @@ def dish_to_dict(dish) -> dict:
         "image_url": dish.image_url,
         "description": dish.description,
         "default_category_id": dish.default_category_id,
+        "food_type": dish.food_type,
     }
 
 
@@ -37,7 +38,8 @@ def list_dish_templates(
     current_user: dict = Depends(get_current_user),
 ):
     """List dish templates (dish library)."""
-    dishes, total = DishTemplateService.list_dish_templates(db, skip, limit)
+    client_id = current_user.get("client_id")
+    dishes, total = DishTemplateService.list_dish_templates(db, client_id, skip, limit)
     # If you want the paginated wrapper, change response_model accordingly
     return dishes
 
@@ -50,7 +52,8 @@ def create_dish_template(
     current_user: dict = Depends(get_current_user),
 ):
     """Create a new dish template (name + image)."""
-    dish = DishTemplateService.create_dish_template(db, dish_in)
+    client_id = current_user.get("client_id")
+    dish = DishTemplateService.create_dish_template(db, dish_in, client_id)
     return dish
 
 
@@ -61,7 +64,8 @@ def get_dish_template(
     current_user: dict = Depends(get_current_user),
 ):
     """Get a single dish template by id."""
-    dish = DishTemplateService.get_dish_template(db, dish_id)
+    client_id = current_user.get("client_id")
+    dish = DishTemplateService.get_dish_template(db, dish_id, client_id)
     return dish
 
 
@@ -73,7 +77,8 @@ def update_dish_template(
     current_user: dict = Depends(get_current_user),
 ):
     """Update dish template."""
-    dish = DishTemplateService.update_dish_template(db, dish_id, dish_in)
+    client_id = current_user.get("client_id")
+    dish = DishTemplateService.update_dish_template(db, dish_id, dish_in, client_id)
     return dish
 
 
@@ -84,5 +89,6 @@ def delete_dish_template(
     current_user: dict = Depends(get_current_user),
 ):
     """Delete dish template."""
-    DishTemplateService.delete_dish_template(db, dish_id)
+    client_id = current_user.get("client_id")
+    DishTemplateService.delete_dish_template(db, dish_id, client_id)
     return {"message": "Dish template deleted successfully"}

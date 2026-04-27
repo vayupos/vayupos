@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.models.user import Base
 from datetime import datetime
@@ -10,7 +10,11 @@ class Category(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     client_id = Column(Integer, nullable=False, index=True)
-    name = Column(String(100), unique=True, nullable=False, index=True)
+    name = Column(String(100), nullable=False, index=True)
+
+    __table_args__ = (
+        UniqueConstraint('client_id', 'name', name='_client_category_name_uc'),
+    )
     description = Column(Text, nullable=True)
     icon_name = Column(String(50), default="Coffee")
     tax_rate = Column(Integer, default=5)

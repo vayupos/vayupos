@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Numeric, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Numeric, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.models.user import Base
 from datetime import datetime
@@ -12,8 +12,12 @@ class Customer(Base):
     client_id = Column(Integer, nullable=False, index=True)
     first_name = Column(String(50), nullable=False)
     last_name = Column(String(50), nullable=False)
-    email = Column(String(100), unique=True, nullable=True, index=True)
+    email = Column(String(100), nullable=True, index=True)
     phone = Column(String(20), nullable=True, index=True)
+
+    __table_args__ = (
+        UniqueConstraint('client_id', 'email', name='_client_email_uc'),
+    )
     address = Column(String(255), nullable=True)
     city = Column(String(100), nullable=True)
     state = Column(String(100), nullable=True)

@@ -6,10 +6,11 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.models import Order, OrderItem, OrderStatus, Product, Customer, InventoryAction
-from app.schemas import OrderCreate, OrderUpdate
+from app.schemas import OrderCreate, OrderUpdate, OrderItemCreate
 from app.core.exceptions import not_found_exception, bad_request_exception
 from app.services.inventory_service import InventoryService
 from app.services.print_service import PrintService
+from app.services.ingredient_service import StockService
 
 
 class OrderService:
@@ -97,6 +98,8 @@ class OrderService:
             discount=discount,
             total=total,
             notes=order_create.notes,
+            is_quick_bill=order_create.is_quick_bill,
+            order_type=order_create.order_type,
         )
 
         db.add(db_order)
@@ -121,14 +124,17 @@ class OrderService:
             item = item_data["item"]
             unit_price = item_data["unit_price"]
 
-            # Check stock
-            if product.stock_quantity < item.quantity:
+            # Check stock ONLY if it's not a recipe-based product
+            # If it has ingredients, we assume stock is managed at the ingredient level
+            has_ingredients = len(product.ingredients) > 0
+            if not has_ingredients and product.stock_quantity < item.quantity:
                 raise bad_request_exception(
                     f"Insufficient stock for {product.name}. "
                     f"Available: {product.stock_quantity}, Requested: {item.quantity}"
                 )
 
             order_item = OrderItem(
+                client_id=client_id,
                 order_id=db_order.id,
                 product_id=product.id,
                 product_name=product.name,
@@ -141,7 +147,7 @@ class OrderService:
 
             db.add(order_item)
 
-            # Log inventory out
+            # Log inventory out for product
             InventoryService.log_inventory_change(
                 db=db,
                 product_id=product.id,
@@ -153,17 +159,25 @@ class OrderService:
                 client_id=client_id,
             )
 
+            # Deduct ingredient stock if product has ingredients
+            if has_ingredients:
+                StockService.deduct_stock_for_order(
+                    db=db,
+                    client_id=client_id,
+                    product_id=product.id,
+                    quantity_ordered=item.quantity
+                )
+
         db.commit()
         db.refresh(db_order)
 
-        # Create Print Jobs for KOT (Splits by printer if needed)
+        # Create KOT (Kitchen Order Ticket)
+        from app.services.kot_service import KOTService
         try:
-            PrintService.create_kot_for_order(db=db, order=db_order)
-            db.commit()
+            KOTService.create_kot_for_order_items(db=db, order=db_order, order_items=db_order.order_items, client_id=client_id)
         except Exception as e:
             print(f"Error creating KOT: {e}")
-            # Don't fail the whole order if KOT fails
-            db.rollback()
+            # Don't fail the whole order if KOT fails, but log it
 
         return db_order
 
@@ -281,3 +295,85 @@ class OrderService:
             .limit(limit)
             .all()
         )
+
+    @staticmethod
+    def add_items_to_order(db: Session, order_id: int, items: list[OrderItemCreate], user_id: int, client_id: int) -> Order:
+        """Add new items to an existing order and generate a new KOT"""
+        from app.services.kot_service import KOTService
+        order = OrderService.get_order_by_id(db, order_id, client_id)
+        if not order:
+            raise not_found_exception("Order not found")
+
+        if order.status in [OrderStatus.COMPLETED, OrderStatus.CANCELLED]:
+            raise bad_request_exception(f"Cannot add items to a {order.status} order")
+
+        new_order_items = []
+        added_subtotal = Decimal("0")
+
+        for item in items:
+            product = db.query(Product).filter(
+                Product.id == item.product_id,
+                Product.client_id == client_id,
+            ).first()
+            if not product:
+                raise not_found_exception(f"Product {item.product_id} not found")
+
+            unit_price = item.unit_price or product.price
+            item_subtotal = unit_price * item.quantity - item.discount
+            added_subtotal += item_subtotal
+
+            # Inventory check
+            has_ingredients = len(product.ingredients) > 0
+            if not has_ingredients and product.stock_quantity < item.quantity:
+                raise bad_request_exception(f"Insufficient stock for {product.name}")
+
+            order_item = OrderItem(
+                client_id=client_id,
+                order_id=order.id,
+                product_id=product.id,
+                product_name=product.name,
+                product_sku=product.sku,
+                quantity=item.quantity,
+                unit_price=unit_price,
+                discount=item.discount or Decimal("0"),
+                subtotal=item_subtotal,
+            )
+            db.add(order_item)
+            new_order_items.append(order_item)
+
+            # Inventory log
+            InventoryService.log_inventory_change(
+                db=db,
+                product_id=product.id,
+                user_id=user_id,
+                action=InventoryAction.SALE,
+                quantity_change=-item.quantity,
+                reference_number=order.order_number,
+                notes=f"Added to order {order.order_number}",
+                client_id=client_id,
+            )
+
+            # Ingredient deduction
+            if has_ingredients:
+                StockService.deduct_stock_for_order(
+                    db=db,
+                    client_id=client_id,
+                    product_id=product.id,
+                    quantity_ordered=item.quantity
+                )
+
+        # Update order totals
+        order.subtotal += added_subtotal
+        order.total += added_subtotal
+        
+        db.flush()
+        
+        # Create NEW KOT only for new items
+        try:
+            KOTService.create_kot_for_order_items(db=db, order=order, order_items=new_order_items, client_id=client_id)
+        except Exception as e:
+            print(f"Error creating additional KOT: {e}")
+
+        db.commit()
+        db.refresh(order)
+        return order

@@ -13,9 +13,14 @@ DATABASE_URL = settings.DATABASE_URL
 DATABASE_URL = DATABASE_URL.strip()
 
 # Create sync engine only (avoid async greenlet issues)
+# Convert asyncpg URL to sync if necessary for the synchronous engine
+sync_url = DATABASE_URL
+if "postgresql+asyncpg://" in sync_url:
+    sync_url = sync_url.replace("postgresql+asyncpg://", "postgresql://")
+
 engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {},
+    sync_url,
+    connect_args={"check_same_thread": False} if "sqlite" in sync_url else {},
     pool_pre_ping=True,
     pool_size=10,
     max_overflow=20

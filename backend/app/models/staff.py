@@ -8,6 +8,7 @@ class Staff(Base):
     __tablename__ = "staff"
     
     id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, nullable=False, index=True)
     name = Column(String, nullable=False)
     phone = Column(String, unique=True, nullable=False, index=True)
     role = Column(String, nullable=False)

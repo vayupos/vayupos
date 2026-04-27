@@ -1,258 +1,160 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, Loader2 } from 'lucide-react';
+import { ArrowLeft, Mail, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
+import api from '../api/axios';
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
-  const [inputType, setInputType] = useState('mobile'); // 'mobile' or 'email'
-  const [inputValue, setInputValue] = useState('');
+  const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
   const handleInputChange = (e) => {
-    setInputValue(e.target.value);
-    // Clear error when user types
-    if (error) {
-      setError('');
-    }
+    setEmail(e.target.value);
+    if (error) setError('');
   };
 
-  const validateInput = () => {
-    if (!inputValue.trim()) {
-      setError(`${inputType === 'mobile' ? 'Mobile number' : 'Email'} is required`);
+  const validateEmail = () => {
+    if (!email.trim()) {
+      setError('Email address is required');
       return false;
     }
-
-    if (inputType === 'mobile') {
-      // Validate 10-digit mobile number
-      if (!/^\d{10}$/.test(inputValue.trim())) {
-        setError('Please enter a valid 10-digit mobile number');
-        return false;
-      }
-    } else {
-      // Validate email format
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(inputValue.trim())) {
-        setError('Please enter a valid email address');
-        return false;
-      }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      setError('Please enter a valid email address');
+      return false;
     }
-
     return true;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!validateInput()) {
-      return;
-    }
+    if (!validateEmail()) return;
 
     setIsLoading(true);
+    setError('');
 
-    // Simulate API call - replace with your actual API endpoint
     try {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      
-      console.log('Password reset requested for:', {
-        type: inputType,
-        value: inputValue
-      });
-
+      await api.post('/auth/forgot-password', { email: email.trim() });
       setIsSuccess(true);
-      
-      // Redirect to login after 3 seconds
-      setTimeout(() => {
-        navigate('/login');
-      }, 3000);
     } catch (err) {
-      setError('Failed to send reset link. Please try again.');
+      setError(err.response?.data?.detail || 'Failed to process request. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleToggleInputType = () => {
-    setInputType(inputType === 'mobile' ? 'email' : 'mobile');
-    setInputValue('');
-    setError('');
-    setIsSuccess(false);
-  };
-
   return (
     <div className="min-h-screen bg-[#0f1419] flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Back to Login Button */}
         <button
           onClick={() => navigate('/login')}
-          className="flex items-center gap-2 text-gray-400 hover:text-[#14b8a6] transition-colors mb-6"
+          className="flex items-center gap-2 text-gray-400 hover:text-[#14b8a6] transition-colors mb-6 group"
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
           <span className="font-medium">Back to Login</span>
         </button>
 
-        {/* Forgot Password Card */}
-        <div className="bg-[#1a2332] rounded-xl p-8 shadow-xl">
+        <div className="bg-[#1a2332] rounded-2xl p-8 shadow-2xl border border-gray-800">
           {!isSuccess ? (
             <>
-              {/* Header */}
               <div className="text-center mb-8">
-                <div className="w-16 h-16 bg-[#14b8a6]/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  {inputType === 'mobile' ? (
-                    <Phone className="text-[#14b8a6]" size={28} />
-                  ) : (
-                    <Mail className="text-[#14b8a6]" size={28} />
-                  )}
+                <div className="w-16 h-16 bg-[#14b8a6]/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-[#14b8a6]/20">
+                  <Mail className="text-[#14b8a6]" size={32} />
                 </div>
                 <h1 className="text-2xl font-bold text-white mb-2">
-                  Forgot Password
+                  Forgot Password?
                 </h1>
                 <p className="text-gray-400 text-sm">
-                  Enter your registered {inputType === 'mobile' ? 'mobile number' : 'email'} to reset your password.
+                  Enter your email address and we'll send you a link to reset your password.
                 </p>
               </div>
 
-              {/* Form */}
-              <form onSubmit={handleSubmit}>
-                {/* Input Type Toggle */}
-                <div className="flex gap-2 mb-6">
-                  <button
-                    type="button"
-                    onClick={() => inputType !== 'mobile' && handleToggleInputType()}
-                    className={`flex-1 py-2 px-4 rounded-lg font-medium text-sm transition-all ${
-                      inputType === 'mobile'
-                        ? 'bg-[#14b8a6] text-white'
-                        : 'bg-[#0f1419] text-gray-400 hover:text-gray-200'
-                    }`}
-                  >
-                    Mobile Number
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => inputType !== 'email' && handleToggleInputType()}
-                    className={`flex-1 py-2 px-4 rounded-lg font-medium text-sm transition-all ${
-                      inputType === 'email'
-                        ? 'bg-[#14b8a6] text-white'
-                        : 'bg-[#0f1419] text-gray-400 hover:text-gray-200'
-                    }`}
-                  >
-                    Email
-                  </button>
-                </div>
-
-                {/* Input Field */}
-                <div className="mb-6">
-                  <label className="block text-white font-medium mb-2">
-                    {inputType === 'mobile' ? 'Mobile Number' : 'Email Address'}
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="block text-gray-200 text-sm font-semibold ml-1">
+                    Email Address
                   </label>
-                  <input
-                    type={inputType === 'mobile' ? 'text' : 'email'}
-                    value={inputValue}
-                    onChange={handleInputChange}
-                    placeholder={
-                      inputType === 'mobile' 
-                        ? 'Enter your mobile number' 
-                        : 'Enter your email address'
-                    }
-                    disabled={isLoading}
-                    className={`w-full px-4 py-3 bg-[#0f1419] border rounded-lg text-white placeholder-gray-500 focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                      error 
-                        ? 'border-red-500 focus:border-red-500' 
-                        : 'border-gray-700 focus:border-[#14b8a6]'
-                    }`}
-                  />
+                  <div className="relative group">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-[#14b8a6] transition-colors">
+                      <Mail size={18} />
+                    </div>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={handleInputChange}
+                      placeholder="name@example.com"
+                      disabled={isLoading}
+                      className={`w-full pl-10 pr-4 py-3 bg-[#0f1419] border rounded-xl text-white placeholder-gray-600 focus:outline-none focus:ring-2 transition-all disabled:opacity-50 ${
+                        error 
+                          ? 'border-red-500/50 focus:ring-red-500/20' 
+                          : 'border-gray-700 focus:border-[#14b8a6] focus:ring-[#14b8a6]/20'
+                      }`}
+                    />
+                  </div>
                   {error && (
-                    <p className="text-red-500 text-sm mt-2 flex items-center gap-1">
-                      <span className="inline-block w-1 h-1 bg-red-500 rounded-full"></span>
+                    <div className="flex items-center gap-2 text-red-400 text-xs font-medium mt-2 animate-in fade-in slide-in-from-top-1">
+                      <AlertCircle size={14} />
                       {error}
-                    </p>
+                    </div>
                   )}
                 </div>
 
-                {/* Submit Button */}
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-medium py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full bg-[#14b8a6] hover:bg-[#0d9488] text-white font-bold py-3.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 shadow-lg shadow-[#14b8a6]/10"
                 >
                   {isLoading ? (
                     <>
                       <Loader2 className="animate-spin" size={20} />
-                      <span>Sending...</span>
+                      <span>Sending Link...</span>
                     </>
                   ) : (
                     'Send Reset Link'
                   )}
                 </button>
-
-                {/* Additional Info */}
-                <div className="mt-6 p-4 bg-[#0f1419] rounded-lg border border-gray-700">
-                  <p className="text-gray-400 text-xs leading-relaxed">
-                    <span className="text-[#14b8a6] font-medium">Note:</span> You will receive a password reset link via {inputType === 'mobile' ? 'SMS' : 'email'}. The link will be valid for 15 minutes.
-                  </p>
-                </div>
               </form>
             </>
           ) : (
-            // Success State
-            <div className="text-center py-6">
-              <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="text-green-500"
-                  width="32"
-                  height="32"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="20 6 9 17 4 12"></polyline>
-                </svg>
+            <div className="text-center py-4 animate-in fade-in zoom-in-95">
+              <div className="w-16 h-16 bg-green-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-green-500/20">
+                <CheckCircle2 className="text-green-500" size={32} />
               </div>
-              <h2 className="text-2xl font-bold text-white mb-2">
-                Reset Link Sent!
+              <h2 className="text-2xl font-bold text-white mb-3">
+                Check Your Email
               </h2>
-              <p className="text-gray-400 mb-6">
-                We've sent a password reset link to your {inputType === 'mobile' ? 'mobile number' : 'email'}
+              <p className="text-gray-400 mb-8 text-sm leading-relaxed">
+                If an account exists for <span className="text-white font-semibold">{email}</span>, you will receive a password reset link shortly.
               </p>
-              <div className="bg-[#0f1419] rounded-lg p-4 mb-6">
-                <p className="text-[#14b8a6] font-medium break-all">
-                  {inputValue}
-                </p>
+              
+              <div className="space-y-4">
+                <button
+                  onClick={() => navigate('/login')}
+                  className="w-full bg-gray-800 hover:bg-gray-700 text-white font-semibold py-3 rounded-xl transition-colors"
+                >
+                  Return to Login
+                </button>
+                <button
+                  onClick={() => setIsSuccess(false)}
+                  className="text-[#14b8a6] hover:text-[#0d9488] text-sm font-medium transition-colors"
+                >
+                  Didn't receive email? Try again
+                </button>
               </div>
-              <p className="text-gray-400 text-sm mb-4">
-                Redirecting to login page...
-              </p>
-              <button
-                onClick={() => navigate('/login')}
-                className="text-[#14b8a6] hover:text-[#0d9488] font-medium transition-colors"
-              >
-                Go to Login Now
-              </button>
             </div>
           )}
         </div>
 
-        {/* Help Text */}
-        {!isSuccess && (
-          <div className="text-center mt-6">
-            <p className="text-gray-400 text-sm">
-              Remember your password?{' '}
-              <button
-                onClick={() => navigate('/login')}
-                className="text-[#14b8a6] hover:text-[#0d9488] font-medium transition-colors"
-              >
-                Sign in
-              </button>
-            </p>
-          </div>
-        )}
+        <div className="text-center mt-8 p-4 bg-[#1a2332]/50 rounded-xl border border-gray-800/50">
+          <p className="text-gray-500 text-xs">
+            <span className="text-[#14b8a6] font-semibold">Security Tip:</span> Reset links are valid for 30 minutes. If you don't see the email, check your spam folder.
+          </p>
+        </div>
       </div>
     </div>
   );
 };
 
-export default ForgotPassword;
+export default ForgotPassword;

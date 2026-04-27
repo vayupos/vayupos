@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
+from typing import Optional
 
 load_dotenv()
 
@@ -19,16 +20,27 @@ class Settings(BaseSettings):
     app_name: str = "POS Backend API"
     app_version: str = "1.0.0"
     cors_origins: list = ["*"]
+    FRONTEND_URL: str = "http://localhost:5173"
     
-    # AWS Configuration (optional - provide your AWS credentials if using S3)
-    AWS_ACCESS_KEY_ID: str = ""
-    AWS_SECRET_ACCESS_KEY: str = ""
-    AWS_REGION: str = "ap-south-1"
-    AWS_BUCKET_NAME: str = ""
+    # Cloudflare R2 Configuration
+    R2_ACCOUNT_ID: str = ""
+    R2_ACCESS_KEY: str = ""
+    R2_SECRET_KEY: str = ""
+    R2_BUCKET_NAME: str = ""
+    R2_ENDPOINT: str = ""
+    R2_PUBLIC_URL: str = ""
 
     # Printer Configuration
     DEFAULT_PRINTER_IP: str = "192.168.1.150"
     DEFAULT_PRINTER_PORT: int = 9100
+    
+    # SMTP Configuration
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    EMAILS_FROM_EMAIL: str = "info@vayupos.com"
+    EMAILS_FROM_NAME: str = "VayuPos Support"
 
     class Config:
         env_file = ".env"

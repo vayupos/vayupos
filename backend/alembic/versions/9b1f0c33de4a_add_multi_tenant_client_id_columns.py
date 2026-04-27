@@ -35,11 +35,19 @@ TABLES = [
 
 
 def upgrade() -> None:
+    # Get database connection
+    conn = op.get_bind()
     for table in TABLES:
-        op.add_column(table, sa.Column("client_id", sa.Integer(), nullable=True))
-        op.execute(f"UPDATE {table} SET client_id = 1 WHERE client_id IS NULL")
-        op.alter_column(table, "client_id", existing_type=sa.Integer(), nullable=False)
-        op.create_index(op.f(f"ix_{table}_client_id"), table, ["client_id"], unique=False)
+        # Check if column already exists
+        check = conn.execute(sa.text(f"SELECT column_name FROM information_schema.columns WHERE table_name='{table}' AND column_name='client_id'")).fetchone()
+        if not check:
+            print(f"Adding client_id to {table}")
+            op.add_column(table, sa.Column("client_id", sa.Integer(), nullable=True))
+            op.execute(f"UPDATE {table} SET client_id = 1 WHERE client_id IS NULL")
+            op.alter_column(table, "client_id", existing_type=sa.Integer(), nullable=False)
+            op.create_index(op.f(f"ix_{table}_client_id"), table, ["client_id"], unique=False)
+        else:
+            print(f"Column client_id already exists in {table}, skipping.")
 
 
 def downgrade() -> None:

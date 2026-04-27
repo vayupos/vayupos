@@ -1,12 +1,14 @@
-import { Search, Menu, User, LayoutDashboard, X, LogOut, UserCircle, ChevronDown } from 'lucide-react';
+import { Search, Menu, User, LayoutDashboard, X, LogOut, UserCircle, ChevronDown, Key } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ThemeToggle from './ThemeToggle';
 import NotificationsDropdown from './NotificationsDropdown';
+import ChangePasswordModal from './ChangePasswordModal';
 
 const Navbar = ({ onMenuClick, onSearch }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const profileDropdownRef = useRef(null);
   const navigate = useNavigate();
 
@@ -32,11 +34,17 @@ const Navbar = ({ onMenuClick, onSearch }) => {
 
   const handleLogout = () => {
     if (window.confirm('Are you sure you want to logout?')) {
-      // Clear authentication
-      localStorage.removeItem('isAuthenticated');
-      localStorage.removeItem('userRole');
-      localStorage.removeItem('userNumber');
-      localStorage.removeItem('userName');
+      // Save theme before clearing
+      const theme = localStorage.getItem('theme');
+      
+      // Clear all authentication and local cache
+      localStorage.clear();
+      
+      // Restore theme if it existed
+      if (theme) {
+        localStorage.setItem('theme', theme);
+      }
+      
       // Redirect to login
       navigate('/login', { replace: true });
     }
@@ -45,6 +53,11 @@ const Navbar = ({ onMenuClick, onSearch }) => {
   const handleProfileClick = () => {
     setIsProfileOpen(false);
     navigate('/profile');
+  };
+
+  const handleChangePasswordClick = () => {
+    setIsProfileOpen(false);
+    setIsChangePasswordOpen(true);
   };
 
   // Get user info from localStorage
@@ -150,6 +163,13 @@ const Navbar = ({ onMenuClick, onSearch }) => {
                     <UserCircle className="h-4 w-4 text-muted-foreground" />
                     Profile
                   </button>
+                  <button
+                    onClick={handleChangePasswordClick}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-foreground hover:bg-secondary transition-colors"
+                  >
+                    <Key className="h-4 w-4 text-muted-foreground" />
+                    Change Password
+                  </button>
                   <hr className="my-1 border-border" />
                   <button
                     onClick={() => {
@@ -167,6 +187,12 @@ const Navbar = ({ onMenuClick, onSearch }) => {
           </div>
         </div>
       </div>
+
+      {/* Modals */}
+      <ChangePasswordModal 
+        isOpen={isChangePasswordOpen} 
+        onClose={() => setIsChangePasswordOpen(false)} 
+      />
 
       {/* Mobile Search */}
       <div className="md:hidden px-4 pb-3">

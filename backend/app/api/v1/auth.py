@@ -73,7 +73,7 @@ def change_password(
     AuthService.change_password(
         db,
         int(current_user["user_id"]),
-        payload.old_password,
+        payload.current_password,
         payload.new_password,
     )
     return {"message": "Password changed successfully"}

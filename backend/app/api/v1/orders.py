@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user, get_db
 from app.services import OrderService
-from app.schemas import OrderCreate, OrderUpdate, OrderResponse
+from app.schemas import OrderCreate, OrderUpdate, OrderResponse, OrderItemCreate
 # 🔥 NEW IMPORTS FOR NOTIFICATIONS
 from app.services.notification_service import create_notification
 from app.schemas.notification import NotificationCreate
@@ -39,16 +39,19 @@ def create_order(
             category="order"
         )
         print(f"🔔 Attempting to create notification with data: {notification.dict()}")
-        create_notification(db, notification)
+        create_notification(db, notification, int(current_user["client_id"]))
         print(f"🔔 Notification sent successfully for order #{order.id}")
         
         return OrderResponse.from_orm(order)
+    except HTTPException as e:
+        # Re-raise HTTPExceptions as-is (e.g. 400 Bad Request)
+        raise e
     except Exception as e:
-        print(f"❌ Error creating order: {str(e)}")
+        print(f"❌ Unexpected error creating order: {str(e)}")
         print(f"📋 Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=500, 
-            detail=f"Error creating order: {str(e)}"
+            detail=f"Internal server error while creating order: {str(e)}"
         )
 
 @router.get("/", response_model=dict)
@@ -109,7 +112,7 @@ def update_order(
         description=f"Status changed to {order_update.status or 'modified'}",
         category="order"
     )
-    create_notification(db, notification)
+    create_notification(db, notification, int(current_user["client_id"]))
     
     return OrderResponse.from_orm(order)
 
@@ -133,7 +136,7 @@ def cancel_order(
         description=f"Table {getattr(order, 'table_number', 'N/A')} was cancelled by staff",
         category="order"
     )
-    create_notification(db, notification)
+    create_notification(db, notification, int(current_user["client_id"]))
     print(f"🔔 Cancellation notification sent for order #{order_id}")
     
     return {
@@ -163,3 +166,20 @@ def get_customer_orders(
     """Get all orders for a customer"""
     orders = OrderService.get_customer_orders(db, customer_id, int(current_user["client_id"]), limit)
     return [OrderResponse.from_orm(order) for order in orders]
+
+@router.post("/{order_id}/items", response_model=OrderResponse)
+def add_items_to_order(
+    order_id: int,
+    items: List[OrderItemCreate],
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Add items to an existing order and generate a new KOT"""
+    order = OrderService.add_items_to_order(
+        db=db,
+        order_id=order_id,
+        items=items,
+        user_id=int(current_user["user_id"]),
+        client_id=int(current_user["client_id"]),
+    )
+    return OrderResponse.from_orm(order)

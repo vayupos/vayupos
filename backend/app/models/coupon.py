@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.sql import func
 from app.models.user import Base
 
@@ -7,7 +7,11 @@ class Coupon(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     client_id = Column(Integer, nullable=False, index=True)
-    code = Column(String(50), unique=True, nullable=False, index=True)
+    code = Column(String(50), nullable=False, index=True)
+
+    __table_args__ = (
+        UniqueConstraint('client_id', 'code', name='_client_coupon_code_uc'),
+    )
     discount_type = Column(String(20), nullable=False)  # "percentage" or "fixed"
     discount_value = Column(Float, nullable=False)
     min_order_amount = Column(Float, default=0.0)

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
+from app.api.dependencies import get_current_user
 
 print("[NOTIF] Loading notification module...")
 
@@ -12,6 +13,7 @@ def read_notifications(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     unread_only: bool = Query(False),
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get notifications with pagination and filters"""
@@ -20,7 +22,7 @@ def read_notifications(
         from app.services.notification_service import get_notifications
         from app.schemas.notification import Notification as NotificationSchema
         
-        notifications = get_notifications(db, skip, limit, unread_only)
+        notifications = get_notifications(db, int(current_user["client_id"]), skip, limit, unread_only)
         
         # Explicitly convert SQLAlchemy models to Pydantic schemas for clean JSON
         result = [NotificationSchema.from_orm(n).dict() for n in notifications]
@@ -34,38 +36,49 @@ def read_notifications(
         return []
 
 @router.post("", response_model=dict, status_code=status.HTTP_201_CREATED)
-def create_notification_endpoint(notification_data: dict, db: Session = Depends(get_db)):
+def create_notification_endpoint(
+    notification_data: dict, 
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Create a new notification"""
     print(f"[NOTIF] POST /notifications called")
     try:
         from app.services.notification_service import create_notification
         from app.schemas.notification import NotificationCreate
         notif = NotificationCreate(**notification_data)
-        result = create_notification(db, notif)
+        result = create_notification(db, notif, int(current_user["client_id"]))
         return {"id": result.id, "title": result.title}
     except Exception as e:
         print(f"[ERR] Error in create_notification: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.patch("/mark-all-read", response_model=dict)
-def mark_all_read_endpoint(db: Session = Depends(get_db)):
+def mark_all_read_endpoint(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Mark ALL unread notifications as read"""
     print(f"[NOTIF] PATCH /mark-all-read called")
     try:
         from app.services.notification_service import mark_all_read
-        count = mark_all_read(db)
+        count = mark_all_read(db, int(current_user["client_id"]))
         return {"marked_as_read": count}
     except Exception as e:
         print(f"[ERR] Error in mark_all_read: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.patch("/{notification_id}/read", response_model=dict)
-def mark_read(notification_id: int, db: Session = Depends(get_db)):
+def mark_read(
+    notification_id: int, 
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Mark single notification as read"""
     print(f"[NOTIF] PATCH /{notification_id}/read called")
     try:
         from app.services.notification_service import mark_notification_read
-        notif = mark_notification_read(db, notification_id)
+        notif = mark_notification_read(db, notification_id, int(current_user["client_id"]))
         if notif is None:
             raise HTTPException(status_code=404, detail="Notification not found")
         return {"success": True, "id": notification_id}
@@ -76,12 +89,16 @@ def mark_read(notification_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/{notification_id}", response_model=dict)
-def delete_notification_endpoint(notification_id: int, db: Session = Depends(get_db)):
+def delete_notification_endpoint(
+    notification_id: int, 
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Delete single notification"""
     print(f"[NOTIF] DELETE /{notification_id} called")
     try:
         from app.services.notification_service import delete_notification
-        success = delete_notification(db, notification_id)
+        success = delete_notification(db, notification_id, int(current_user["client_id"]))
         if not success:
             raise HTTPException(status_code=404, detail="Notification not found")
         return {"success": True}
@@ -92,12 +109,15 @@ def delete_notification_endpoint(notification_id: int, db: Session = Depends(get
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/all", response_model=dict)
-def delete_all_endpoint(db: Session = Depends(get_db)):
+def delete_all_endpoint(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Delete ALL notifications"""
     print(f"[NOTIF] DELETE /all called")
     try:
         from app.services.notification_service import delete_all
-        count = delete_all(db)
+        count = delete_all(db, int(current_user["client_id"]))
         return {"deleted": count}
     except Exception as e:
         print(f"[ERR] Error in delete_all: {e}")

@@ -14,7 +14,7 @@ from app.core.database import init_db, get_db
 from app.api.v1 import (
     auth, users, products, categories,
     customers, orders, inventory, payment, reports,
-    coupons, dish_templates, upload, staff, expense, notification, search, print_jobs
+    coupons, dish_templates, upload, staff, expense, notification, search, print_jobs, ingredient, kot
 )
 
 settings = get_settings()
@@ -24,7 +24,7 @@ app = FastAPI(
     title=settings.app_name,
     description="Point of Sale System Backend API",
     version=settings.app_version,
-    redirect_slashes=False,
+    redirect_slashes=True,
 )
 
 # -------------------- CORS --------------------
@@ -256,6 +256,12 @@ except Exception as e:
     print(f"[ERR] Failed to include expense router: {e}")
 
 try:
+    app.include_router(ingredient.router, prefix="/api/v1/ingredients", tags=["Ingredients"])
+    print("[OK] Ingredient router included")
+except Exception as e:
+    print(f"[ERR] Failed to include ingredient router: {e}")
+
+try:
     app.include_router(notification.router, prefix="/api/v1", tags=["Notifications"])
     print("[OK] Notification router included")
 except Exception as e:
@@ -272,5 +278,11 @@ try:
     print("[OK] Print Jobs router included")
 except Exception as e:
     print(f"[ERR] Failed to include print jobs router: {e}")
+
+try:
+    app.include_router(kot.router, prefix="/api/v1", tags=["KOT"])
+    print("[OK] KOT router included")
+except Exception as e:
+    print(f"[ERR] Failed to include KOT router: {e}")
 
 print("[OK] All routers included")

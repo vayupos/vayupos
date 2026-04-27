@@ -11,6 +11,7 @@ import Offers from "./pages/Offers";
 import PastOrders from "./pages/PastOrders";
 import ExpensesManagement from "./pages/ExpensesManagement";
 import Menu from './pages/Menu';
+import Stock from './pages/Stock';
 import POS from './pages/POS';
 import KOTPrinterSettings from './pages/KOTPrinterSettings';
 import StaffManagement from './pages/StaffManagement';
@@ -18,9 +19,11 @@ import ReportsPage from './pages/ReportsPage';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import NotFound from './pages/NotFound';
 import Notifications from "./pages/Notifications";
 import SearchResults from "./pages/SearchResults";
+import KDS from "./pages/KDS";
 import Profile from './pages/Profile';
 import OrderDetails from './pages/OrderDetails';
 import PrintBill from './pages/PrintBill';
@@ -61,7 +64,8 @@ const AppContent = () => {
   // Check if current route is auth route (login/register/forgot-password)
   const isAuthRoute = location.pathname === '/login' ||
     location.pathname === '/register' ||
-    location.pathname === '/forgot-password';
+    location.pathname === '/forgot-password' ||
+    location.pathname === '/reset-password';
 
   useEffect(() => {
     // Initialize theme on mount
@@ -83,6 +87,7 @@ const AppContent = () => {
       'expenses': '/expensesmanagement',
       'notifications': '/notifications',
       'search': '/search',
+      'kds': '/kds',
       'dashboard': '/'
     };
 
@@ -131,6 +136,14 @@ const AppContent = () => {
                 </PublicRoute>
               }
             />
+            <Route
+              path="/reset-password"
+              element={
+                <PublicRoute>
+                  <ResetPassword />
+                </PublicRoute>
+              }
+            />
 
             {/* Protected Routes */}
             <Route
@@ -146,6 +159,14 @@ const AppContent = () => {
               element={
                 <ProtectedRoute>
                   <Menu onNavigate={handleNavigate} />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/stock"
+              element={
+                <ProtectedRoute>
+                  <Stock />
                 </ProtectedRoute>
               }
             />
@@ -234,6 +255,14 @@ const AppContent = () => {
               element={
                 <ProtectedRoute>
                   <ReportsPage onNavigate={handleNavigate} />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/kds"
+              element={
+                <ProtectedRoute>
+                  <KDS onNavigate={handleNavigate} />
                 </ProtectedRoute>
               }
             />

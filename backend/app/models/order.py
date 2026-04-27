@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, Enum, Text
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, Enum, Text, Boolean
 from sqlalchemy.orm import relationship
 from app.models.user import Base
 import enum
@@ -14,6 +14,12 @@ class OrderStatus(str, enum.Enum):
     ON_HOLD = "on_hold"
 
 
+class OrderType(str, enum.Enum):
+    """Order type enumeration"""
+    DINE_IN = "dine_in"
+    TAKEAWAY = "takeaway"
+
+
 from app.models.payment import PaymentMethod
 
 class Order(Base):
@@ -26,6 +32,8 @@ class Order(Base):
     customer_id = Column(Integer, ForeignKey("customers.id", ondelete="SET NULL"), nullable=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=False)
     status = Column(Enum(OrderStatus), nullable=False, default=OrderStatus.PENDING)
+    order_type = Column(Enum(OrderType), nullable=False, default=OrderType.DINE_IN)
+    is_quick_bill = Column(Boolean, default=False)
 
     # Payment method for the order (Cash, UPI, Card, etc.)
     payment_method = Column(String(50), nullable=True, default="Cash")

@@ -1,10 +1,12 @@
 from sqlalchemy.orm import Session
 from typing import Optional, Tuple, List
 
-from app.models import Product, Category
+from app.core.time_utils import is_item_available
+
+from app.models import Product, Category, ProductIngredient
 from app.schemas.product import ProductCreate, ProductUpdate
 from app.schemas.category import CategoryCreate, CategoryUpdate
-from app.api.v1.upload import delete_image_from_s3
+from app.api.v1.upload import delete_image
 from app.core.exceptions import conflict_exception, not_found_exception
 
 
@@ -32,11 +34,28 @@ class ProductService:
             category_id=product_create.category_id,
             image_url=product_create.image_url,
             is_active=True,
+            food_type=getattr(product_create, "food_type", "veg"),
+            is_time_restricted=getattr(product_create, "is_time_restricted", False),
+            available_from=getattr(product_create, "available_from", None),
+            available_to=getattr(product_create, "available_to", None),
         )
 
         db.add(db_product)
         db.commit()
         db.refresh(db_product)
+
+        # Handle Ingredients
+        if product_create.ingredients:
+            for ing in product_create.ingredients:
+                pi = ProductIngredient(
+                    client_id=client_id,
+                    product_id=db_product.id,
+                    ingredient_id=ing.ingredient_id,
+                    quantity=ing.quantity
+                )
+                db.add(pi)
+            db.commit()
+            db.refresh(db_product)
 
         return db_product
 
@@ -62,12 +81,28 @@ class ProductService:
 
         update_data = product_update.dict(exclude_unset=True)
         for field, value in update_data.items():
+            if field == 'ingredients':
+                continue
             setattr(product, field, value)
 
         # If image changed → delete old image from S3
         if product_update.image_url and old_image_url != product_update.image_url:
             if old_image_url:
-                delete_image_from_s3(old_image_url)
+                delete_image(old_image_url)
+
+        # Handle Ingredients Update (Replace old with new)
+        if product_update.ingredients is not None:
+            # Delete old ingredients
+            db.query(ProductIngredient).filter(ProductIngredient.product_id == product.id).delete()
+            # Add new ingredients
+            for ing in product_update.ingredients:
+                pi = ProductIngredient(
+                    client_id=client_id,
+                    product_id=product.id,
+                    ingredient_id=ing.ingredient_id,
+                    quantity=ing.quantity
+                )
+                db.add(pi)
 
         db.commit()
         db.refresh(product)
@@ -81,7 +116,7 @@ class ProductService:
             raise not_found_exception("Product not found")
 
         if product.image_url:
-            delete_image_from_s3(product.image_url)
+            delete_image(product.image_url)
 
         db.delete(product)
         db.commit()
@@ -106,10 +141,33 @@ class ProductService:
         if is_active is not None:
             query = query.filter(Product.is_active == is_active)
 
-        total = query.count()
         products = query.offset(skip).limit(limit).all()
+        available_products = [p for p in products if is_item_available(p)]
 
-        return products, total
+        return available_products, len(available_products)
+
+    @staticmethod
+    def get_low_stock_products(db: Session, client_id: int) -> List[Product]:
+        """Get products with stock <= min_stock_level for a specific client"""
+        return db.query(Product).filter(
+            Product.client_id == client_id,
+            Product.stock_quantity <= Product.min_stock_level,
+            Product.is_active == True
+        ).all()
+
+    @staticmethod
+    def search_products(db: Session, client_id: int, search_term: str) -> List[Product]:
+        """Search products by name, SKU, or barcode for a specific client"""
+        products = db.query(Product).filter(
+            Product.client_id == client_id,
+            (
+                (Product.name.ilike(f"%{search_term}%")) |
+                (Product.sku.ilike(f"%{search_term}%")) |
+                (Product.barcode.ilike(f"%{search_term}%"))
+            )
+        ).filter(Product.is_active == True).all()
+        
+        return [p for p in products if is_item_available(p)]
 
 
 class CategoryService:

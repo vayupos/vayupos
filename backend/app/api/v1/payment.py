@@ -15,7 +15,7 @@ def create_payment(
     db: Session = Depends(get_db),
 ):
     """Create a new payment"""
-    payment = PaymentService.create_payment(db, payment_create)
+    payment = PaymentService.create_payment(db, payment_create, int(current_user["client_id"]))
     return payment
 
 
@@ -25,10 +25,18 @@ def list_payments(
     limit: int = 100,
     order_id: int = None,
     status: str = None,
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """List all payments"""
-    payments, total = PaymentService.list_payments(db, skip, limit, order_id, status)
+    payments, total = PaymentService.list_payments(
+        db, 
+        int(current_user["client_id"]), 
+        skip, 
+        limit, 
+        order_id, 
+        status
+    )
     return {
         "total": total,
         "skip": skip,
@@ -38,9 +46,13 @@ def list_payments(
 
 
 @router.get("/{payment_id}", response_model=PaymentResponse)
-def get_payment(payment_id: int, db: Session = Depends(get_db)):
+def get_payment(
+    payment_id: int, 
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """Get payment by ID"""
-    payment = PaymentService.get_payment_by_id(db, payment_id)
+    payment = PaymentService.get_payment_by_id(db, payment_id, int(current_user["client_id"]))
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
     return payment
@@ -54,7 +66,7 @@ def update_payment(
     db: Session = Depends(get_db),
 ):
     """Update payment"""
-    payment = PaymentService.update_payment(db, payment_id, payment_update)
+    payment = PaymentService.update_payment(db, payment_id, payment_update, int(current_user["client_id"]))
     return payment
 
 
@@ -66,15 +78,16 @@ def refund_payment(
     db: Session = Depends(get_db),
 ):
     """Refund a payment"""
-    payment = PaymentService.refund_payment(db, payment_id, reason)
+    payment = PaymentService.refund_payment(db, payment_id, int(current_user["client_id"]), reason)
     return {"message": "Payment refunded successfully", "payment_id": payment.id}
 
 
 @router.get("/order/{order_id}/status", response_model=dict)
 def get_order_payment_status(
     order_id: int,
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get payment status for an order"""
-    status = PaymentService.get_order_payment_status(db, order_id)
+    status = PaymentService.get_order_payment_status(db, order_id, int(current_user["client_id"]))
     return status

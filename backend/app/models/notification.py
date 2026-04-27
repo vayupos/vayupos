@@ -6,6 +6,7 @@ class Notification(Base):
     __tablename__ = "notifications"
 
     id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(Integer, nullable=False, index=True)
     title = Column(String(length=255), nullable=False)
     description = Column(String, nullable=True)
     category = Column(String(length=50), nullable=True, default="general")

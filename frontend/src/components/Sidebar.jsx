@@ -9,21 +9,25 @@ import {
   UserCog, 
   Wallet, 
   BarChart3,
-  X 
+  X,
+  Package,
+  ChefHat
 } from 'lucide-react';
 import { NavLink } from './NavLink';
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
-  { icon: UtensilsCrossed, label: 'Menu Categories', path: '/menu' },
+  { icon: UtensilsCrossed, label: 'Menu Management', path: '/menu' },
+  { icon: Package, label: 'Stock & Inventory', path: '/stock' },
   { icon: Users, label: 'Customers', path: '/customers' },
-  { icon: Tag, label: 'Offers', path: '/offers' },
-  { icon: ShoppingCart, label: 'POS', path: '/pos' },
+  { icon: Tag, label: 'Offers & Coupons', path: '/offers' },
+  { icon: ShoppingCart, label: 'POS (Sales)', path: '/pos' },
   { icon: ClipboardList, label: 'Past Orders', path: '/pastorders' },
   { icon: Printer, label: 'KOT Printer Settings', path: '/KOTPrinterSettings' },
-  { icon: UserCog, label: 'Staff', path: '/StaffManagement' },
-  { icon: Wallet, label: 'Expenses', path: '/ExpensesManagement' },
-  { icon: BarChart3, label: 'Reports', path: '/ReportsPage' },
+  { icon: UserCog, label: 'Staff Management', path: '/StaffManagement' },
+  { icon: Wallet, label: 'Expense Tracking', path: '/ExpensesManagement' },
+  { icon: BarChart3, label: 'Business Reports', path: '/ReportsPage' },
+  { icon: ChefHat, label: 'Kitchen Display (KDS)', path: '/kds' },
 ];
 
 const Sidebar = ({ isOpen, onClose }) => {

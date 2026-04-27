@@ -18,6 +18,9 @@ from app.core.exceptions import (
     conflict_exception,
 )
 from app.utils.auth_email import send_password_reset_email_mock
+from app.core.config import get_settings
+
+settings = get_settings()
 
 
 class AuthService:
@@ -122,15 +125,15 @@ class AuthService:
         return user
 
     @staticmethod
-    def change_password(db: Session, user_id: int, old_password: str, new_password: str) -> User:
+    def change_password(db: Session, user_id: int, current_password: str, new_password: str) -> User:
         """Change user password"""
         user = AuthService.get_user_by_id(db, user_id)
         if not user:
             raise not_found_exception("User not found")
 
         # Verify old password
-        if not verify_password(old_password, user.hashed_password):
-            raise bad_request_exception("Old password is incorrect")
+        if not verify_password(current_password, user.hashed_password):
+            raise bad_request_exception("Current password is incorrect")
 
         # Hash and set new password
         user.hashed_password = hash_password(new_password)
@@ -139,10 +142,9 @@ class AuthService:
         return user
 
     @staticmethod
-    def create_password_reset_token(
-        db: Session, email: str, reset_link_base: str = "https://yourfrontend.com/reset-password"
-    ) -> None:
+    def create_password_reset_token(db: Session, email: str) -> None:
         """Create and send password reset token when email exists."""
+        reset_link_base = f"{settings.FRONTEND_URL}/reset-password"
         user = db.query(User).filter(func.lower(User.email) == email.strip().lower()).first()
         if not user:
             return

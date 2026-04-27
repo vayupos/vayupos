@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 class ExpenseBase(BaseModel):
@@ -26,7 +26,7 @@ class ExpenseUpdate(BaseModel):
 
 class Expense(ExpenseBase):
     id: int
-    created_at: Optional[date] = None
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

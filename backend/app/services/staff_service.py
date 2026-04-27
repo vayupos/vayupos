@@ -9,12 +9,16 @@ from app.schemas.staff import StaffCreate, StaffUpdate, StaffResponse
 
 class StaffService:
     @classmethod
-    def create_staff(cls, db: Session, staff_data: StaffCreate) -> Staff:
-        existing = db.query(Staff).filter(Staff.phone == staff_data.phone).first()
+    def create_staff(cls, db: Session, staff_data: StaffCreate, client_id: int) -> Staff:
+        existing = db.query(Staff).filter(
+            Staff.phone == staff_data.phone,
+            Staff.client_id == client_id
+        ).first()
         if existing:
             raise HTTPException(status_code=400, detail="Phone number already registered")
         
         staff = Staff(
+            client_id=client_id,
             name=staff_data.name,
             phone=staff_data.phone,
             role=staff_data.role,
@@ -29,10 +33,10 @@ class StaffService:
         return staff
 
     @classmethod
-    def get_staff_list(cls, db: Session, skip: int = 0, limit: int = 100, 
+    def get_staff_list(cls, db: Session, client_id: int, skip: int = 0, limit: int = 100, 
                       search: Optional[str] = None, role: Optional[str] = None, 
                       status: Optional[str] = None) -> List[Staff]:
-        query = db.query(Staff)
+        query = db.query(Staff).filter(Staff.client_id == client_id)
         if search:
             search_like = f"%{search}%"
             query = query.filter((Staff.name.ilike(search_like)) | (Staff.phone.contains(search)))
@@ -44,19 +48,21 @@ class StaffService:
         return query.offset(skip).limit(limit).all()
 
     @classmethod
-    def get_staff_by_id(cls, db: Session, staff_id: int) -> Optional[Staff]:
-        return db.query(Staff).filter(Staff.id == staff_id).first()
+    def get_staff_by_id(cls, db: Session, staff_id: int, client_id: int) -> Optional[Staff]:
+        return db.query(Staff).filter(Staff.id == staff_id, Staff.client_id == client_id).first()
 
     @classmethod
-    def update_staff(cls, db: Session, staff_id: int, staff_data: StaffUpdate) -> Optional[Staff]:
-        staff = db.query(Staff).filter(Staff.id == staff_id).first()
+    def update_staff(cls, db: Session, staff_id: int, staff_data: StaffUpdate, client_id: int) -> Optional[Staff]:
+        staff = cls.get_staff_by_id(db, staff_id, client_id)
         if not staff:
             return None
         
         update_data = staff_data.dict(exclude_unset=True)
         if 'phone' in update_data:
             existing = db.query(Staff).filter(
-                Staff.phone == update_data['phone'], Staff.id != staff_id
+                Staff.phone == update_data['phone'], 
+                Staff.id != staff_id,
+                Staff.client_id == client_id
             ).first()
             if existing:
                 raise HTTPException(status_code=400, detail="Phone number already registered")
@@ -73,9 +79,9 @@ class StaffService:
         return staff
 
     @classmethod
-    def delete_staff(cls, db: Session, staff_id: int) -> bool:
+    def delete_staff(cls, db: Session, staff_id: int, client_id: int) -> bool:
         try:
-            staff = db.query(Staff).filter(Staff.id == staff_id).first()
+            staff = cls.get_staff_by_id(db, staff_id, client_id)
             if not staff:
                 return False
             staff.is_active = False
@@ -87,13 +93,16 @@ class StaffService:
             raise
 
     @classmethod
-    def get_upcoming_salaries(cls, db: Session) -> List[dict]:
+    def get_upcoming_salaries(cls, db: Session, client_id: int) -> List[dict]:
         """
         Returns staff members whose salary is due within the next 30 days
         (including overdue, due today, and upcoming)
         """
         try:
-            active_staff = db.query(Staff).filter(Staff.is_active == True).all()
+            active_staff = db.query(Staff).filter(
+                Staff.is_active == True,
+                Staff.client_id == client_id
+            ).all()
             
             salary_entries = []
             today = datetime.now().date()
@@ -181,8 +190,8 @@ class StaffService:
             raise
 
     @classmethod
-    def mark_salary_paid(cls, db: Session, staff_id: int) -> bool:
-        staff = db.query(Staff).filter(Staff.id == staff_id).first()
+    def mark_salary_paid(cls, db: Session, staff_id: int, client_id: int) -> bool:
+        staff = cls.get_staff_by_id(db, staff_id, client_id)
         if not staff:
             return False
         
@@ -203,6 +212,7 @@ class StaffService:
 
         # Create the expense record
         expense = ExpenseModel(
+            client_id=client_id,
             title=f"Salary: {staff.name}",
             category="Salaries & Wages",
             amount=float(staff.salary),

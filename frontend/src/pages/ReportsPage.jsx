@@ -6,8 +6,9 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-// API Configuration - Using environment variables
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
+import axios_api from "../api/axios";
+
+// Removed local API_BASE_URL - using shared axios instance
 
 const ReportsPage = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -43,10 +44,7 @@ const ReportsPage = () => {
     };
   }, [isExportOpen]);
 
-  // Helper function to get auth token from localStorage
-  const getAuthToken = () => {
-    return localStorage.getItem('access_token') || '';
-  };
+  // Removed getAuthToken - using shared axios instance
 
   const [filters, setFilters] = useState({
     reportType: 'Sales',
@@ -80,31 +78,7 @@ const ReportsPage = () => {
 
   const COLORS = ['#14b8a6', '#0d9488', '#0f766e'];
 
-  // Helper function to make authenticated API calls
-  const fetchWithAuth = async (url, options = {}) => {
-    const token = getAuthToken();
-
-    if (!token) {
-      throw new Error('No authentication token found. Please login again.');
-    }
-
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        ...options.headers,
-      }
-    });
-
-    // Handle 401 Unauthorized - token expired or invalid
-    if (response.status === 401) {
-      localStorage.removeItem('access_token');
-      throw new Error('Session expired. Please login again.');
-    }
-
-    return response;
-  };
+  // Removed fetchWithAuth - using shared axios instance which handles this automatically
 
   // Fetch Sales Report - FIXED VERSION
   const fetchSalesReport = async () => {
@@ -112,25 +86,13 @@ const ReportsPage = () => {
       setLoading(true);
       setError(null);
 
-      const response = await fetchWithAuth(
-        `${API_BASE_URL}/reports/sales?days=${filters.days}&group_by=${filters.view}`
-      );
+      const response = await axios_api.get('/reports/sales', {
+        params: { days: filters.days, group_by: filters.view }
+      });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Sales API Error:', response.status, errorText);
-        throw new Error(`Failed to fetch sales report (${response.status})`);
-      }
-
-      const data = await response.json();
+      const data = response.data;
       console.log('🔍 RAW Sales API Response:', data);
-      console.log('🔍 Is Array?', Array.isArray(data));
-      console.log('🔍 Data Type:', typeof data);
-      if (data && typeof data === 'object') {
-        console.log('🔍 Data Keys:', Object.keys(data));
-      }
 
-      // Handle different response formats - check all possible structures
       let salesArray = [];
       if (Array.isArray(data)) {
         salesArray = data;
@@ -142,13 +104,6 @@ const ReportsPage = () => {
         salesArray = data.items;
       }
 
-      console.log('🔍 Extracted Sales Array:', salesArray);
-      console.log('🔍 Sales Array Length:', salesArray.length);
-      if (salesArray.length > 0) {
-        console.log('🔍 First Item Structure:', salesArray[0]);
-      }
-
-      // Transform the API response to match your UI structure
       if (salesArray && salesArray.length > 0) {
         const transformedData = salesArray.map(item => {
           const gross = safeNum(item.gross_sales || item.total_sales);
@@ -164,10 +119,8 @@ const ReportsPage = () => {
           };
         });
 
-        console.log('✅ Transformed Sales Data:', transformedData);
         setSalesData(transformedData);
 
-        // Prepare chart data
         const chartData = salesArray.map(item => {
           const gross = safeNum(item.gross_sales || item.total_sales);
           const disc = safeNum(item.discounts);
@@ -178,15 +131,10 @@ const ReportsPage = () => {
           };
         });
 
-        console.log('✅ Sales Chart Data:', chartData);
-        setSalesChartData([...chartData]); // Force new array reference
+        setSalesChartData([...chartData]);
 
-        // Calculate key metrics
         const totalSales = salesArray.reduce((sum, item) => sum + safeNum(item.gross_sales || item.total_sales), 0);
         const totalOrders = salesArray.reduce((sum, item) => sum + safeNum(item.order_count || item.orders), 0);
-        const totalDiscounts = salesArray.reduce((sum, item) => sum + safeNum(item.discounts), 0);
-
-        console.log('✅ Calculated Metrics - Sales:', totalSales, 'Orders:', totalOrders);
 
         setKeyMetrics(prev => ({
           ...prev,
@@ -195,101 +143,79 @@ const ReportsPage = () => {
           avgOrderValue: formatCurrency(totalOrders > 0 ? totalSales / totalOrders : 0)
         }));
       } else {
-        console.warn('⚠️ No sales data found in API response');
-        console.log('💡 Attempting to calculate sales from orders...');
-
-        // Fallback: Calculate sales from orders
+        console.warn('⚠️ No sales data found in API response, attempting fallback...');
         try {
-          const ordersResponse = await fetchWithAuth(`${API_BASE_URL}/orders?limit=1000`);
-          if (ordersResponse.ok) {
-            const ordersData = await ordersResponse.json();
-            const ordersArray = Array.isArray(ordersData) ? ordersData :
-              (ordersData.data || ordersData.results || []);
+          const ordersResponse = await axios_api.get('/orders', { params: { limit: 1000 } });
+          const ordersData = ordersResponse.data;
+          const ordersArray = Array.isArray(ordersData) ? ordersData : (ordersData.data || ordersData.results || []);
 
-            if (ordersArray.length > 0) {
-              // Filter by date range
-              const endDate = new Date();
-              const startDate = new Date();
-              startDate.setDate(startDate.getDate() - filters.days);
+          if (ordersArray.length > 0) {
+            const endDate = new Date();
+            const startDate = new Date();
+            startDate.setDate(startDate.getDate() - filters.days);
 
-              const filteredOrders = ordersArray.filter(order => {
-                const orderDate = new Date(order.created_at || order.order_date);
-                return orderDate >= startDate && orderDate <= endDate;
-              });
+            const filteredOrders = ordersArray.filter(order => {
+              const orderDate = new Date(order.created_at || order.order_date);
+              return orderDate >= startDate && orderDate <= endDate;
+            });
 
-              // Group by date/week/month based on filters.view
-              const groupedData = {};
-              filteredOrders.forEach(order => {
-                const orderDate = new Date(order.created_at || order.order_date);
-                let period;
+            const groupedData = {};
+            filteredOrders.forEach(order => {
+              const orderDate = new Date(order.created_at || order.order_date);
+              let period;
+              if (filters.view === 'day') {
+                period = orderDate.toISOString().split('T')[0];
+              } else if (filters.view === 'week') {
+                const weekNum = Math.ceil((orderDate.getDate()) / 7);
+                period = `Week ${weekNum}`;
+              } else {
+                period = orderDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+              }
 
-                if (filters.view === 'day') {
-                  period = orderDate.toISOString().split('T')[0];
-                } else if (filters.view === 'week') {
-                  const weekNum = Math.ceil((orderDate.getDate()) / 7);
-                  period = `Week ${weekNum}`;
-                } else {
-                  period = orderDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-                }
+              if (!groupedData[period]) {
+                groupedData[period] = { orders: 0, grossSales: 0, discounts: 0 };
+              }
+              groupedData[period].orders += 1;
+              groupedData[period].grossSales += safeNum(order.total || order.total_amount);
+              groupedData[period].discounts += safeNum(order.discount);
+            });
 
-                if (!groupedData[period]) {
-                  groupedData[period] = {
-                    orders: 0,
-                    grossSales: 0,
-                    discounts: 0
-                  };
-                }
+            const calculatedSalesData = Object.entries(groupedData)
+              .map(([period, d]) => ({
+                period: period.includes('-') && period.length >= 10 ? formatDateTime(period).split(' | ')[0] : period,
+                orders: d.orders,
+                grossSales: formatCurrency(d.grossSales),
+                discounts: formatCurrency(d.discounts),
+                net: formatCurrency(d.grossSales - d.discounts),
+                grossSalesNum: d.grossSales,
+                netNum: d.grossSales - d.discounts
+              }))
+              .sort((a, b) => a.period.localeCompare(b.period));
 
-                groupedData[period].orders += 1;
-                groupedData[period].grossSales += safeNum(order.total || order.total_amount);
-                groupedData[period].discounts += safeNum(order.discount);
-              });
+            setSalesData(calculatedSalesData);
 
-              // Convert to array
-              const calculatedSalesData = Object.entries(groupedData)
-                .map(([period, data]) => ({
-                  period: period.includes('-') && period.length >= 10 ? formatDateTime(period).split(' | ')[0] : period,
-                  orders: data.orders,
-                  grossSales: formatCurrency(data.grossSales),
-                  discounts: formatCurrency(data.discounts),
-                  net: formatCurrency(data.grossSales - data.discounts),
-                  grossSalesNum: data.grossSales,
-                  netNum: data.grossSales - data.discounts
-                }))
-                .sort((a, b) => a.period.localeCompare(b.period));
+            const chartData = calculatedSalesData.map(item => ({
+              month: item.period,
+              sales: item.grossSalesNum,
+              net: item.netNum
+            }));
 
-              console.log('✅ Calculated Sales Data from Orders:', calculatedSalesData);
-              setSalesData(calculatedSalesData);
+            setSalesChartData([...chartData]);
 
-              // Chart data
-              const chartData = calculatedSalesData.map(item => ({
-                month: item.period,
-                sales: item.grossSalesNum,
-                net: item.netNum
-              }));
+            const totalSalesFallback = calculatedSalesData.reduce((sum, item) => sum + item.grossSalesNum, 0);
+            const totalOrdersFallback = calculatedSalesData.reduce((sum, item) => sum + item.orders, 0);
 
-              console.log('✅ Calculated Chart Data:', chartData);
-              setSalesChartData([...chartData]);
-
-              // Update metrics
-              const totalSales = calculatedSalesData.reduce((sum, item) => sum + item.grossSalesNum, 0);
-              const totalOrders = calculatedSalesData.reduce((sum, item) => sum + item.orders, 0);
-
-              setKeyMetrics(prev => ({
-                ...prev,
-                totalSales: formatCurrency(totalSales),
-                totalOrders: totalOrders.toString(),
-                avgOrderValue: formatCurrency(totalOrders > 0 ? totalSales / totalOrders : 0)
-              }));
-
-              return; // Exit successfully
-            }
+            setKeyMetrics(prev => ({
+              ...prev,
+              totalSales: formatCurrency(totalSalesFallback),
+              totalOrders: totalOrdersFallback.toString(),
+              avgOrderValue: formatCurrency(totalOrdersFallback > 0 ? totalSalesFallback / totalOrdersFallback : 0)
+            }));
+            return;
           }
         } catch (fallbackErr) {
           console.error('❌ Fallback calculation failed:', fallbackErr);
         }
-
-        // If all else fails, show empty
         setSalesData([]);
         setSalesChartData([]);
       }
@@ -304,16 +230,10 @@ const ReportsPage = () => {
   // Fetch Payment Methods Report
   const fetchPaymentMethodsReport = async () => {
     try {
-      const response = await fetchWithAuth(
-        `${API_BASE_URL}/reports/payment-methods?days=${filters.days}`
-      );
-
-      if (!response.ok) {
-        console.error('Payment methods API error:', response.status);
-        throw new Error('Failed to fetch payment methods report');
-      }
-
-      const data = await response.json();
+      const response = await axios_api.get('/reports/payment-methods', {
+        params: { days: filters.days }
+      });
+      const data = response.data;
       console.log('🔍 Payment methods data:', data);
 
       // Handle different response formats
@@ -362,16 +282,8 @@ const ReportsPage = () => {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - filters.days);
 
-      const response = await fetchWithAuth(
-        `${API_BASE_URL}/orders?limit=1000`
-      );
-
-      if (!response.ok) {
-        console.error('Orders API error:', response.status);
-        throw new Error('Failed to fetch orders');
-      }
-
-      const data = await response.json();
+      const response = await axios_api.get('/orders', { params: { limit: 1000 } });
+      const data = response.data;
       console.log('🔍 RAW Orders API Response:', data);
       console.log('🔍 Orders - Is Array?', Array.isArray(data));
 
@@ -500,16 +412,8 @@ const ReportsPage = () => {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - filters.days);
 
-      const response = await fetchWithAuth(
-        `${API_BASE_URL}/expenses/?limit=1000`
-      );
-
-      if (!response.ok) {
-        console.error('Expenses API error:', response.status);
-        throw new Error('Failed to fetch expenses');
-      }
-
-      const data = await response.json();
+      const response = await axios_api.get('/expenses/', { params: { limit: 1000 } });
+      const data = response.data;
       console.log('🔍 RAW Expenses data:', data);
 
       // Handle different response formats
@@ -604,16 +508,10 @@ const ReportsPage = () => {
   // Fetch Product Sales Report
   const fetchProductSalesReport = async () => {
     try {
-      const response = await fetchWithAuth(
-        `${API_BASE_URL}/reports/products-sales?days=${filters.days}&limit=50`
-      );
-
-      if (!response.ok) {
-        console.error('Product sales API error:', response.status);
-        throw new Error('Failed to fetch product sales report');
-      }
-
-      const data = await response.json();
+      const response = await axios_api.get('/reports/products-sales', {
+        params: { days: filters.days, limit: 50 }
+      });
+      const data = response.data;
       console.log('Product sales data:', data);
 
       const productsArray = Array.isArray(data) ? data :
@@ -639,16 +537,10 @@ const ReportsPage = () => {
   const fetchDailySummary = async () => {
     try {
       const today = new Date().toISOString().split('T')[0];
-      const response = await fetchWithAuth(
-        `${API_BASE_URL}/reports/daily-summary?date=${today}`
-      );
-
-      if (!response.ok) {
-        console.error('Daily summary API error:', response.status);
-        return;
-      }
-
-      const data = await response.json();
+      const response = await axios_api.get('/reports/daily-summary', {
+        params: { date: today }
+      });
+      const data = response.data;
       console.log('Daily summary data:', data);
 
       if (data && data.gross_margin) {
@@ -685,11 +577,6 @@ const ReportsPage = () => {
 
   // Initial load
   useEffect(() => {
-    const token = getAuthToken();
-    if (!token) {
-      setError('No authentication token found. Please login first.');
-      return;
-    }
     fetchAllReports();
   }, []);
 

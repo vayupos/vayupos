@@ -232,3 +232,37 @@ class ReportService:
             }
             for c in customers
         ]
+    @staticmethod
+    def get_order_type_stats(db: Session, client_id: int, days: int = 30) -> Dict:
+        """Get order type breakdown (dine-in vs takeaway)"""
+        from app.models.order import OrderType
+        
+        start_date = datetime.utcnow() - timedelta(days=days)
+
+        stats = db.query(
+            Order.order_type,
+            func.count(Order.id).label("count")
+        ).filter(
+            Order.client_id == client_id,
+            Order.created_at >= start_date,
+            Order.status != OrderStatus.CANCELLED
+        ).group_by(Order.order_type).all()
+
+        results = {
+            "dine_in": {"count": 0, "percentage": 0},
+            "takeaway": {"count": 0, "percentage": 0}
+        }
+
+        total_count = sum(s[1] for s in stats)
+
+        for s in stats:
+            order_type = str(s[0].value) if hasattr(s[0], 'value') else str(s[0])
+            if order_type in results:
+                count = s[1]
+                percentage = (count / total_count * 100) if total_count > 0 else 0
+                results[order_type] = {
+                    "count": count,
+                    "percentage": round(percentage, 1)
+                }
+
+        return results

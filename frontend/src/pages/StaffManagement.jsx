@@ -18,42 +18,9 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
+import axios_api from "../api/axios";
 
-const getAuthHeaders = () => {
-    const tokenKeys = ['access_token', 'acces_Token', 'token', 'authToken', 'jwt', 'bearer', 'Token'];
-    let token = null;
-    let tokenKey = null;
-
-    for (const key of tokenKeys) {
-        const value = localStorage.getItem(key);
-        if (value && value.length > 10) {
-            token = value;
-            tokenKey = key;
-            break;
-        }
-    }
-
-    console.log('🔑 Auth Check:', {
-        found: !!token,
-        key: tokenKey,
-        length: token ? token.length : 0,
-        preview: token ? token.substring(0, 20) + '...' : 'none'
-    });
-
-    if (!token) {
-        console.error('❌ No authentication token found');
-        console.log('📦 Available localStorage keys:', Object.keys(localStorage));
-        return {
-            'Content-Type': 'application/json',
-        };
-    }
-
-    return {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-    };
-};
+// Removed local API_BASE_URL and getAuthHeaders - using shared axios instance
 
 const StaffManagement = () => {
     const [searchQuery, setSearchQuery] = useState('');
@@ -121,51 +88,25 @@ const StaffManagement = () => {
             setLoading(true);
             setError(null);
 
-            const params = new URLSearchParams();
+            const params = {};
 
             const trimmedSearch = searchQuery?.trim() || '';
             if (trimmedSearch) {
-                params.append('search', trimmedSearch);
+                params.search = trimmedSearch;
             }
 
             if (roleFilter && roleFilter !== 'All') {
-                params.append('role', roleFilter);
+                params.role = roleFilter;
             }
 
             if (statusFilter) {
-                params.append('status', statusFilter);
+                params.status = statusFilter;
             }
 
-            const queryString = params.toString();
-            const url = `${API_BASE_URL}/staff${queryString ? '?' + queryString : ''}`;
+            console.log('📡 Fetching staff with params:', params);
 
-            console.log('📡 Fetching from:', url);
-
-            const headers = getAuthHeaders();
-
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: headers,
-            });
-
-            console.log('📥 Response:', response.status, response.statusText);
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error('❌ API Error:', response.status, errorText);
-
-                if (response.status === 401 || response.status === 403) {
-                    console.error('🔒 Auth failed - Status:', response.status);
-                    setError(`Authentication failed (${response.status}). Please check if you're logged in.`);
-                    setStaff([]);
-                    setLoading(false);
-                    return;
-                }
-
-                throw new Error(`API failed (${response.status}): ${errorText}`);
-            }
-
-            const data = await response.json();
+            const response = await axios_api.get('/staff', { params });
+            const data = response.data;
             console.log('✅ Received staff data:', data);
 
             const staffArray = Array.isArray(data) ? data : (data.data || []);
@@ -209,20 +150,8 @@ const StaffManagement = () => {
     const fetchUpcomingSalaries = async () => {
         try {
             console.log('📡 Fetching upcoming salaries...');
-            const response = await fetch(`${API_BASE_URL}/staff/upcoming-salaries`, {
-                method: 'GET',
-                headers: getAuthHeaders(),
-            });
-
-            if (!response.ok) {
-                if (response.status === 401 || response.status === 403) {
-                    console.warn('⚠️ Auth failed for upcoming salaries');
-                    return;
-                }
-                throw new Error('Failed to fetch upcoming salaries');
-            }
-
-            const data = await response.json();
+            const response = await axios_api.get('/staff/upcoming-salaries');
+            const data = response.data;
             console.log('✅ Upcoming salaries data:', data);
 
             const transformedSalaries = data.map(entry => ({
@@ -381,31 +310,8 @@ const StaffManagement = () => {
 
             console.log('➕ Adding staff:', requestBody);
 
-            const response = await fetch(`${API_BASE_URL}/staff`, {
-                method: 'POST',
-                headers: getAuthHeaders(),
-                body: JSON.stringify(requestBody),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-                console.error('❌ Server response:', errorData);
-
-                if (response.status === 401 || response.status === 403) {
-                    throw new Error('Authentication failed. Please login again.');
-                }
-
-                if (response.status === 422) {
-                    const errorMsg = typeof errorData.detail === 'string'
-                        ? errorData.detail
-                        : JSON.stringify(errorData.detail);
-                    throw new Error(`Validation error: ${errorMsg}`);
-                }
-
-                throw new Error(errorData.detail || 'Failed to add staff');
-            }
-
-            const data = await response.json();
+            const response = await axios_api.post('/staff', requestBody);
+            const data = response.data;
             console.log('✅ Staff added:', data);
 
             setNewStaff({
@@ -472,28 +378,7 @@ const StaffManagement = () => {
 
             console.log('✏️ Updating staff:', requestBody);
 
-            const response = await fetch(`${API_BASE_URL}/staff/${editingStaff.id}`, {
-                method: 'PUT',
-                headers: getAuthHeaders(),
-                body: JSON.stringify(requestBody),
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-
-                if (response.status === 401 || response.status === 403) {
-                    throw new Error('Authentication failed. Please login again.');
-                }
-
-                if (response.status === 422) {
-                    const errorMsg = typeof errorData.detail === 'string'
-                        ? errorData.detail
-                        : JSON.stringify(errorData.detail);
-                    throw new Error(`Validation error: ${errorMsg}`);
-                }
-
-                throw new Error(errorData.detail || 'Failed to update staff');
-            }
+            const response = await axios_api.put(`/staff/${editingStaff.id}`, requestBody);
 
             setShowEditModal(false);
             setEditingStaff(null);
@@ -513,17 +398,7 @@ const StaffManagement = () => {
             try {
                 setLoading(true);
 
-                const response = await fetch(`${API_BASE_URL}/staff/${id}`, {
-                    method: 'DELETE',
-                    headers: getAuthHeaders(),
-                });
-
-                if (!response.ok) {
-                    if (response.status === 401 || response.status === 403) {
-                        throw new Error('Authentication failed. Please login again.');
-                    }
-                    throw new Error('Failed to delete staff');
-                }
+                await axios_api.delete(`/staff/${id}`);
 
                 alert('Staff member deleted successfully!');
 
@@ -549,19 +424,8 @@ const StaffManagement = () => {
         setRemovingIds(prev => new Set([...prev, staffId]));
 
         try {
-            const response = await fetch(`${API_BASE_URL}/staff/salaries/${staffId}/add`, {
-                method: 'POST',
-                headers: getAuthHeaders(),
-            });
-
-            if (!response.ok) {
-                if (response.status === 401 || response.status === 403) {
-                    throw new Error('Authentication failed. Please login again.');
-                }
-                throw new Error('Failed to add salary entry');
-            }
-
-            const message = await response.json();
+            const response = await axios_api.post(`/staff/salaries/${staffId}/add`);
+            const message = response.data;
             console.log('✅ Salary added successfully');
             alert(typeof message === 'string' ? message : 'Salary entry added successfully!');
 

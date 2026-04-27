@@ -5,113 +5,36 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api/v1';
+import axios_api from "../api/axios";
 
-// API Helper Functions
+// API Helper Functions wrapping the shared axios instance
 const api = {
     async getExpenses(skip = 0, limit = 100) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/expenses?skip=${skip}&limit=${limit}`);
-            if (!response.ok) throw new Error('Failed to fetch expenses');
-            return await response.json();
-        } catch (error) {
-            console.error('Error fetching expenses:', error);
-            throw error;
-        }
+        const res = await axios_api.get("/expenses/", { params: { skip, limit } });
+        return res.data;
     },
-
     async createExpense(expenseData) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/expenses`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(expenseData)
-            });
-            if (!response.ok) throw new Error('Failed to create expense');
-            return await response.json();
-        } catch (error) {
-            console.error('Error creating expense:', error);
-            throw error;
-        }
+        const res = await axios_api.post("/expenses/", expenseData);
+        return res.data;
     },
-
     async getExpense(expenseId) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/expenses/${expenseId}`);
-            if (!response.ok) throw new Error('Failed to fetch expense');
-            return await response.json();
-        } catch (error) {
-            console.error('Error fetching expense:', error);
-            throw error;
-        }
+        const res = await axios_api.get(`/expenses/${expenseId}/`);
+        return res.data;
     },
-
     async updateExpense(expenseId, updateData) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/expenses/${expenseId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(updateData)
-            });
-            if (!response.ok) throw new Error('Failed to update expense');
-            return await response.json();
-        } catch (error) {
-            console.error('Error updating expense:', error);
-            throw error;
-        }
+        const res = await axios_api.put(`/expenses/${expenseId}/`, updateData);
+        return res.data;
     },
-
     async deleteExpense(expenseId) {
-        try {
-            const response = await fetch(`${API_BASE_URL}/expenses/${expenseId}`, {
-                method: 'DELETE'
-            });
-            if (!response.ok) throw new Error('Failed to delete expense');
-            return await response.json();
-        } catch (error) {
-            console.error('Error deleting expense:', error);
-            throw error;
-        }
+        const res = await axios_api.delete(`/expenses/${expenseId}/`);
+        return res.data;
     },
-
-    // ✅ Fetch upcoming staff salaries
     async getUpcomingStaffSalaries() {
         try {
-            const tokenKeys = ['access_token', 'acces_Token', 'token', 'authToken'];
-            let token = null;
-
-            for (const key of tokenKeys) {
-                const value = localStorage.getItem(key);
-                if (value && value.length > 10) {
-                    token = value;
-                    break;
-                }
-            }
-
-            const headers = {
-                'Content-Type': 'application/json',
-            };
-
-            if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
-            }
-
-            const response = await fetch(`${API_BASE_URL}/staff/upcoming-salaries`, {
-                method: 'GET',
-                headers: headers,
-            });
-
-            if (!response.ok) {
-                console.warn('Failed to fetch upcoming salaries');
-                return [];
-            }
-            return await response.json();
+            const res = await axios_api.get("/staff/upcoming-salaries");
+            return res.data;
         } catch (error) {
-            console.error('Error fetching upcoming staff salaries:', error);
+            console.error("Error fetching upcoming salaries:", error);
             return [];
         }
     }
@@ -205,7 +128,7 @@ const ExpensesManagement = () => {
 
     const [formData, setFormData] = useState({
         title: '',
-        date: new Date().toLocaleDateString('en-CA') + 'T' + new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+        date: new Date().toLocaleDateString('en-CA'),
         category: '',
         account: 'Cashbook',
         amount: '0.00',
@@ -417,7 +340,6 @@ const ExpensesManagement = () => {
         }
     };
 
-    // ✅ FIXED: Handle adding salary from upcoming payments via backend only
     const handleAddNow = async (staffId) => {
         const payment = autoAddedPayments.find(p => p.staffId === staffId);
         if (!payment) return;
@@ -428,29 +350,8 @@ const ExpensesManagement = () => {
         setRemovingIds(prev => new Set([...prev, staffId]));
 
         try {
-            // Call backend to mark salary as paid and CREATE the expense record
-            const tokenKeys = ['access_token', 'acces_Token', 'token', 'authToken'];
-            let token = null;
-
-            for (const key of tokenKeys) {
-                const value = localStorage.getItem(key);
-                if (value && value.length > 10) {
-                    token = value;
-                    break;
-                }
-            }
-
-            const response = await fetch(`${API_BASE_URL}/staff/salaries/${staffId}/add`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                }
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to process salary entry on backend');
-            }
+            // Use shared axios instance which handles authentication automatically
+            const response = await axios_api.post(`/staff/salaries/${staffId}/add`);
 
             console.log('✅ Salary processed successfully on backend');
             alert('Salary entry added to expenses successfully!');
@@ -467,7 +368,7 @@ const ExpensesManagement = () => {
                 newSet.delete(staffId);
                 return newSet;
             });
-            alert('Failed to add salary entry.');
+            alert('Failed to add salary entry: ' + (error.response?.data?.detail || error.message));
         }
     };
 
@@ -507,7 +408,7 @@ const ExpensesManagement = () => {
                 title: formData.title,
                 category: formData.category,
                 amount: parseFloat(formData.amount),
-                date: formData.date,
+                date: formData.date.split('T')[0],
                 subtitle: formData.subtitle,
                 type: formData.type,
                 account: formData.account,

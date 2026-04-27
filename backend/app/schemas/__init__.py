@@ -1,5 +1,10 @@
 """Pydantic schemas for API request/response validation"""
 from app.schemas.response import *
+from app.schemas.ingredient import (
+    IngredientBase, IngredientCreate, IngredientUpdate, IngredientResponse,
+    ProductIngredientBase, ProductIngredientCreate, ProductIngredientResponse,
+    StockBase, StockUpdate, StockResponse, AddStockRequest
+)
 from app.schemas.dish_template import (    # ← ADD THIS
     DishTemplateBase,
     DishTemplateCreate,
@@ -57,4 +62,10 @@ __all__ = [
     "ForgotPasswordRequest",
     "ResetPasswordRequest",
     "TokenResponse",
+    # Ingredient
+    "IngredientBase", "IngredientCreate", "IngredientUpdate", "IngredientResponse",
+    "ProductIngredientBase", "ProductIngredientCreate", "ProductIngredientResponse",
+    "StockBase", "StockUpdate", "StockResponse", "AddStockRequest",
+    # KOT
+    "KOTResponse", "KOTItemUpdateStatus", "KOTItemUpdatePriority", "KOTItemCancel", "KOTItemResponse"
 ]

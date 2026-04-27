@@ -80,6 +80,7 @@ const Register = () => {
 
     try {
       setSubmitting(true);
+      setErrors({}); // Clear previous errors
 
       const payload = {
         username: formData.username.trim().toLowerCase(),
@@ -87,26 +88,43 @@ const Register = () => {
         full_name: formData.name.trim(),
         phone_number: formData.number.trim(),
         password: formData.password,
-        // backend sets role = "cashier" by default
       };
 
       const res = await api.post("/auth/register", payload);
-      console.log("REGISTER RESPONSE:", res.status, res.data);
-
-      // treat 200/201 as success
+      
       if (res.status === 201 || res.status === 200) {
         alert("Account created successfully!");
-        // after signup, usually go to login page
         navigate("/login", { replace: true });
-      } else {
-        alert("Registration failed. Please try again.");
       }
     } catch (err) {
-      console.error(
-        "REGISTER ERROR RAW:",
-        JSON.stringify(err?.response?.data || err.message, null, 2)
-      );
-      alert("Registration failed. Check console and send me the JSON.");
+      console.error("REGISTER ERROR:", err);
+      const errorData = err?.response?.data;
+      
+      if (errorData?.detail) {
+        // Handle string detail (FastAPI standard)
+        const detail = errorData.detail;
+        if (typeof detail === 'string') {
+          if (detail.toLowerCase().includes("username")) {
+            setErrors({ username: detail });
+          } else if (detail.toLowerCase().includes("email")) {
+            setErrors({ email: detail });
+          } else if (detail.toLowerCase().includes("phone")) {
+            setErrors({ number: detail });
+          } else {
+            setErrors({ submit: detail });
+          }
+        } else if (Array.isArray(detail)) {
+          // Handle FastAPI validation errors (list of objects)
+          const newErrors = {};
+          detail.forEach(errItem => {
+            const field = errItem.loc[errItem.loc.length - 1];
+            newErrors[field === 'phone_number' ? 'number' : field] = errItem.msg;
+          });
+          setErrors(newErrors);
+        }
+      } else {
+        setErrors({ submit: "Registration failed. Please check your internet connection." });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -123,6 +141,11 @@ const Register = () => {
           </div>
 
           <form onSubmit={handleSubmit}>
+            {errors.submit && (
+              <div className="mb-6 p-3 bg-red-500/10 border border-red-500/50 rounded-lg">
+                <p className="text-red-500 text-sm text-center">{errors.submit}</p>
+              </div>
+            )}
             {/* Username */}
             <div className="mb-6">
               <label className="block text-white font-medium mb-2">

@@ -18,7 +18,7 @@ def global_search(
     """Search across products, customers, and orders"""
     
     # Search Products
-    products = ProductService.search_products(db, q)
+    products = ProductService.search_products(db, int(current_user["client_id"]), q)
     product_results = [{
         "id": p.id,
         "name": p.name,
