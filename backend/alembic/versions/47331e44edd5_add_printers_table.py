@@ -1,7 +1,7 @@
 """Add printers table
 
 Revision ID: 47331e44edd5
-Revises: 6f5e3056cfc2
+Revises: a8b3549f762b
 Create Date: 2026-04-26 20:22:02.967589
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '47331e44edd5'
-down_revision: Union[str, Sequence[str], None] = '6f5e3056cfc2'
+down_revision: Union[str, Sequence[str], None] = 'a8b3549f762b'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

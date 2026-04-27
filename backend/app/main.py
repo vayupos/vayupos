@@ -67,29 +67,31 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 # -------------------- STARTUP --------------------
 @app.on_event("startup")
 def startup_event():
+    print("[INFO] Starting application startup sequence...")
     try:
+        import sys
         backend_dir = Path(__file__).parent.parent
         env = os.environ.copy()
         env["PYTHONPATH"] = str(backend_dir)
 
+        print("[INFO] Running database migrations...")
+        # Use sys.executable to ensure we use the same python environment
+        # and don't capture output so we can see it in real-time if it hangs
         result = subprocess.run(
-            ["alembic", "upgrade", "head"],
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
             cwd=str(backend_dir),
             env=env,
-            capture_output=True,
-            text=True
+            capture_output=False, 
         )
 
         if result.returncode == 0:
             print("[OK] Database migrations completed")
-        elif "already exists" in result.stderr:
-            # Tables already exist (e.g., in production database)
-            print("[OK] Database schema already exists, skipping migrations")
         else:
-            print(f"[WARN] Migration warning: {result.stderr}")
+            print(f"[WARN] Migration process exited with code {result.returncode}")
 
     except Exception as e:
         print(f"[ERR] Could not run migrations: {str(e)}")
+        traceback.print_exc()
 
     try:
         init_db()
