@@ -1,4 +1,5 @@
 """Database models for POS application"""
+from app.models.client import Client
 from app.models.user import User, UserRole
 from app.models.category import Category
 from app.models.product import Product
@@ -41,5 +42,6 @@ __all__ = [
       "PrintJob",
       "PasswordResetToken",
       "KOT",
-      "KOTItem"
+      "KOTItem",
+      "Client",
 ]

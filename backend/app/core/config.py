@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     DEFAULT_PRINTER_IP: str = "192.168.1.150"
     DEFAULT_PRINTER_PORT: int = 9100
     
+    # Admin
+    ADMIN_SECRET_KEY: str = "change-me-in-production"
+
     # SMTP Configuration
     SMTP_HOST: Optional[str] = None
     SMTP_PORT: int = 587

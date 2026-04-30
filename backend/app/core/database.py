@@ -46,6 +46,7 @@ from app.models.expense import Expense
 from app.models.order_coupon import OrderCoupon
 from app.models.staff import Staff
 from app.models.password_reset_token import PasswordResetToken
+from app.models.client import Client
 
 # Dependency to get DB session (Sync)
 def get_db():

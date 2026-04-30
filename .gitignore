@@ -62,3 +62,11 @@ frontend/dist/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Planning / design documents (not part of the codebase)
+ANTIGIRAVITY_IMPLEMENTATION_PROMPT.md
+FLOW_QUICK_REFERENCE.md
+IMPLEMENTATION_REQUIREMENTS.md
+SUPERADMIN_LANDING_IMPLEMENTATION.md
+SYSTEM_FLOW_DIAGRAM.md
+SYSTEM_FLOW_MERMAID.md

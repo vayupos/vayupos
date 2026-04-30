@@ -25,6 +25,9 @@ import Notifications from "./pages/Notifications";
 import SearchResults from "./pages/SearchResults";
 import KDS from "./pages/KDS";
 import Profile from './pages/Profile';
+import Settings from './pages/Settings';
+import SuperAdminLogin from './pages/SuperAdminLogin';
+import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import OrderDetails from './pages/OrderDetails';
 import PrintBill from './pages/PrintBill';
 import { Toaster } from '@/components/ui/toaster';
@@ -40,6 +43,13 @@ const ProtectedRoute = ({ children }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  return children;
+};
+
+// Superadmin Route Guard
+const SuperAdminRoute = ({ children }) => {
+  const isAuth = localStorage.getItem('isSuperAdminAuthenticated') === 'true';
+  if (!isAuth) return <Navigate to="/superadmin/login" replace />;
   return children;
 };
 
@@ -61,11 +71,12 @@ const AppContent = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Check if current route is auth route (login/register/forgot-password)
+  // Check if current route is auth route (login/register/forgot-password) or superadmin
   const isAuthRoute = location.pathname === '/login' ||
     location.pathname === '/register' ||
     location.pathname === '/forgot-password' ||
-    location.pathname === '/reset-password';
+    location.pathname === '/reset-password' ||
+    location.pathname.startsWith('/superadmin');
 
   useEffect(() => {
     // Initialize theme on mount
@@ -282,6 +293,26 @@ const AppContent = () => {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <Settings />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Superadmin routes — no restaurant sidebar/navbar */}
+            <Route path="/superadmin/login" element={<SuperAdminLogin />} />
+            <Route
+              path="/superadmin/dashboard"
+              element={
+                <SuperAdminRoute>
+                  <SuperAdminDashboard />
+                </SuperAdminRoute>
+              }
+            />
+            <Route path="/superadmin" element={<Navigate to="/superadmin/dashboard" replace />} />
 
             {/* 404 Route */}
             <Route path="*" element={<NotFound />} />

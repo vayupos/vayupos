@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, Text, false
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm import declarative_base
 import enum
@@ -33,6 +33,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     last_login = Column(DateTime, nullable=True)
+    is_superadmin = Column(Boolean, nullable=False, default=False)
 
     # Correct relationships
     orders = relationship("Order", back_populates="user", cascade="all, delete-orphan")

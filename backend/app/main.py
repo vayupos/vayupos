@@ -14,7 +14,9 @@ from app.core.database import init_db, get_db
 from app.api.v1 import (
     auth, users, products, categories,
     customers, orders, inventory, payment, reports,
-    coupons, dish_templates, upload, staff, expense, notification, search, print_jobs, ingredient, kot
+    coupons, dish_templates, upload, staff, expense, notification, search, print_jobs, ingredient, kot,
+    settings as settings_router, admin as admin_router,
+    superadmin as superadmin_router,
 )
 
 settings = get_settings()
@@ -286,5 +288,23 @@ try:
     print("[OK] KOT router included")
 except Exception as e:
     print(f"[ERR] Failed to include KOT router: {e}")
+
+try:
+    app.include_router(settings_router.router, prefix="/api/v1", tags=["Settings"])
+    print("[OK] Settings router included")
+except Exception as e:
+    print(f"[ERR] Failed to include settings router: {e}")
+
+try:
+    app.include_router(admin_router.router, prefix="/api/v1", tags=["Admin"])
+    print("[OK] Admin router included")
+except Exception as e:
+    print(f"[ERR] Failed to include admin router: {e}")
+
+try:
+    app.include_router(superadmin_router.router, prefix="/api/v1", tags=["Superadmin"])
+    print("[OK] Superadmin router included")
+except Exception as e:
+    print(f"[ERR] Failed to include superadmin router: {e}")
 
 print("[OK] All routers included")

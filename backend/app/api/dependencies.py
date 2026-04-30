@@ -52,6 +52,9 @@ def get_current_user(credentials: Optional[dict] = Depends(security)) -> dict:
             user_id = None
 
     client_id = payload.get("client_id")
+    is_superadmin = bool(payload.get("is_superadmin", False))
+
+    # Superadmin users have client_id=0 — allow that through
     if user_id is None or client_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -63,4 +66,15 @@ def get_current_user(credentials: Optional[dict] = Depends(security)) -> dict:
         "sub": str(user_id),
         "user_id": user_id,
         "client_id": int(client_id),
+        "is_superadmin": is_superadmin,
     }
+
+
+def get_superadmin_user(current_user: dict = Depends(get_current_user)) -> dict:
+    """Require the authenticated user to be a superadmin."""
+    if not current_user.get("is_superadmin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superadmin access required",
+        )
+    return current_user

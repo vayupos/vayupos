@@ -17,12 +17,13 @@ from app.core.security import create_access_token, create_refresh_token
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-@router.post("/register", response_model=UserResponse)
-def register(user_create: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user"""
-    # Public signup creates a new tenant so newly registered users don't see existing tenant data.
-    user = AuthService.create_user(db, user_create, create_new_client=True)
-    return user
+@router.post("/register", include_in_schema=False)
+def register():
+    """Self-registration is disabled. Use POST /api/v1/admin/register-restaurant."""
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Self-registration is disabled. Contact the administrator to create an account.",
+    )
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -43,7 +44,12 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
         )
 
     # Create tokens
-    access_payload = {"sub": str(user.id), "user_id": user.id, "client_id": user.client_id}
+    access_payload = {
+        "sub": str(user.id),
+        "user_id": user.id,
+        "client_id": user.client_id,
+        "is_superadmin": user.is_superadmin,
+    }
     access_token = create_access_token(data=access_payload)
     refresh_token = create_refresh_token(data={"sub": str(user.id)})
 
@@ -51,6 +57,7 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
+        "is_superadmin": user.is_superadmin,
     }
 
 
