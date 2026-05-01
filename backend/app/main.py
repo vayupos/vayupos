@@ -41,12 +41,8 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:4173",
     "http://127.0.0.1:4173",
-
-    # production frontend
-    "https://restaurant-vayu-pos.vercel.app",
-    
-    # Allow all localhost variations and frontend access
-    "*"  # For development - allows any origin
+    settings.FRONTEND_URL,
+    "https://vyoma-vayupos.pages.dev",
 ]
 
 app.add_middleware(

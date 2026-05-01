@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ValidationInfo
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -26,15 +26,16 @@ class CouponBase(BaseModel):
     description: Optional[str] = None
     is_first_order_only: bool = False
 
-    @validator("code")
+    @field_validator("code", mode="before")
+    @classmethod
     def code_uppercase(cls, v: str) -> str:
         return v.upper().strip()
 
-    @validator("discount_value")
-    def validate_discount(cls, v: float, values):
-        if "discount_type" in values:
-            if values["discount_type"] == DiscountType.PERCENTAGE and v > 100:
-                raise ValueError("Percentage discount cannot exceed 100%")
+    @field_validator("discount_value")
+    @classmethod
+    def validate_discount(cls, v: float, info: ValidationInfo) -> float:
+        if info.data.get("discount_type") == DiscountType.PERCENTAGE and v > 100:
+            raise ValueError("Percentage discount cannot exceed 100%")
         return v
 
 
@@ -42,9 +43,9 @@ class CouponBase(BaseModel):
 # Create — adds min_order_amount rounding rule (input only, not on DB reads)
 # ---------------------------------------------------------------------------
 class CouponCreate(CouponBase):
-    @validator("min_order_amount")
+    @field_validator("min_order_amount")
+    @classmethod
     def validate_min_order_amount(cls, v: float) -> float:
-        """Enforce rounded minimum order amounts (multiples of 50)."""
         if v and v % 50 != 0:
             raise ValueError(
                 f"Minimum order must be a rounded value (\u20b9100, \u20b9200, \u20b9300 etc.). "
@@ -70,9 +71,9 @@ class CouponUpdate(BaseModel):
     is_first_order_only: Optional[bool] = None
     description: Optional[str] = None
 
-    @validator("min_order_amount")
+    @field_validator("min_order_amount")
+    @classmethod
     def validate_min_order_amount(cls, v: Optional[float]) -> Optional[float]:
-        """Enforce rounded minimum order amounts (multiples of 50)."""
         if v is not None and v != 0 and v % 50 != 0:
             raise ValueError(
                 f"Minimum order must be a rounded value (\u20b9100, \u20b9200, \u20b9300 etc.). "

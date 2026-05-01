@@ -1,9 +1,9 @@
 import re
-from typing import Optional, List
+from typing import Optional, List, Annotated
 from datetime import datetime, time
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, EmailStr, validator, field_validator, condecimal
+from pydantic import BaseModel, Field, EmailStr, field_validator
 
 from app.models.user import UserRole
 from app.models.order import OrderStatus, OrderType
@@ -11,7 +11,7 @@ from app.models.payment import PaymentMethod, PaymentStatus
 from app.models.inventory_log import InventoryAction
 
 # Common decimal type for money (2 decimal places)
-Money = condecimal(max_digits=10, decimal_places=2)
+Money = Annotated[Decimal, Field(max_digits=10, decimal_places=2)]
 PASSWORD_REGEX = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$")
 
 # ============= User Schemas =============
@@ -199,16 +199,18 @@ class CustomerBase(BaseModel):
 class CustomerCreate(CustomerBase):
     """Customer creation schema"""
 
-    @validator("phone")
+    @field_validator("phone", mode="before")
+    @classmethod
     def validate_phone(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
+        if v is None or str(v).strip() == "":
             return v
-        if not PHONE_PATTERN.match(v):
+        if not PHONE_PATTERN.match(str(v)):
             raise ValueError("Phone must be 10-digit Indian mobile like 9876543210")
         return v
 
-    @validator("email")
-    def validate_email(cls, v: Optional[EmailStr]) -> Optional[EmailStr]:
+    @field_validator("email", mode="before")
+    @classmethod
+    def validate_email(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return v
         if not EMAIL_PATTERN.match(str(v)):
@@ -229,16 +231,18 @@ class CustomerUpdate(BaseModel):
     country: Optional[str] = None
     is_active: Optional[bool] = None
 
-    @validator("phone")
+    @field_validator("phone", mode="before")
+    @classmethod
     def validate_phone(cls, v: Optional[str]) -> Optional[str]:
-        if v is None or v.strip() == "":
+        if v is None or str(v).strip() == "":
             return v
-        if not PHONE_PATTERN.match(v):
+        if not PHONE_PATTERN.match(str(v)):
             raise ValueError("Phone must be 10-digit Indian mobile like 9876543210")
         return v
 
-    @validator("email")
-    def validate_email(cls, v: Optional[EmailStr]) -> Optional[EmailStr]:
+    @field_validator("email", mode="before")
+    @classmethod
+    def validate_email(cls, v: Optional[str]) -> Optional[str]:
         if v is None:
             return v
         if not EMAIL_PATTERN.match(str(v)):
