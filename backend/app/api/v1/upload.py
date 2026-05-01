@@ -1,21 +1,20 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 import boto3
-import os
 import re
 from uuid import uuid4
 from pathlib import Path
 from botocore.config import Config
 from app.api.dependencies import get_current_user
-from fastapi import Depends
+from app.core.config import get_settings
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
 
-# Cloudflare R2 Configuration
-R2_ACCESS_KEY = os.getenv("R2_ACCESS_KEY", "")
-R2_SECRET_KEY = os.getenv("R2_SECRET_KEY", "")
-R2_ENDPOINT = os.getenv("R2_ENDPOINT", "")
-R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME", "")
-R2_PUBLIC_URL = os.getenv("R2_PUBLIC_URL", "")
+_s = get_settings()
+R2_ACCESS_KEY = _s.R2_ACCESS_KEY
+R2_SECRET_KEY = _s.R2_SECRET_KEY
+R2_ENDPOINT = _s.R2_ENDPOINT
+R2_BUCKET_NAME = _s.R2_BUCKET_NAME
+R2_PUBLIC_URL = _s.R2_PUBLIC_URL
 
 # Initialize R2 client (S3-compatible)
 r2 = None
@@ -25,8 +24,8 @@ if R2_ENDPOINT and R2_ACCESS_KEY and R2_SECRET_KEY:
         endpoint_url=R2_ENDPOINT,
         aws_access_key_id=R2_ACCESS_KEY,
         aws_secret_access_key=R2_SECRET_KEY,
-        config=Config(s3={'addressing_style': 'virtual'}), # Recommended for R2
-        region_name="auto", # R2 doesn't use standard regions
+        config=Config(s3={"addressing_style": "virtual"}),
+        region_name="auto",
     )
 
 # Local upload directory as fallback

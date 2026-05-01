@@ -1,13 +1,15 @@
+from contextlib import asynccontextmanager
+from pathlib import Path
+import os
+import subprocess
+import sys
+
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from pathlib import Path
-import subprocess
-import os
-import traceback
 
 from app.core.config import get_settings
 from app.core.database import init_db, get_db
@@ -21,26 +23,55 @@ from app.api.v1 import (
 
 settings = get_settings()
 
+
+# -------------------- LIFESPAN --------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("[INFO] Starting application startup sequence...")
+    try:
+        backend_dir = Path(__file__).parent.parent
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(backend_dir)
+
+        print("[INFO] Running database migrations...")
+        result = subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            cwd=str(backend_dir),
+            env=env,
+            capture_output=False,
+        )
+
+        if result.returncode == 0:
+            print("[OK] Database migrations completed")
+        else:
+            print(f"[WARN] Migration process exited with code {result.returncode}")
+
+    except Exception as e:
+        print(f"[ERR] Could not run migrations: {str(e)}")
+
+    try:
+        init_db()
+        print("[OK] Database initialized")
+    except Exception as e:
+        print(f"[ERR] Could not initialize database: {str(e)}")
+        print("[OK] Starting application anyway (tables may already exist)")
+
+    yield
+
+
 # -------------------- APP INIT --------------------
 app = FastAPI(
     title=settings.app_name,
     description="Point of Sale System Backend API",
     version=settings.app_version,
     redirect_slashes=True,
+    lifespan=lifespan,
 )
 
 # -------------------- CORS --------------------
-# NOTE: allow_origins=["*"] + allow_credentials=True is invalid per CORS spec.
-# Browsers will block it. We must list origins explicitly when using credentials.
 ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
     "http://localhost:8080",
     "http://127.0.0.1:8080",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://localhost:4173",
-    "http://127.0.0.1:4173",
     settings.FRONTEND_URL,
     "https://vyoma-vayupos.pages.dev",
 ]
@@ -62,71 +93,13 @@ uploads_dir.mkdir(parents=True, exist_ok=True)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# -------------------- STARTUP --------------------
-@app.on_event("startup")
-def startup_event():
-    print("[INFO] Starting application startup sequence...")
-    try:
-        import sys
-        backend_dir = Path(__file__).parent.parent
-        env = os.environ.copy()
-        env["PYTHONPATH"] = str(backend_dir)
 
-        print("[INFO] Running database migrations...")
-        # Use sys.executable to ensure we use the same python environment
-        # and don't capture output so we can see it in real-time if it hangs
-        result = subprocess.run(
-            [sys.executable, "-m", "alembic", "upgrade", "head"],
-            cwd=str(backend_dir),
-            env=env,
-            capture_output=False, 
-        )
-
-        if result.returncode == 0:
-            print("[OK] Database migrations completed")
-        else:
-            print(f"[WARN] Migration process exited with code {result.returncode}")
-
-    except Exception as e:
-        print(f"[ERR] Could not run migrations: {str(e)}")
-        traceback.print_exc()
-
-    try:
-        init_db()
-        print("[OK] Database initialized")
-    except Exception as e:
-        print(f"[ERR] Could not initialize database: {str(e)}")
-        print("[OK] Starting application anyway (tables may already exist)")
-
-# -------------------- ROOT --------------------
+# -------------------- HEALTH CHECK --------------------
 @app.get("/")
 async def root():
     return {"status": "VayuPOS Backend Live"}
 
-@app.get("/api/v1/test")
-async def test_endpoint():
-    """Test endpoint to verify API is working"""
-    return {"message": "API is working", "timestamp": str(__import__('datetime').datetime.now())}
 
-@app.get("/api/v1/notifications-health")
-async def notifications_health():
-    """Health check for notifications module"""
-    try:
-        from app.api.v1 import notification
-        return {
-            "status": "healthy",
-            "notification_module": str(notification),
-            "notification_router": str(notification.router),
-            "router_routes": len(notification.router.routes) if hasattr(notification, 'router') else 0
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e),
-            "trace": __import__('traceback').format_exc()
-        }
-
-# -------------------- HEALTH CHECK --------------------
 @app.get("/health")
 async def health(db: Session = Depends(get_db)):
     try:
@@ -143,164 +116,27 @@ async def health(db: Session = Depends(get_db)):
             },
         )
 
-@app.get("/api/v1/test-db")
-async def test_db():
-    """Test database connection"""
-    from app.core.database import engine
-    from sqlalchemy import text
-    try:
-        with engine.connect() as conn:
-            result = conn.execute(text("SELECT 1"))
-            val = result.scalar()
-            return {
-                "status": "success",
-                "message": "Database connection established",
-                "result": val
-            }
-    except Exception as e:
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "error",
-                "message": f"Database connection failed: {str(e)}",
-                "traceback": traceback.format_exc() if settings.DEBUG else None
-            }
-        )
-
 
 # -------------------- ROUTERS --------------------
-print("[INFO] Including routers...")
-try:
-    app.include_router(auth.router, prefix="/api/v1", tags=["Auth"])
-    print("[OK] Auth router included")
-except Exception as e:
-    print(f"[ERR] Failed to include auth router: {e}")
-    traceback.print_exc()
-
-try:
-    app.include_router(users.router, prefix="/api/v1", tags=["Users"])
-    print("[OK] Users router included")
-except Exception as e:
-    print(f"[ERR] Failed to include users router: {e}")
-
-try:
-    app.include_router(products.router, prefix="/api/v1", tags=["Products"])
-    print("[OK] Products router included")
-except Exception as e:
-    print(f"[ERR] Failed to include products router: {e}")
-
-try:
-    app.include_router(categories.router, prefix="/api/v1", tags=["Categories"])
-    print("[OK] Categories router included")
-except Exception as e:
-    print(f"[ERR] Failed to include categories router: {e}")
-
-try:
-    app.include_router(customers.router, prefix="/api/v1", tags=["Customers"])
-    print("[OK] Customers router included")
-except Exception as e:
-    print(f"[ERR] Failed to include customers router: {e}")
-
-try:
-    app.include_router(orders.router, prefix="/api/v1", tags=["Orders"])
-    print("[OK] Orders router included")
-except Exception as e:
-    print(f"[ERR] Failed to include orders router: {e}")
-
-try:
-    app.include_router(inventory.router, prefix="/api/v1", tags=["Inventory"])
-    print("[OK] Inventory router included")
-except Exception as e:
-    print(f"[ERR] Failed to include inventory router: {e}")
-
-try:
-    app.include_router(payment.router, prefix="/api/v1", tags=["Payment"])
-    print("[OK] Payment router included")
-except Exception as e:
-    print(f"[ERR] Failed to include payment router: {e}")
-
-try:
-    app.include_router(reports.router, prefix="/api/v1", tags=["Reports"])
-    print("[OK] Reports router included")
-except Exception as e:
-    print(f"[ERR] Failed to include reports router: {e}")
-
-try:
-    app.include_router(coupons.router, prefix="/api/v1", tags=["Coupons"])
-    print("[OK] Coupons router included")
-except Exception as e:
-    print(f"[ERR] Failed to include coupons router: {e}")
-
-try:
-    app.include_router(dish_templates.router, prefix="/api/v1", tags=["DishTemplates"])
-    print("[OK] DishTemplates router included")
-except Exception as e:
-    print(f"[ERR] Failed to include dish_templates router: {e}")
-
-try:
-    app.include_router(upload.router, prefix="/api/v1", tags=["Upload"])
-    print("[OK] Upload router included")
-except Exception as e:
-    print(f"[ERR] Failed to include upload router: {e}")
-
-try:
-    app.include_router(staff.router, prefix="/api/v1", tags=["Staff"])
-    print("[OK] Staff router included")
-except Exception as e:
-    print(f"[ERR] Failed to include staff router: {e}")
-
-try:
-    app.include_router(expense.router, prefix="/api/v1", tags=["Expense"])
-    print("[OK] Expense router included")
-except Exception as e:
-    print(f"[ERR] Failed to include expense router: {e}")
-
-try:
-    app.include_router(ingredient.router, prefix="/api/v1/ingredients", tags=["Ingredients"])
-    print("[OK] Ingredient router included")
-except Exception as e:
-    print(f"[ERR] Failed to include ingredient router: {e}")
-
-try:
-    app.include_router(notification.router, prefix="/api/v1", tags=["Notifications"])
-    print("[OK] Notification router included")
-except Exception as e:
-    print(f"[ERR] Failed to include notification router: {e}")
-
-try:
-    app.include_router(search.router, prefix="/api/v1", tags=["Search"])
-    print("[OK] Search router included")
-except Exception as e:
-    print(f"[ERR] Failed to include search router: {e}")
-
-try:
-    app.include_router(print_jobs.router, prefix="/api/v1", tags=["Print Jobs"])
-    print("[OK] Print Jobs router included")
-except Exception as e:
-    print(f"[ERR] Failed to include print jobs router: {e}")
-
-try:
-    app.include_router(kot.router, prefix="/api/v1", tags=["KOT"])
-    print("[OK] KOT router included")
-except Exception as e:
-    print(f"[ERR] Failed to include KOT router: {e}")
-
-try:
-    app.include_router(settings_router.router, prefix="/api/v1", tags=["Settings"])
-    print("[OK] Settings router included")
-except Exception as e:
-    print(f"[ERR] Failed to include settings router: {e}")
-
-try:
-    app.include_router(admin_router.router, prefix="/api/v1", tags=["Admin"])
-    print("[OK] Admin router included")
-except Exception as e:
-    print(f"[ERR] Failed to include admin router: {e}")
-
-try:
-    app.include_router(superadmin_router.router, prefix="/api/v1", tags=["Superadmin"])
-    print("[OK] Superadmin router included")
-except Exception as e:
-    print(f"[ERR] Failed to include superadmin router: {e}")
-
-print("[OK] All routers included")
+app.include_router(auth.router, prefix="/api/v1", tags=["Auth"])
+app.include_router(users.router, prefix="/api/v1", tags=["Users"])
+app.include_router(products.router, prefix="/api/v1", tags=["Products"])
+app.include_router(categories.router, prefix="/api/v1", tags=["Categories"])
+app.include_router(customers.router, prefix="/api/v1", tags=["Customers"])
+app.include_router(orders.router, prefix="/api/v1", tags=["Orders"])
+app.include_router(inventory.router, prefix="/api/v1", tags=["Inventory"])
+app.include_router(payment.router, prefix="/api/v1", tags=["Payment"])
+app.include_router(reports.router, prefix="/api/v1", tags=["Reports"])
+app.include_router(coupons.router, prefix="/api/v1", tags=["Coupons"])
+app.include_router(dish_templates.router, prefix="/api/v1", tags=["DishTemplates"])
+app.include_router(upload.router, prefix="/api/v1", tags=["Upload"])
+app.include_router(staff.router, prefix="/api/v1", tags=["Staff"])
+app.include_router(expense.router, prefix="/api/v1", tags=["Expense"])
+app.include_router(ingredient.router, prefix="/api/v1/ingredients", tags=["Ingredients"])
+app.include_router(notification.router, prefix="/api/v1", tags=["Notifications"])
+app.include_router(search.router, prefix="/api/v1", tags=["Search"])
+app.include_router(print_jobs.router, prefix="/api/v1", tags=["Print Jobs"])
+app.include_router(kot.router, prefix="/api/v1", tags=["KOT"])
+app.include_router(settings_router.router, prefix="/api/v1", tags=["Settings"])
+app.include_router(admin_router.router, prefix="/api/v1", tags=["Admin"])
+app.include_router(superadmin_router.router, prefix="/api/v1", tags=["Superadmin"])

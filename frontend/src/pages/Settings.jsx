@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Save, Store, Printer, Wifi, Bluetooth, Monitor,
-  RotateCw, CheckCircle, XCircle, Search, Loader2,
+  Save, Store, Printer, Wifi, Monitor,
+  RotateCw, CheckCircle, XCircle, Loader2, Copy, Key,
 } from 'lucide-react';
-import { getSettings, updateSettings } from '../api/settingsApi';
+import { getSettings, updateSettings, regenerateAgentKey } from '../api/settingsApi';
 import { useToast } from '@/hooks/use-toast';
 
 // ── Paper width options ─────────────────────────────────────────────────
@@ -16,22 +16,29 @@ const PAPER_WIDTHS = [
 ];
 
 const PRINTER_TYPES = [
-  { value: 'browser', label: 'Browser / USB', icon: Monitor, desc: 'Print via browser dialog — works with any printer connected to this device (USB, PDF, etc.)' },
-  { value: 'wifi',    label: 'WiFi / LAN',   icon: Wifi,     desc: 'Send directly to a thermal printer on the same network via the VayuPOS Print Agent' },
-  { value: 'bluetooth', label: 'Bluetooth',  icon: Bluetooth, desc: 'Pair with a Bluetooth thermal printer (Chrome / Edge on HTTPS only)' },
+  {
+    value: 'browser',
+    label: 'Browser / USB',
+    icon: Monitor,
+    desc: 'Print via browser dialog — works with any USB printer connected to this device',
+  },
+  {
+    value: 'wifi',
+    label: 'WiFi / LAN',
+    icon: Wifi,
+    desc: 'Send directly to a WiFi/LAN thermal printer via the VayuPOS Print Agent',
+  },
 ];
 
 // ── Printer section (reused for Bill and KOT) ───────────────────────────
 function PrinterSection({ title, prefix, form, setForm, onTestPrint, testStatus }) {
-  const typeKey     = `${prefix}_printer_type`;
-  const widthKey    = `${prefix}_paper_width`;
-  const ipKey       = `${prefix}_printer_ip`;
-  const portKey     = `${prefix}_printer_port`;
+  const typeKey  = `${prefix}_printer_type`;
+  const widthKey = `${prefix}_paper_width`;
+  const ipKey    = `${prefix}_printer_ip`;
+  const portKey  = `${prefix}_printer_port`;
   const [customWidth, setCustomWidth] = useState('');
-  const [btScanning, setBtScanning]   = useState(false);
-  const [btDevice, setBtDevice]       = useState(null);
 
-  const isCustom  = !PAPER_WIDTHS.slice(0, -1).find(w => w.value === form[widthKey]);
+  const isCustom    = !PAPER_WIDTHS.slice(0, -1).find(w => w.value === form[widthKey]);
   const printerType = form[typeKey] || 'browser';
 
   const handleWidthSelect = (val) => {
@@ -42,33 +49,6 @@ function PrinterSection({ title, prefix, form, setForm, onTestPrint, testStatus 
     }
   };
 
-  const handleCustomWidth = (val) => {
-    setCustomWidth(val);
-    setForm(f => ({ ...f, [widthKey]: val }));
-  };
-
-  const scanBluetooth = async () => {
-    if (!navigator.bluetooth) {
-      alert('Web Bluetooth is not supported in this browser.\nUse Chrome or Edge on HTTPS.');
-      return;
-    }
-    setBtScanning(true);
-    try {
-      const device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb'],
-      });
-      setBtDevice(device.name);
-      setForm(f => ({ ...f, [`${prefix}_bt_device`]: device.name }));
-    } catch {
-      // User cancelled or error — do nothing
-    } finally {
-      setBtScanning(false);
-    }
-  };
-
-  const selectedWidthOption = PAPER_WIDTHS.find(w => w.value === form[widthKey]) ? form[widthKey] : 'custom';
-
   return (
     <div className="space-y-6">
       <h3 className="text-[17px] font-semibold text-foreground">{title}</h3>
@@ -76,7 +56,7 @@ function PrinterSection({ title, prefix, form, setForm, onTestPrint, testStatus 
       {/* Connection type */}
       <div>
         <label className="block text-[13px] font-medium text-muted-foreground mb-3">Connection type</label>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {PRINTER_TYPES.map(({ value, label, icon: Icon, desc }) => (
             <button
               key={value}
@@ -126,16 +106,13 @@ function PrinterSection({ title, prefix, form, setForm, onTestPrint, testStatus 
               min="40"
               max="120"
               value={customWidth || form[widthKey]}
-              onChange={e => handleCustomWidth(e.target.value)}
+              onChange={e => { setCustomWidth(e.target.value); setForm(f => ({ ...f, [widthKey]: e.target.value })); }}
               placeholder="e.g. 72"
               className="w-28 px-3 py-2 rounded-lg border border-border bg-muted text-foreground text-[14px] focus:outline-none focus:ring-1 focus:ring-primary"
             />
             <span className="text-[13px] text-muted-foreground">mm</span>
           </div>
         )}
-        <p className="mt-2 text-[12px] text-muted-foreground">
-          Bill layout and character width adjust automatically when you change this.
-        </p>
       </div>
 
       {/* WiFi settings */}
@@ -172,35 +149,6 @@ function PrinterSection({ title, prefix, form, setForm, onTestPrint, testStatus 
         </div>
       )}
 
-      {/* Bluetooth settings */}
-      {printerType === 'bluetooth' && (
-        <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-4">
-          <p className="text-[13px] text-muted-foreground">
-            Pair your Bluetooth thermal printer. Only available in Chrome / Edge on HTTPS.
-          </p>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={scanBluetooth}
-              disabled={btScanning}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-[14px] font-medium hover:bg-primary/90 disabled:opacity-50"
-            >
-              {btScanning ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
-              {btScanning ? 'Scanning…' : 'Scan for printers'}
-            </button>
-            {btDevice && (
-              <span className="flex items-center gap-1.5 text-[13px] text-green-600 dark:text-green-400 font-medium">
-                <CheckCircle size={14} />
-                {btDevice}
-              </span>
-            )}
-          </div>
-          <p className="text-[12px] text-muted-foreground">
-            The browser's device picker will open. Select your printer from the list.
-          </p>
-        </div>
-      )}
-
       {/* Test print */}
       <div className="flex items-center gap-3">
         <button
@@ -209,11 +157,7 @@ function PrinterSection({ title, prefix, form, setForm, onTestPrint, testStatus 
           disabled={testStatus === 'loading'}
           className="flex items-center gap-2 px-5 py-2.5 rounded-lg border border-border bg-card text-foreground text-[14px] font-medium hover:bg-muted transition-all disabled:opacity-50"
         >
-          {testStatus === 'loading' ? (
-            <Loader2 size={15} className="animate-spin" />
-          ) : (
-            <Printer size={15} />
-          )}
+          {testStatus === 'loading' ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />}
           Test print
         </button>
         {testStatus === 'success' && (
@@ -226,6 +170,67 @@ function PrinterSection({ title, prefix, form, setForm, onTestPrint, testStatus 
             <XCircle size={14} /> Failed — check connection
           </span>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Print Agent Key section ─────────────────────────────────────────────
+function AgentKeySection({ agentKey, onRegenerate }) {
+  const { toast } = useToast();
+  const [regenerating, setRegenerating] = useState(false);
+
+  const copyKey = () => {
+    navigator.clipboard.writeText(agentKey || '');
+    toast({ title: 'Agent key copied' });
+  };
+
+  const handleRegenerate = async () => {
+    if (!window.confirm('Regenerate the agent key? The current key will stop working immediately.')) return;
+    setRegenerating(true);
+    try {
+      await onRegenerate();
+      toast({ title: 'New agent key generated' });
+    } catch {
+      toast({ title: 'Failed to regenerate key', variant: 'destructive' });
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  return (
+    <div className="mt-8 rounded-xl border border-border bg-muted/30 p-5 space-y-3">
+      <div className="flex items-center gap-2">
+        <Key size={16} className="text-primary" />
+        <h4 className="text-[14px] font-semibold text-foreground">Print Agent Key</h4>
+      </div>
+      <p className="text-[13px] text-muted-foreground">
+        Copy this key into the <code className="bg-muted px-1 rounded text-[12px]">agent_key</code> field
+        in your VayuPOS Print Agent's <code className="bg-muted px-1 rounded text-[12px]">config.json</code>.
+        Each restaurant has its own unique key — the agent will only fetch jobs for this restaurant.
+      </p>
+      <div className="flex items-center gap-2">
+        <input
+          readOnly
+          value={agentKey || '—'}
+          className="flex-1 px-3 py-2 rounded-lg border border-border bg-card text-foreground text-[13px] font-mono focus:outline-none"
+        />
+        <button
+          type="button"
+          onClick={copyKey}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card text-[13px] hover:bg-muted transition-all"
+        >
+          <Copy size={14} /> Copy
+        </button>
+        <button
+          type="button"
+          onClick={handleRegenerate}
+          disabled={regenerating}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-card text-[13px] hover:bg-muted transition-all disabled:opacity-50"
+        >
+          {regenerating ? <Loader2 size={14} className="animate-spin" /> : <RotateCw size={14} />}
+          Regenerate
+        </button>
       </div>
     </div>
   );
@@ -249,10 +254,11 @@ const DEFAULT_FORM = {
   bill_paper_width: '80',
   bill_printer_ip: '',
   bill_printer_port: 9100,
-  kot_printer_type: 'browser',
+  kot_printer_type: 'wifi',
   kot_paper_width: '80',
   kot_printer_ip: '',
   kot_printer_port: 9100,
+  print_agent_key: '',
 };
 
 export default function Settings() {
@@ -275,7 +281,7 @@ export default function Settings() {
     setSaving(true);
     try {
       const res = await updateSettings(form);
-      setForm({ ...DEFAULT_FORM, ...res.data });
+      setForm(prev => ({ ...prev, ...res.data }));
       toast({ title: 'Settings saved' });
     } catch {
       toast({ title: 'Failed to save settings', variant: 'destructive' });
@@ -284,15 +290,19 @@ export default function Settings() {
     }
   };
 
+  const handleRegenerate = async () => {
+    const res = await regenerateAgentKey();
+    setForm(prev => ({ ...prev, print_agent_key: res.data.print_agent_key }));
+  };
+
   const handleTestPrint = useCallback(async (prefix) => {
     setTestStatus(s => ({ ...s, [prefix]: 'loading' }));
-    const type = form[`${prefix}_printer_type`];
+    const type  = form[`${prefix}_printer_type`];
     const width = form[`${prefix}_paper_width`] || '80';
 
     try {
       if (type === 'browser') {
-        // Open a test receipt in a new window
-        const win = window.open('', '_blank', 'width=400,height=600');
+        const win   = window.open('', '_blank', 'width=400,height=600');
         const chars = Math.floor(parseInt(width) / 1.65);
         const line  = '-'.repeat(chars);
         win.document.write(`
@@ -303,10 +313,10 @@ export default function Settings() {
           <div style="text-align:center"><b>TEST PRINT</b><br>${form.restaurant_name || 'My Restaurant'}</div>
           <p>${line}</p>
           <p>Paper: ${width}mm | Type: ${type}</p>
-          <p>Item 1 × 2 &nbsp;&nbsp;&nbsp; ₹200</p>
-          <p>Item 2 × 1 &nbsp;&nbsp;&nbsp; ₹150</p>
+          <p>Item 1 x 2 &nbsp;&nbsp;&nbsp; &#x20B9;200</p>
+          <p>Item 2 x 1 &nbsp;&nbsp;&nbsp; &#x20B9;150</p>
           <p>${line}</p>
-          <p style="text-align:right"><b>Total: ₹350</b></p>
+          <p style="text-align:right"><b>Total: &#x20B9;350</b></p>
           <p>${line}</p>
           <p style="text-align:center">${form.bill_footer || 'Thank you!'}</p>
           <script>window.onload=()=>{ window.print(); setTimeout(()=>window.close(),1000); }</script>
@@ -314,15 +324,11 @@ export default function Settings() {
         win.document.close();
         setTestStatus(s => ({ ...s, [prefix]: 'success' }));
       } else if (type === 'wifi') {
-        // For WiFi, a real print job would be created here; for the test we just validate the IP is set
-        if (!form[`${prefix}_printer_ip`]) {
-          throw new Error('No printer IP set');
-        }
-        toast({ title: `Test job queued for ${form[`${prefix}_printer_ip`]}:${form[`${prefix}_printer_port`] || 9100}`, description: 'Make sure the VayuPOS Print Agent is running.' });
-        setTestStatus(s => ({ ...s, [prefix]: 'success' }));
-      } else {
-        // Bluetooth — guide user
-        toast({ title: 'Bluetooth test', description: 'Select your printer in the scan dialog above, then print via the browser.' });
+        if (!form[`${prefix}_printer_ip`]) throw new Error('No printer IP set');
+        toast({
+          title: `Test job queued for ${form[`${prefix}_printer_ip`]}:${form[`${prefix}_printer_port`] || 9100}`,
+          description: 'Make sure the VayuPOS Print Agent is running.',
+        });
         setTestStatus(s => ({ ...s, [prefix]: 'success' }));
       }
     } catch (err) {
@@ -377,7 +383,7 @@ export default function Settings() {
       {activeTab === 0 && (
         <div className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <Field label="Restaurant name *" required>
+            <Field label="Restaurant name" required>
               <input
                 value={form.restaurant_name}
                 onChange={e => setForm(f => ({ ...f, restaurant_name: e.target.value }))}
@@ -427,7 +433,6 @@ export default function Settings() {
               />
             </Field>
           </div>
-
           <Field label="Address">
             <textarea
               value={form.address || ''}
@@ -437,7 +442,6 @@ export default function Settings() {
               className={inputCls + ' resize-none'}
             />
           </Field>
-
           <div className="border-t border-border pt-5 space-y-4">
             <h3 className="text-[15px] font-semibold text-foreground">Bill text</h3>
             <Field label="Bill header" hint="Printed at the top of every bill (e.g. GSTIN, tagline)">
@@ -465,7 +469,7 @@ export default function Settings() {
       {/* ── Tab 1: Bill Printer ──────────────────────────────────────── */}
       {activeTab === 1 && (
         <PrinterSection
-          title="Bill / POS printer"
+          title="Bill / POS printer  (customer receipt)"
           prefix="bill"
           form={form}
           setForm={setForm}
@@ -476,14 +480,20 @@ export default function Settings() {
 
       {/* ── Tab 2: KOT Printer ──────────────────────────────────────── */}
       {activeTab === 2 && (
-        <PrinterSection
-          title="KOT (Kitchen Order Ticket) printer"
-          prefix="kot"
-          form={form}
-          setForm={setForm}
-          onTestPrint={handleTestPrint}
-          testStatus={testStatus.kot}
-        />
+        <>
+          <PrinterSection
+            title="KOT printer  (kitchen)"
+            prefix="kot"
+            form={form}
+            setForm={setForm}
+            onTestPrint={handleTestPrint}
+            testStatus={testStatus.kot}
+          />
+          <AgentKeySection
+            agentKey={form.print_agent_key}
+            onRegenerate={handleRegenerate}
+          />
+        </>
       )}
     </div>
   );
@@ -497,7 +507,7 @@ function Field({ label, hint, required, children }) {
   return (
     <div>
       <label className="block text-[13px] font-medium text-muted-foreground mb-1.5">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+        {label}{required && <span className="text-red-500 ml-0.5"> *</span>}
       </label>
       {children}
       {hint && <p className="mt-1 text-[12px] text-muted-foreground">{hint}</p>}

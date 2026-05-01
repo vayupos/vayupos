@@ -38,6 +38,9 @@ class Client(Base):
     kot_printer_ip = Column(String(45), nullable=True)
     kot_printer_port = Column(Integer, nullable=True, default=9100)
 
+    # Print agent authentication key — shown in Settings so the local agent can be configured
+    print_agent_key = Column(String(64), nullable=True, index=True)
+
     # Lifecycle
     is_active = Column(Boolean, nullable=False, default=True)
     trial_expires_at = Column(DateTime, nullable=True)

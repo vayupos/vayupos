@@ -12,18 +12,12 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION: int = 3600
-    
-    # Additional settings
-    DEBUG: bool = False
-    API_V1_STR: str = "/api/v1"
-    PROJECT_NAME: str = "Restaurant VayuPos"
-    app_name: str = "POS Backend API"
-    app_version: str = "1.0.0"
-    cors_origins: list = ["*"]
-    FRONTEND_URL: str = "http://localhost:5173"
-    
+    FRONTEND_URL: str = "http://localhost:8080"
+
+    # Admin
+    ADMIN_SECRET_KEY: str
+
     # Cloudflare R2 Configuration
-    R2_ACCOUNT_ID: str = ""
     R2_ACCESS_KEY: str = ""
     R2_SECRET_KEY: str = ""
     R2_BUCKET_NAME: str = ""
@@ -33,9 +27,6 @@ class Settings(BaseSettings):
     # Printer Configuration
     DEFAULT_PRINTER_IP: str = "192.168.1.150"
     DEFAULT_PRINTER_PORT: int = 9100
-    
-    # Admin
-    ADMIN_SECRET_KEY: str = "change-me-in-production"
 
     # SMTP Configuration
     SMTP_HOST: Optional[str] = None
@@ -44,6 +35,10 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: Optional[str] = None
     EMAILS_FROM_EMAIL: str = "info@vayupos.com"
     EMAILS_FROM_NAME: str = "VayuPos Support"
+
+    # Internal (used by FastAPI app init — not set via .env)
+    app_name: str = "VayuPos API"
+    app_version: str = "1.0.0"
 
     class Config:
         env_file = ".env"
@@ -54,5 +49,4 @@ settings = Settings()
 
 
 def get_settings() -> Settings:
-    """Get application settings"""
     return settings

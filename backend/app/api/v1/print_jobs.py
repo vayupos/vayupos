@@ -1,62 +1,58 @@
+"""Print jobs API routes"""
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
-from app.api.dependencies import get_db
+from app.api.dependencies import get_current_user, get_db
+from app.models.client import Client
+from app.models.print_job import PrintJob
 from app.schemas import PrintJobResponse, PrintJobCreate
 from app.services.print_service import PrintService
 
 router = APIRouter(prefix="/print-jobs", tags=["Print Jobs"])
 
+
+def _get_client_by_agent_key(x_print_agent_key: str, db: Session) -> Client:
+    """Validate X-Print-Agent-Key header and return the matching client."""
+    client = db.query(Client).filter(Client.print_agent_key == x_print_agent_key).first()
+    if not client:
+        raise HTTPException(status_code=403, detail="Invalid or missing print agent key")
+    return client
+
+
 @router.get("/pending", response_model=List[PrintJobResponse])
 def get_pending_print_jobs(
-    db: Session = Depends(get_db)
+    x_print_agent_key: str = Header(...),
+    db: Session = Depends(get_db),
 ):
-    """Fetch unprinted KOT jobs"""
-    jobs = PrintService.get_pending_jobs(db)
-    return jobs
+    """Fetch unprinted KOT jobs for this restaurant's print agent."""
+    client = _get_client_by_agent_key(x_print_agent_key, db)
+    return PrintService.get_pending_jobs(db, client.id)
+
 
 @router.post("/{id}/mark-printed", response_model=PrintJobResponse)
 @router.post("/{id}/complete", response_model=PrintJobResponse)
 def mark_print_job_as_printed(
     id: int,
-    db: Session = Depends(get_db)
+    x_print_agent_key: str = Header(...),
+    db: Session = Depends(get_db),
 ):
-    """Mark a print job as completed"""
-    job = PrintService.mark_as_printed(db, id)
+    """Mark a print job as completed (called by the local print agent)."""
+    client = _get_client_by_agent_key(x_print_agent_key, db)
+    job = PrintService.mark_as_printed(db, id, client.id)
     if not job:
         raise HTTPException(status_code=404, detail="Print job not found")
     return job
 
 
-@router.post("", response_model=PrintJobResponse)
-@router.post("/", response_model=PrintJobResponse)
-def create_manual_print_job(
-    job_data: PrintJobCreate,
-    db: Session = Depends(get_db)
-):
-    """Create a print job manually (for testing)"""
-    from app.models.print_job import PrintJob
-    db_job = PrintJob(
-        order_id=job_data.order_id,
-        printer_ip=job_data.printer_ip,
-        printer_port=job_data.printer_port,
-        content=job_data.content,
-        status="pending"
-    )
-    db.add(db_job)
-    db.commit()
-    db.refresh(db_job)
-    return db_job
-
 @router.get("", response_model=List[PrintJobResponse])
 def list_print_jobs(
     order_id: Optional[int] = Query(None),
-    db: Session = Depends(get_db)
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    """List print jobs by order ID"""
-    from app.models.print_job import PrintJob
-    query = db.query(PrintJob)
+    """List print jobs for the current restaurant (frontend use)."""
+    client_id = int(current_user["client_id"])
+    query = db.query(PrintJob).filter(PrintJob.client_id == client_id)
     if order_id:
         query = query.filter(PrintJob.order_id == order_id)
-    jobs = query.all()
-    return jobs
+    return query.all()

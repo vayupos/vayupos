@@ -187,8 +187,16 @@ class AuthService:
         db.commit()
 
     @staticmethod
+    def list_users_by_client(db: Session, client_id: int, skip: int = 0, limit: int = 100) -> tuple[list[User], int]:
+        """List users for a specific restaurant."""
+        query = db.query(User).filter(User.client_id == client_id)
+        total = query.count()
+        users = query.offset(skip).limit(limit).all()
+        return users, total
+
+    @staticmethod
     def list_users(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[User], int]:
-        """List all users with pagination"""
+        """List all users (superadmin only)."""
         query = db.query(User)
         total = query.count()
         users = query.offset(skip).limit(limit).all()

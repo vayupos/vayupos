@@ -1,9 +1,10 @@
 """Restaurant settings API — GET/PUT /settings"""
+import secrets
 from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_current_user, get_db
@@ -34,6 +35,7 @@ class SettingsResponse(BaseModel):
     kot_paper_width: str
     kot_printer_ip: Optional[str]
     kot_printer_port: Optional[int]
+    print_agent_key: Optional[str]
     is_active: bool
     trial_expires_at: Optional[datetime]
 
@@ -61,15 +63,39 @@ class SettingsUpdate(BaseModel):
     kot_printer_ip: Optional[str] = None
     kot_printer_port: Optional[int] = None
 
+    @field_validator("bill_printer_ip", "kot_printer_ip", mode="before")
+    @classmethod
+    def validate_printer_ip(cls, v: Optional[str]) -> Optional[str]:
+        if not v or not v.strip():
+            return v
+        import ipaddress
+        try:
+            ipaddress.ip_address(v.strip())
+        except ValueError:
+            raise ValueError(f"'{v}' is not a valid IP address")
+        return v.strip()
+
+    @field_validator("bill_printer_port", "kot_printer_port", mode="before")
+    @classmethod
+    def validate_printer_port(cls, v: Optional[int]) -> Optional[int]:
+        if v is None:
+            return v
+        if not (1 <= int(v) <= 65535):
+            raise ValueError("Port must be between 1 and 65535")
+        return v
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 def _get_or_create_client(db: Session, client_id: int) -> Client:
-    """Return the client row, creating it with defaults if it doesn't exist yet."""
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
-        client = Client(id=client_id)
+        client = Client(id=client_id, print_agent_key=secrets.token_urlsafe(32))
         db.add(client)
+        db.commit()
+        db.refresh(client)
+    elif not client.print_agent_key:
+        client.print_agent_key = secrets.token_urlsafe(32)
         db.commit()
         db.refresh(client)
     return client
@@ -82,7 +108,6 @@ def get_settings(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return the current restaurant's settings (creates row with defaults on first call)."""
     client_id = int(current_user["client_id"])
     return _get_or_create_client(db, client_id)
 
@@ -93,7 +118,6 @@ def update_settings(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update the current restaurant's settings."""
     client_id = int(current_user["client_id"])
     client = _get_or_create_client(db, client_id)
 
@@ -101,6 +125,20 @@ def update_settings(
         setattr(client, field, value)
 
     client.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(client)
+    return client
+
+
+@router.post("/regenerate-agent-key", response_model=SettingsResponse)
+def regenerate_agent_key(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Generate a new print agent key (invalidates the old one)."""
+    client_id = int(current_user["client_id"])
+    client = _get_or_create_client(db, client_id)
+    client.print_agent_key = secrets.token_urlsafe(32)
     db.commit()
     db.refresh(client)
     return client

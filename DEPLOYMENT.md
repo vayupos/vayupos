@@ -160,14 +160,11 @@ DATABASE_URL="postgresql+psycopg2://<neon_user>:<neon_password>@<neon_endpoint>.
 SECRET_KEY="<your-strong-random-key>"
 JWT_ALGORITHM="HS256"
 JWT_EXPIRATION=3600
-ACCESS_TOKEN_EXPIRE_MINUTES=1440
 
 # App
 DEBUG=False
 API_V1_STR="/api/v1"
-PROJECT_NAME="VayuPos - POS System"
-app_name="POS Backend API"
-app_version="1.0.0"
+PROJECT_NAME="VayuPos"
 FRONTEND_URL="https://app.vayupos.com"
 
 # Admin secret — use to create superadmin and register restaurants
@@ -436,24 +433,20 @@ Find the `ALLOWED_ORIGINS` list and make sure it includes your production domain
 
 ```python
 ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
     "https://app.vayupos.com",
-    "https://vayupos-frontend.pages.dev",   # Cloudflare Pages preview URL
+    "https://vyoma-vayupos.pages.dev",   # Cloudflare Pages preview URL
 ]
 ```
 
-Remove the `"*"` wildcard entry for production security. Then:
+Then restart the service:
 
 ```bash
 sudo systemctl restart vayupos
 ```
 
-Also update [frontend/.env.production](frontend/.env.production) in your local code and push:
-```env
-VITE_API_URL=https://api.vayupos.com/api/v1
-VITE_API_HOST=https://api.vayupos.com
-```
+> Production env vars (`VITE_API_URL`, `VITE_API_HOST`) are set in the Cloudflare Pages dashboard — not in any file.
 
 ---
 
@@ -567,7 +560,7 @@ Output should be `1`. If it errors, check your `DATABASE_URL` in `.env`.
 
 ### Frontend build fails on Cloudflare Pages
 - Check the build log in Cloudflare Pages dashboard
-- Common fix: make sure `VITE_API_URL` environment variable is set in Pages settings (not just in the `.env.production` file)
+- Common fix: make sure `VITE_API_URL` and `VITE_API_HOST` are set in Cloudflare Pages → Settings → Environment variables
 
 ### SSL certificate not renewing
 Certbot auto-renews. To check: `sudo certbot renew --dry-run`

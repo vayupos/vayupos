@@ -1,30 +1,11 @@
 """Users API routes"""
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user, get_db
 from app.services import AuthService
 from app.schemas import UserResponse, UserUpdate
-from typing import List
 
-# FIXED PREFIX — REMOVE /api/v1
 router = APIRouter(prefix="/users", tags=["Users"])
-
-
-# Helper function to convert ORM to dict
-def user_to_dict(user):
-    """Convert User ORM to dict"""
-    return {
-        "id": user.id,
-        "username": user.username,
-        "email": user.email,
-        "full_name": user.full_name,
-        "phone_number": user.phone_number,
-        "role": user.role.value if hasattr(user.role, 'value') else user.role,
-        "is_active": user.is_active,
-        "is_verified": user.is_verified,
-        "created_at": user.created_at.isoformat() if user.created_at else None,
-        "updated_at": user.updated_at.isoformat() if user.updated_at else None,
-    }
 
 
 @router.get("/")
@@ -34,13 +15,14 @@ def list_users(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all users"""
-    users, total = AuthService.list_users(db, skip, limit)
+    """List users belonging to the current restaurant."""
+    client_id = int(current_user["client_id"])
+    users, total = AuthService.list_users_by_client(db, client_id, skip, limit)
     return {
         "total": total,
         "skip": skip,
         "limit": limit,
-        "data": [user_to_dict(user) for user in users],
+        "data": [UserResponse.from_orm(u) for u in users],
     }
 
 
@@ -50,9 +32,10 @@ def get_user(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get user by ID"""
+    """Get a user — must belong to the same restaurant."""
+    client_id = int(current_user["client_id"])
     user = AuthService.get_user_by_id(db, user_id)
-    if not user:
+    if not user or user.client_id != client_id:
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
@@ -64,9 +47,12 @@ def update_user(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update user information"""
-    user = AuthService.update_user(db, user_id, user_update)
-    return user
+    """Update a user — must belong to the same restaurant."""
+    client_id = int(current_user["client_id"])
+    user = AuthService.get_user_by_id(db, user_id)
+    if not user or user.client_id != client_id:
+        raise HTTPException(status_code=404, detail="User not found")
+    return AuthService.update_user(db, user_id, user_update)
 
 
 @router.delete("/{user_id}")
@@ -75,7 +61,11 @@ def deactivate_user(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Deactivate a user"""
+    """Deactivate a user — must belong to the same restaurant."""
+    client_id = int(current_user["client_id"])
+    user = AuthService.get_user_by_id(db, user_id)
+    if not user or user.client_id != client_id:
+        raise HTTPException(status_code=404, detail="User not found")
     AuthService.deactivate_user(db, user_id)
     return {"message": "User deactivated successfully"}
 
@@ -86,6 +76,10 @@ def activate_user(
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Activate a user"""
+    """Activate a user — must belong to the same restaurant."""
+    client_id = int(current_user["client_id"])
+    user = AuthService.get_user_by_id(db, user_id)
+    if not user or user.client_id != client_id:
+        raise HTTPException(status_code=404, detail="User not found")
     AuthService.activate_user(db, user_id)
     return {"message": "User activated successfully"}

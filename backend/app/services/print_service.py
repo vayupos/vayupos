@@ -2,8 +2,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from app.models.print_job import PrintJob
 from app.models.order import Order
-from app.models.product import Product
-from app.models.category import Category
+from app.models.client import Client
 from app.core.config import settings
 from collections import defaultdict
 import re
@@ -53,28 +52,30 @@ class PrintService:
     @staticmethod
     def create_kot_for_order(db: Session, order: Order) -> list[PrintJob]:
         """Group items by category's printer and create print jobs"""
-        print(f"Creating KOT for order {order.id}")
-        # Dictionary to group items: {(ip, port): [order_items]}
         printer_groups = defaultdict(list)
-        
-        # Check notes for table number
+
+        # Per-restaurant KOT printer as fallback (set in Settings page)
+        client = db.query(Client).filter(Client.id == order.client_id).first()
+        client_kot_ip = (client.kot_printer_ip if client and client.kot_printer_ip else settings.DEFAULT_PRINTER_IP)
+        client_kot_port = (client.kot_printer_port if client and client.kot_printer_port else settings.DEFAULT_PRINTER_PORT)
+
         table_number = "N/A"
         if order.notes:
-             match = re.search(r"Table:\s*([A-Za-z0-9-]+)", order.notes, re.IGNORECASE)
-             if match:
-                 table_number = match.group(1)
+            match = re.search(r"Table:\s*([A-Za-z0-9-]+)", order.notes, re.IGNORECASE)
+            if match:
+                table_number = match.group(1)
 
         for item in order.order_items:
-            # Try to get printer from product category
-            printer_ip = settings.DEFAULT_PRINTER_IP
-            printer_port = settings.DEFAULT_PRINTER_PORT
-            
+            # Priority: category printer → restaurant KOT printer → global default
+            printer_ip = client_kot_ip
+            printer_port = client_kot_port
+
             if item.product and item.product.category:
                 if item.product.category.printer_ip:
                     printer_ip = item.product.category.printer_ip
                 if item.product.category.printer_port:
                     printer_port = item.product.category.printer_port
-            
+
             printer_groups[(printer_ip, printer_port)].append(item)
 
         created_jobs = []
@@ -82,11 +83,12 @@ class PrintService:
             content = PrintService.generate_kot_content(order, items, table_number)
             
             db_print_job = PrintJob(
+                client_id=order.client_id,
                 order_id=order.id,
                 printer_ip=ip,
                 printer_port=port,
                 content=content,
-                status="pending"
+                status="pending",
             )
             db.add(db_print_job)
             created_jobs.append(db_print_job)
@@ -95,14 +97,23 @@ class PrintService:
         return created_jobs
 
     @staticmethod
-    def get_pending_jobs(db: Session) -> list[PrintJob]:
-        """Fetch all unprinted jobs"""
-        return db.query(PrintJob).filter(PrintJob.status == "pending").order_by(PrintJob.created_at.asc()).all()
+    def get_pending_jobs(db: Session, client_id: int) -> list[PrintJob]:
+        """Fetch unprinted jobs for a specific client."""
+        return (
+            db.query(PrintJob)
+            .filter(PrintJob.status == "pending", PrintJob.client_id == client_id)
+            .order_by(PrintJob.created_at.asc())
+            .all()
+        )
 
     @staticmethod
-    def mark_as_printed(db: Session, job_id: int) -> PrintJob:
-        """Mark a job as printed"""
-        db_job = db.query(PrintJob).get(job_id)
+    def mark_as_printed(db: Session, job_id: int, client_id: int) -> PrintJob:
+        """Mark a job as printed — verifies it belongs to the client."""
+        db_job = (
+            db.query(PrintJob)
+            .filter(PrintJob.id == job_id, PrintJob.client_id == client_id)
+            .first()
+        )
         if db_job:
             db_job.status = "printed"
             db_job.printed_at = datetime.utcnow()
