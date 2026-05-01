@@ -76,7 +76,8 @@ const Notifications = () => {
       fetchNotifications(false); // Silent refresh (no loading spinner)
     }, 5000);
 
-    return () => clearInterval(interval); // Cleanup on unmount
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filteredNotifications = allNotifications.filter((notif) => {
@@ -239,7 +240,7 @@ const Notifications = () => {
 
           {/* Filters */}
           <div className="flex items-center gap-2 flex-wrap">
-            <Filter className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
+            <Filter className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
             <div className="flex gap-2">
               <button
                 onClick={() => setFilter('all')}
@@ -288,7 +289,7 @@ const Notifications = () => {
               >
                 <div className="flex items-start gap-2 sm:gap-2.5 md:gap-3 lg:gap-4">
                   {/* Status Indicator */}
-                  <div className="mt-1 flex-shrink-0">
+                  <div className="mt-1 shrink-0">
                     {!notification.isRead && (
                       <div className="h-2 w-2 sm:h-2.5 sm:w-2.5 md:h-3 md:w-3 bg-teal-600 rounded-full" />
                     )}
@@ -306,7 +307,7 @@ const Notifications = () => {
                       {notification.description}
                     </p>
                     <div className="flex items-center gap-1 mt-1 sm:mt-1.5 md:mt-2">
-                      <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-muted-foreground flex-shrink-0" />
+                      <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-muted-foreground shrink-0" />
                       <span className="text-[10px] sm:text-xs text-muted-foreground">
                         {notification.time}
                       </span>
@@ -314,7 +315,7 @@ const Notifications = () => {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 shrink-0">
                     {!notification.isRead && (
                       <button
                         onClick={() => handleMarkAsRead(notification.id)}

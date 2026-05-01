@@ -32,6 +32,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
 
   useEffect(() => {
     fetchAllData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchAllData = async () => {
@@ -309,7 +310,7 @@ const Dashboard = ({ isDarkMode = true, onNavigate }) => {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-teal-600 to-teal-800 rounded-xl p-6 text-white shadow-lg flex flex-col justify-between">
+        <div className="bg-linear-to-br from-teal-600 to-teal-800 rounded-xl p-6 text-white shadow-lg flex flex-col justify-between">
           <div>
             <h3 className="text-xl font-bold mb-2">Business Insight</h3>
             <p className="text-teal-50 text-sm leading-relaxed">

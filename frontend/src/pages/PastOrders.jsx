@@ -194,6 +194,7 @@ const PastOrders = () => {
   // Initial fetch
   useEffect(() => {
     fetchOrders(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Filter updates - fetch silently to avoid full page refresh loader
@@ -203,6 +204,7 @@ const PastOrders = () => {
     } else {
       fetchOrders(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentFilter, selectedDate, debouncedSearch]);
 
   // Client-side filtering without status filter
@@ -375,7 +377,7 @@ const PastOrders = () => {
     <div className="min-h-screen bg-background">
       {/* Dedicated View/Print pages are now used instead of this modal */}
 
-      <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px] mx-auto">
+      <div className="p-4 sm:p-6 lg:p-8 max-w-350 mx-auto">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-3 sm:gap-4">
           <h1 className="text-xl sm:text-2xl lg:text-[26px] font-bold text-foreground">Past Orders</h1>
           <button
@@ -519,7 +521,7 @@ const PastOrders = () => {
 
                   <div className="flex items-center gap-2 sm:gap-2.5 mb-3 pb-3 border-b border-border">
                     <div
-                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-semibold text-xs sm:text-[13px] flex-shrink-0 text-white"
+                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-semibold text-xs sm:text-[13px] shrink-0 text-white"
                       style={{ backgroundColor: order.customer.color }}
                     >
                       {order.customer.avatar}
@@ -618,7 +620,7 @@ const PastOrders = () => {
                       <td className="py-4 px-3">
                         <div className="flex items-center gap-2.5">
                           <div
-                            className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-[13px] flex-shrink-0 text-white"
+                            className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-[13px] shrink-0 text-white"
                             style={{ backgroundColor: order.customer.color }}
                           >
                             {order.customer.avatar}

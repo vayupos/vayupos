@@ -319,7 +319,7 @@ const OrderDetail = () => {
                             </h3>
                             <div className="space-y-6">
                                 <div className="flex items-start gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
                                         <Calendar size={16} className="text-muted-foreground" />
                                     </div>
                                     <div>
@@ -328,7 +328,7 @@ const OrderDetail = () => {
                                     </div>
                                 </div>
                                 <div className="flex items-start gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0">
+                                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
                                         <CreditCard size={16} className="text-muted-foreground" />
                                     </div>
                                     <div>

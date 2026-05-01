@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Download, Plus, Filter, Eye, Edit2, Trash2, RotateCw, FileText, Flame, Droplet, Zap, Wifi, Paperclip, X, Search, ChevronDown } from 'lucide-react';
 import { formatDateTime, formatPaymentMethod } from '../utils/formatters';
-import * as XLSX from 'xlsx';
+import { exportToExcel } from '../utils/exportExcel';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -75,14 +75,14 @@ const Modal = ({ isOpen, onClose, title, subtitle, children, size = 'default' })
                 className={`relative w-full ${sizeClasses[size]} bg-card border border-border rounded-lg shadow-2xl animate-in zoom-in-95 duration-200 max-h-[96vh] flex flex-col`}
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="flex items-start justify-between p-3 sm:p-4 md:p-6 border-b border-border flex-shrink-0">
+                <div className="flex items-start justify-between p-3 sm:p-4 md:p-6 border-b border-border shrink-0">
                     <div className="flex-1 min-w-0 pr-2">
                         <h2 className="text-base sm:text-lg md:text-xl font-bold text-foreground truncate">{title}</h2>
                         {subtitle && <p className="text-xs sm:text-sm text-muted-foreground mt-1">{subtitle}</p>}
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-1.5 sm:p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground flex-shrink-0"
+                        className="p-1.5 sm:p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground shrink-0"
                     >
                         <X size={18} className="sm:w-5 sm:h-5" />
                     </button>
@@ -444,7 +444,7 @@ const ExpensesManagement = () => {
         });
     };
 
-    const handleExportExcel = () => {
+    const handleExportExcel = async () => {
         const filtered = getFilteredExpenses();
         const data = filtered.map((e, index) => ({
             '#': index + 1,
@@ -458,10 +458,7 @@ const ExpensesManagement = () => {
             'Notes': e.notes || ''
         }));
 
-        const ws = XLSX.utils.json_to_sheet(data);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Expenses');
-        XLSX.writeFile(wb, `expenses_report_${new Date().toISOString().split('T')[0]}.xlsx`);
+        await exportToExcel(data, 'Expenses', `expenses_report_${new Date().toISOString().split('T')[0]}.xlsx`);
         setIsExportOpen(false);
     };
 
@@ -870,7 +867,7 @@ const ExpensesManagement = () => {
                                 <div className="flex items-start justify-between mb-2">
                                     <div className="flex items-center gap-2 flex-1 min-w-0">
                                         <div
-                                            className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 text-white"
+                                            className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-xs shrink-0 text-white"
                                             style={{ backgroundColor: payment.color }}
                                         >
                                             {payment.avatar}
@@ -923,7 +920,7 @@ const ExpensesManagement = () => {
                                         <td className="py-4 px-3">
                                             <div className="flex items-center gap-2">
                                                 <div
-                                                    className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-xs flex-shrink-0 text-white"
+                                                    className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-xs shrink-0 text-white"
                                                     style={{ backgroundColor: payment.color }}
                                                 >
                                                     {payment.avatar}
@@ -1136,7 +1133,7 @@ const ExpensesManagement = () => {
                                         onClick={() => handlePresetClick(preset)}
                                         className="flex items-center gap-2 px-3 py-2.5 rounded-lg font-medium transition-colors text-xs bg-primary text-primary-foreground hover:bg-primary/90"
                                     >
-                                        <preset.icon size={16} className="flex-shrink-0" />
+                                        <preset.icon size={16} className="shrink-0" />
                                         <div className="text-left min-w-0">
                                             <div className="font-semibold truncate">{preset.label}</div>
                                             <div className="text-xs opacity-90">{preset.amount}</div>

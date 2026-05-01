@@ -141,6 +141,7 @@ export default function SuperAdminDashboard() {
     } finally {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -320,7 +321,7 @@ export default function SuperAdminDashboard() {
                           {r.phone || '—'}
                         </p>
                         {r.email && (
-                          <p className="text-[#475569] text-xs mt-0.5 truncate max-w-[160px]">{r.email}</p>
+                          <p className="text-[#475569] text-xs mt-0.5 truncate max-w-40">{r.email}</p>
                         )}
                       </td>
 

@@ -14,7 +14,7 @@ import {
     FileText,
     ChevronDown,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { exportToExcel } from '../utils/exportExcel';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -81,6 +81,7 @@ const StaffManagement = () => {
     useEffect(() => {
         fetchStaff();
         fetchUpcomingSalaries();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const fetchStaff = useCallback(async () => {
@@ -145,6 +146,7 @@ const StaffManagement = () => {
         } finally {
             setLoading(false);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchQuery, roleFilter, statusFilter]);
 
     const fetchUpcomingSalaries = async () => {
@@ -199,7 +201,7 @@ const StaffManagement = () => {
         return formatted;
     };
 
-    const handleExportExcel = () => {
+    const handleExportExcel = async () => {
         // Prepare data for Excel
         const data = staff.map((s, index) => ({
             '#': index + 1,
@@ -212,15 +214,7 @@ const StaffManagement = () => {
             'Aadhar': s.aadhar || '-'
         }));
 
-        // Create worksheet
-        const ws = XLSX.utils.json_to_sheet(data);
-
-        // Create workbook
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'StaffMembers');
-
-        // Save file
-        XLSX.writeFile(wb, `staff_report_${new Date().toISOString().split('T')[0]}.xlsx`);
+        await exportToExcel(data, 'StaffMembers', `staff_report_${new Date().toISOString().split('T')[0]}.xlsx`);
         setIsExportOpen(false);
     };
 
@@ -505,7 +499,7 @@ const StaffManagement = () => {
 
     return (
         <div className="min-h-screen bg-background">
-            <div className="p-3 sm:p-4 lg:p-6 xl:p-8 max-w-[1400px] mx-auto">
+            <div className="p-3 sm:p-4 lg:p-6 xl:p-8 max-w-350 mx-auto">
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 sm:mb-6">
                     <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-foreground">Staff</h1>

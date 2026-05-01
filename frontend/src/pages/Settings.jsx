@@ -268,6 +268,7 @@ export default function Settings() {
       .then(res => setForm({ ...DEFAULT_FORM, ...res.data }))
       .catch(() => toast({ title: 'Could not load settings', variant: 'destructive' }))
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSave = async () => {

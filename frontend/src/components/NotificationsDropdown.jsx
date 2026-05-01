@@ -63,8 +63,9 @@ const NotificationsDropdown = () => {
   // Initial fetch + Polling
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 5000); // Poll every 5s for dropdown
+    const interval = setInterval(fetchNotifications, 5000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Close dropdown when clicking outside
@@ -187,7 +188,7 @@ const NotificationsDropdown = () => {
             </div>
 
             {/* Notifications List */}
-            <div className="max-h-[60vh] md:max-h-[400px] overflow-y-auto">
+            <div className="max-h-[60vh] md:max-h-100 overflow-y-auto">
               {displayedNotifications.length > 0 ? (
                 <div className="divide-y divide-border">
                   {displayedNotifications.map((notification) => (
@@ -198,7 +199,7 @@ const NotificationsDropdown = () => {
                     >
                       <div className="flex items-start gap-2 md:gap-3">
                         {/* Status indicator */}
-                        <div className="mt-1 flex-shrink-0">
+                        <div className="mt-1 shrink-0">
                           {!notification.isRead ? (
                             <div className="h-2 w-2 bg-teal-600 rounded-full"></div>
                           ) : (
@@ -224,7 +225,7 @@ const NotificationsDropdown = () => {
                         </div>
 
                         {/* Actions */}
-                        <div className="flex flex-col md:flex-row items-center gap-1 flex-shrink-0">
+                        <div className="flex flex-col md:flex-row items-center gap-1 shrink-0">
                           {!notification.isRead && (
                             <button
                               onClick={(e) => {

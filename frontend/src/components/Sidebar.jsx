@@ -76,7 +76,7 @@ const Sidebar = ({ isOpen, onClose }) => {
                   activeClassName="bg-primary text-primary-foreground font-medium shadow-sm"
                   onClick={() => onClose()}
                 >
-                  <item.icon className="h-5 w-5 flex-shrink-0" />
+                  <item.icon className="h-5 w-5 shrink-0" />
                   <span className="text-sm">{item.label}</span>
                 </NavLink>
               </li>

@@ -234,6 +234,7 @@ function Customers() {
           customer.phone.includes(customerSearchQuery) ||
           customer.email.toLowerCase().includes(customerSearchQuery)
       );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customers, customerSearchQuery]);
 
   const filteredOrders = useMemo(() => {
@@ -667,7 +668,7 @@ function Customers() {
             </div>
 
             <div className="flex items-start gap-3 sm:gap-4 mb-4 sm:mb-5 lg:mb-6">
-              <div className="bg-muted text-foreground w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center text-xl sm:text-2xl font-bold flex-shrink-0">
+              <div className="bg-muted text-foreground w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center text-xl sm:text-2xl font-bold shrink-0">
                 {getInitials(customerData)}
               </div>
               <div className="flex-1 min-w-0">
@@ -754,7 +755,7 @@ function Customers() {
                         notes: e.target.value,
                       })
                     }
-                    className="w-full bg-muted text-foreground rounded-lg border border-border px-3 py-2 text-sm sm:text-base outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 min-h-[80px]"
+                    className="w-full bg-muted text-foreground rounded-lg border border-border px-3 py-2 text-sm sm:text-base outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 min-h-20"
                   />
                 ) : (
                   <div className="bg-muted text-foreground rounded-lg px-3 py-2 text-sm sm:text-base">
@@ -834,7 +835,7 @@ function Customers() {
                 onClick={handleExport}
                 className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-xs sm:text-sm font-medium"
               >
-                <Download size={14} className="sm:w-[18px] sm:h-[18px]" />
+                <Download size={14} className="sm:w-4.5 sm:h-4.5" />
                 Export
               </button>
             </div>
@@ -993,7 +994,7 @@ function Customers() {
                           {order.created_at}
                         </p>
                       </div>
-                      <div className="flex gap-1.5 flex-shrink-0">
+                      <div className="flex gap-1.5 shrink-0">
                         {payments.map((method, i) => (
                           <span
                             key={i}
@@ -1060,11 +1061,11 @@ function Customers() {
                 </div>
                 <button
                   onClick={handleStartPOS}
-                  className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 whitespace-nowrap text-xs sm:text-sm font-medium flex-shrink-0"
+                  className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 whitespace-nowrap text-xs sm:text-sm font-medium shrink-0"
                 >
                   <PlusCircle
                     size={14}
-                    className="sm:w-[18px] sm:h-[18px]"
+                    className="sm:w-4.5 sm:h-4.5"
                   />
                   Start
                 </button>
@@ -1081,9 +1082,9 @@ function Customers() {
                 </div>
                 <button
                   onClick={handleApplyOffer}
-                  className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 whitespace-nowrap text-xs sm:text-sm font-medium flex-shrink-0"
+                  className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 whitespace-nowrap text-xs sm:text-sm font-medium shrink-0"
                 >
-                  <Copy size={14} className="sm:w-[18px] sm:h-[18px]" />
+                  <Copy size={14} className="sm:w-4.5 sm:h-4.5" />
                   Apply
                 </button>
               </div>
@@ -1099,9 +1100,9 @@ function Customers() {
                 </div>
                 <button
                   onClick={handleDeleteCustomer}
-                  className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 whitespace-nowrap text-xs sm:text-sm font-medium flex-shrink-0"
+                  className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 whitespace-nowrap text-xs sm:text-sm font-medium shrink-0"
                 >
-                  <Trash2 size={14} className="sm:w-[18px] sm:h-[18px]" />
+                  <Trash2 size={14} className="sm:w-4.5 sm:h-4.5" />
                   Delete
                 </button>
               </div>
@@ -1121,7 +1122,7 @@ function Customers() {
         </h2>
         <button
           onClick={() => setShowAddCustomerModal(true)}
-          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
+          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 shrink-0"
         >
           <Plus size={16} />
           <span>Add </span>
@@ -1180,7 +1181,7 @@ function Customers() {
                   >
                     <td className="py-3 px-2">
                       <div className="flex items-center gap-2">
-                        <div className="bg-muted text-foreground w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        <div className="bg-muted text-foreground w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0">
                           {customer.name
                             .split(" ")
                             .map((n) => n[0])
@@ -1225,7 +1226,7 @@ function Customers() {
                 className="p-3 sm:p-4 rounded-lg cursor-pointer transition bg-muted hover:bg-secondary"
               >
                 <div className="flex items-start gap-3 mb-2">
-                  <div className="bg-background text-foreground w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
+                  <div className="bg-background text-foreground w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0">
                     {customer.name
                       .split(" ")
                       .map((n) => n[0])

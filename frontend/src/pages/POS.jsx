@@ -71,6 +71,7 @@ function POS() {
       setAddToOrderId(location.state.addToOrderId);
       setAddToOrderNumber(location.state.orderNumber);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
 
   // Fetch menu items when category or search changes
@@ -85,6 +86,7 @@ function POS() {
         fetchMenuItems();
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategory, searchMenu, categories.length]);
 
   // Fetch customers when search changes
@@ -1413,7 +1415,7 @@ function POS() {
             </button>
             <button
               onClick={() => setShowAddCustomerModal(true)}
-              className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
+              className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 shrink-0"
             >
               <Plus size={16} />
               <span>Add</span>
@@ -1424,7 +1426,7 @@ function POS() {
           <label className="text-muted-foreground text-sm mb-2 block">
             Select customer
           </label>
-          <div className={`flex flex-wrap items-center gap-2 p-2 border rounded-md min-h-[48px] transition-all ${
+          <div className={`flex flex-wrap items-center gap-2 p-2 border rounded-md min-h-12 transition-all ${
             isQuickBillMode 
             ? 'bg-teal-50/30 border-teal-200 cursor-not-allowed opacity-80' 
             : 'bg-muted border-border focus-within:border-teal-500'
@@ -1456,7 +1458,7 @@ function POS() {
 
             {/* Search Input */}
             {!isQuickBillMode && (
-              <div className="relative flex-1 min-w-[120px]">
+              <div className="relative flex-1 min-w-30">
                 <Search
                   size={16}
                   className="text-muted-foreground absolute left-2 top-1/2 transform -translate-y-1/2"
@@ -1568,7 +1570,7 @@ function POS() {
             </h2>
             <button
               onClick={handleDatabaseClick}
-              className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 flex-shrink-0"
+              className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 shrink-0"
             >
               <Database size={16} />
               <span>DB</span>
@@ -1633,7 +1635,7 @@ function POS() {
                       key={i}
                       className="bg-secondary rounded-lg overflow-hidden flex flex-col shadow-sm"
                     >
-                      <div className="w-full h-20 sm:h-24 overflow-hidden bg-gray-200 flex-shrink-0">
+                      <div className="w-full h-20 sm:h-24 overflow-hidden bg-gray-200 shrink-0">
                         <img
                           src={imageUrl || fallbackImage}
                           alt={itemName}
@@ -1645,8 +1647,8 @@ function POS() {
                           }}
                         />
                       </div>
-                      <div className="p-2 sm:p-2.5 flex flex-col gap-1.5 sm:gap-2 flex-grow">
-                        <div className="flex-grow">
+                      <div className="p-2 sm:p-2.5 flex flex-col gap-1.5 sm:gap-2 grow">
+                        <div className="grow">
                           <h3 className="text-foreground text-sm font-bold mb-1.5 line-clamp-2 leading-tight">
                             {itemName}
                           </h3>
@@ -1791,7 +1793,7 @@ function POS() {
                     setShowCouponModal(true);
                   }}
                   disabled={loadingCoupons}
-                  className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 hover:bg-teal-700 flex-shrink-0 disabled:opacity-50"
+                  className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 hover:bg-teal-700 shrink-0 disabled:opacity-50"
                 >
                   <Tag size={16} />
                   <span>{loadingCoupons ? 'Loading...' : 'Coupon'}</span>
@@ -1801,7 +1803,7 @@ function POS() {
                     setCartItems([]);
                     removeCoupon();
                   }}
-                  className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 hover:bg-teal-700 flex-shrink-0"
+                  className="px-3 py-1.5 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 hover:bg-teal-700 shrink-0"
                 >
                   <Trash2 size={16} />
                   <span>Clear</span>

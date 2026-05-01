@@ -21,7 +21,7 @@ import {
   ChevronDown,
   FileText,
 } from "lucide-react";
-import * as XLSX from 'xlsx';
+import { exportToExcel } from '../utils/exportExcel';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import api from "../api/axios";
@@ -326,7 +326,7 @@ const Menu = () => {
     });
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     const data = [];
     Object.values(categoriesById).forEach((category) => {
       const categoryProducts = rawProducts.filter(
@@ -346,10 +346,7 @@ const Menu = () => {
       });
     });
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'MenuData');
-    XLSX.writeFile(wb, `menu_export_${new Date().toISOString().split("T")[0]}.xlsx`);
+    await exportToExcel(data, 'MenuData', `menu_export_${new Date().toISOString().split("T")[0]}.xlsx`);
     setIsExportOpen(false);
   };
 
@@ -1220,7 +1217,7 @@ const Menu = () => {
                   </div>
                 )}
                 <h3 className="text-foreground font-medium mb-3 text-sm sm:text-base flex items-center gap-2">
-                  <span className={`w-3 h-3 rounded-full flex-shrink-0 border ${
+                  <span className={`w-3 h-3 rounded-full shrink-0 border ${
                     g.food_type === 'non_veg' ? 'bg-red-500 border-red-700' : 
                     g.food_type === 'egg' ? 'bg-yellow-500 border-yellow-700' : 
                     'bg-green-500 border-green-700'
@@ -1337,7 +1334,7 @@ const Menu = () => {
                     className="flex items-center justify-between bg-muted border border-border rounded-lg px-4 py-2.5 gap-2"
                   >
                     <span className="text-foreground text-xs sm:text-sm flex-1">{e.action}</span>
-                    <span className="text-muted-foreground text-xs flex-shrink-0">{formatTimeAgo(e.time)}</span>
+                    <span className="text-muted-foreground text-xs shrink-0">{formatTimeAgo(e.time)}</span>
                   </div>
                 ))
               )}
@@ -1711,7 +1708,7 @@ const Menu = () => {
                         className="w-full flex items-center gap-3 p-3 hover:bg-muted transition-colors text-left border-b border-border last:border-b-0"
                       >
                         {dish.image_url && (
-                          <div className="w-12 h-12 bg-gray-200 rounded overflow-hidden flex-shrink-0">
+                          <div className="w-12 h-12 bg-gray-200 rounded overflow-hidden shrink-0">
                             <img
                               src={dish.image_url}
                               alt={dish.name}
@@ -1768,7 +1765,7 @@ const Menu = () => {
                             }
                             setNewProductData({ ...newProductData, sizes: copy });
                           }}
-                          className="w-[100px] bg-muted text-foreground border border-border rounded-lg px-2 py-2 text-sm outline-none"
+                          className="w-25 bg-muted text-foreground border border-border rounded-lg px-2 py-2 text-sm outline-none"
                         >
                           {AVAILABLE_SIZES.map(sizeOption => (
                             <option key={sizeOption} value={sizeOption}>{sizeOption}</option>
@@ -1846,7 +1843,7 @@ const Menu = () => {
                         copy[idx].ingredient_id = e.target.value;
                         setNewProductData({ ...newProductData, ingredients: copy });
                       }}
-                      className="flex-[2] bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                      className="flex-2 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
                     >
                       <option value="" disabled>Select Ingredient</option>
                       {allIngredients.map(i => (
@@ -2113,7 +2110,7 @@ const Menu = () => {
                               }
                               setEditingProductGroup({ ...editingProductGroup, sizes: copy });
                             }}
-                            className="w-[100px] bg-muted text-foreground border border-border rounded-lg px-2 py-2 text-sm outline-none"
+                            className="w-25 bg-muted text-foreground border border-border rounded-lg px-2 py-2 text-sm outline-none"
                           >
                             {AVAILABLE_SIZES.map(sizeOption => (
                               <option key={sizeOption} value={sizeOption}>{sizeOption}</option>
@@ -2227,7 +2224,7 @@ const Menu = () => {
                       copy[idx].ingredient_id = e.target.value;
                       setEditingProductGroup({ ...editingProductGroup, ingredients: copy });
                     }}
-                    className="flex-[2] bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                    className="flex-2 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
                   >
                     <option value="" disabled>Select Ingredient</option>
                     {allIngredients.map(i => (

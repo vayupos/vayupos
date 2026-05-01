@@ -277,7 +277,7 @@ const KDS = () => {
                           <span className="text-lg font-bold text-primary">{item.quantity}x</span>
                           <div>
                             <p className="font-semibold text-slate-900 dark:text-slate-100 leading-tight">{item.product_name}</p>
-                            {item.notes && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 italic italic flex items-center gap-1">
+                            {item.notes && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 italic flex items-center gap-1">
                               <AlertCircle className="h-3 w-3" /> {item.notes}
                             </p>}
                           </div>

@@ -14,6 +14,7 @@ const SearchResults = () => {
         if (query) {
             fetchResults();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [query]);
 
     const fetchResults = async () => {

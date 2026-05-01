@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Plus, RefreshCw, X, Save, Edit, Trash2, Link2, FolderOpen, ChevronDown, FileText } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import api from '../api/axios';
@@ -43,13 +42,13 @@ function Modal({ isOpen, onClose, title, children, maxWidth = "max-w-3xl" }) {
         className={`bg-card rounded-xl shadow-2xl w-full ${maxWidth} my-8 animate-slideUp`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between p-3 sm:p-4 lg:p-5 border-b border-border flex-shrink-0">
+        <div className="flex items-center justify-between p-3 sm:p-4 lg:p-5 border-b border-border shrink-0">
           <h2 className="text-foreground text-sm sm:text-base lg:text-lg font-semibold pr-4">{title}</h2>
           <button
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground transition-colors p-1 flex-shrink-0"
+            className="text-muted-foreground hover:text-foreground transition-colors p-1 shrink-0"
           >
-            <X size={20} className="sm:w-[22px] sm:h-[22px]" />
+            <X size={20} className="sm:w-5.5 sm:h-5.5" />
           </button>
         </div>
 
@@ -110,6 +109,7 @@ function Offers() {
     loadCoupons();
     loadCategories();
     loadProducts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadCoupons = async (isRetry = false) => {
@@ -646,14 +646,14 @@ function Offers() {
               onClick={handleCancel}
               className="flex items-center justify-center gap-2 px-4 py-2.5 border border-border text-muted-foreground bg-transparent rounded-lg text-sm sm:text-base hover:bg-muted transition-colors order-2 sm:order-1"
             >
-              <X size={16} className="sm:w-[18px] sm:h-[18px]" />
+              <X size={16} className="sm:w-4.5 sm:h-4.5" />
               <span>Cancel</span>
             </button>
             <button
               onClick={handleSaveCoupon}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-600 text-white rounded-lg text-sm sm:text-base font-medium hover:bg-teal-700 transition-colors order-1 sm:order-2"
             >
-              <Save size={16} className="sm:w-[18px] sm:h-[18px]" />
+              <Save size={16} className="sm:w-4.5 sm:h-4.5" />
               <span>{editingId !== null ? 'Update Coupon' : 'Save Coupon'}</span>
             </button>
           </div>
@@ -678,7 +678,7 @@ function Offers() {
                 onClick={() => setIsExportOpen(!isExportOpen)}
                 className="w-full flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-teal-600 text-white rounded-lg text-xs sm:text-sm lg:text-base hover:bg-teal-700 transition-colors"
               >
-                <Download size={16} className="sm:w-[18px] sm:h-[18px]" />
+                <Download size={16} className="sm:w-4.5 sm:h-4.5" />
                 <span>Export</span>
                 <ChevronDown size={14} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
               </button>
@@ -708,14 +708,14 @@ function Offers() {
               onClick={handleNewCoupon}
               className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 bg-teal-600 text-white rounded-lg text-xs sm:text-sm lg:text-base font-medium hover:bg-teal-700 transition-colors"
             >
-              <Plus size={16} className="sm:w-[18px] sm:h-[18px]" />
+              <Plus size={16} className="sm:w-4.5 sm:h-4.5" />
               <span>New Coupon</span>
             </button>
           </div>
         </div>
 
         {/* Main Content */}
-        <div className="max-w-[1600px] mx-auto">
+        <div className="max-w-400 mx-auto">
           <div className="flex flex-col gap-4 sm:gap-5 lg:gap-6">
 
         {/* Inline error banner (replaces the blocking alert popup) */}
@@ -741,7 +741,7 @@ function Offers() {
                   onClick={handleSync}
                   className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 border border-teal-600 text-teal-600 bg-transparent rounded-lg text-xs sm:text-sm lg:text-base hover:bg-teal-50 dark:hover:bg-teal-950 transition-colors"
                 >
-                  <RefreshCw size={16} className="sm:w-[18px] sm:h-[18px]" />
+                  <RefreshCw size={16} className="sm:w-4.5 sm:h-4.5" />
                   <span>Sync</span>
                 </button>
               </div>
@@ -898,7 +898,7 @@ function Offers() {
                         </div>
                         <div>
                           <span
-                            className={`px-2 py-1 text-white text-xs rounded-full whitespace-nowrap flex-shrink-0 ${displayStatus === 'Active'
+                            className={`px-2 py-1 text-white text-xs rounded-full whitespace-nowrap shrink-0 ${displayStatus === 'Active'
                               ? 'bg-emerald-600'
                               : displayStatus === 'Expired'
                                 ? 'bg-red-500'

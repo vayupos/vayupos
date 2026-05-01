@@ -213,7 +213,7 @@ const Profile = () => {
         <div className="bg-card rounded-xl border border-border p-4 sm:p-6 lg:p-8">
           {/* Avatar and Basic Info */}
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 mb-8">
-            <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+            <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-primary flex items-center justify-center shrink-0">
               <span className="text-3xl sm:text-4xl font-bold text-primary-foreground">
                 {getInitials(profileData.name)}
               </span>

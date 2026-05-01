@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Download, Printer, Calendar, Filter, RotateCw, ChevronDown, AlertCircle, FileText } from 'lucide-react';
 import { formatDateTime, formatPaymentMethod } from '../utils/formatters';
 import { LineChart, Line, PieChart, Pie, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-import * as XLSX from 'xlsx';
+import { exportToExcel } from '../utils/exportExcel';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -578,6 +578,7 @@ const ReportsPage = () => {
   // Initial load
   useEffect(() => {
     fetchAllReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Recalculate gross margin when sales or expenses change
@@ -599,7 +600,7 @@ const ReportsPage = () => {
     }
   }, [keyMetrics.totalSales, keyMetrics.totalExpenses]);
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (salesData.length === 0 && expensesData.length === 0) return;
 
     // Prepare data for Excel based on current view
@@ -624,10 +625,7 @@ const ReportsPage = () => {
       }));
     }
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'ReportData');
-    XLSX.writeFile(wb, `${filename}.xlsx`);
+    await exportToExcel(data, 'ReportData', `${filename}.xlsx`);
     setIsExportOpen(false);
   };
 
@@ -712,6 +710,7 @@ const ReportsPage = () => {
     if (daysDiff > 0 && daysDiff !== filters.days) {
       setFilters(prev => ({ ...prev, days: daysDiff }));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.dateRange]);
 
   if (loading) {
@@ -727,7 +726,7 @@ const ReportsPage = () => {
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
-      <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+      <div className="w-full max-w-350 mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 lg:mb-8 gap-3">
           <h1 className="text-xl sm:text-2xl font-semibold text-foreground">Reports</h1>
@@ -778,7 +777,7 @@ const ReportsPage = () => {
         {/* Error Message */}
         {error && (
           <div className="mb-4 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex items-start gap-3">
-            <AlertCircle className="text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" size={20} />
+            <AlertCircle className="text-red-600 dark:text-red-400 shrink-0 mt-0.5" size={20} />
             <div className="flex-1">
               <h3 className="text-sm font-semibold text-red-800 dark:text-red-300 mb-1">Error Loading Reports</h3>
               <p className="text-sm text-red-600 dark:text-red-400">{error}</p>

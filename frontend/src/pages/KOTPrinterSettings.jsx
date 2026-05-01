@@ -133,7 +133,7 @@ const KOTPrinterSettings = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="p-6 max-w-[1400px] mx-auto">
+      <div className="p-6 max-w-350 mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-[26px] font-bold text-foreground">KOT Printer Settings</h1>
@@ -450,13 +450,13 @@ const KOTPrinterSettings = () => {
                 <h3 className="text-[16px] font-bold mb-4 text-foreground">Printing Tips</h3>
                 <div className="space-y-4">
                   <div className="flex gap-3">
-                    <Info size={18} className="flex-shrink-0 mt-1 text-muted-foreground" />
+                    <Info size={18} className="shrink-0 mt-1 text-muted-foreground" />
                     <p className="text-[14px] text-muted-foreground">
                       Use 58mm paper for compact KOTs. Enable bold for item names if readability is low.
                     </p>
                   </div>
                   <div className="flex gap-3">
-                    <Zap size={18} className="flex-shrink-0 mt-1 text-muted-foreground" />
+                    <Zap size={18} className="shrink-0 mt-1 text-muted-foreground" />
                     <p className="text-[14px] text-muted-foreground">
                       Bluetooth may drop when printer sleeps. Wake the printer and hit Test Print.
                     </p>
