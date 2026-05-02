@@ -9,7 +9,7 @@ from alembic import context
 
 from app.core.config import get_settings
 from app.core.database import Base
-from app.models import *  # make sure this imports all your models
+#from app.models import *  # make sure this imports all your models
 
 
 # Alembic Config object, provides access to the .ini values
