@@ -13,7 +13,6 @@ from app.models.dish_template import DishTemplate
 from app.models.ingredient import Ingredient, ProductIngredient, Stock
 from app.models.expense import Expense  # ← ADD THIS
 from app.models.notification import Notification  # ← ADD THIS
-from app.models.print_job import PrintJob
 from app.models.password_reset_token import PasswordResetToken
 from app.models.kot import KOT, KOTItem
 
