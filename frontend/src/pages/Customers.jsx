@@ -1,1109 +1,559 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
-  ArrowLeft,
-  Save,
-  Download,
-  Edit,
-  Copy,
-  IndianRupee,
-  Clock,
-  ShoppingBag,
-  Trash2,
-  PlusCircle,
-  Plus,
-  X,
-  Search,
+  ArrowLeft, Save, Download, Pencil, Copy, IndianRupee,
+  Clock, ShoppingBag, Trash2, PlusCircle, Plus, X, Search,
+  Star, Users, TrendingUp, ChevronDown, ChevronUp, Loader2,
+  AlertCircle, CheckCircle2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
+import { toastError, toastSuccess } from "../lib/toast";
 
-function Customers() {
+// ── Loyalty tier ────────────────────────────────────────────────────────────
+function getLoyaltyTier(pts) {
+  if (pts >= 2000) return { name: "Gold",   bg: "bg-amber-500/10",  text: "text-amber-500",  border: "border-amber-500/30",  next: null,     nextAt: 2000 };
+  if (pts >= 500)  return { name: "Silver", bg: "bg-slate-400/10",  text: "text-slate-400",  border: "border-slate-400/30",  next: "Gold",   nextAt: 2000 };
+  return              { name: "Bronze", bg: "bg-orange-500/10", text: "text-orange-500", border: "border-orange-500/30", next: "Silver", nextAt: 500  };
+}
+
+function TierBadge({ points, size = "sm" }) {
+  const t = getLoyaltyTier(points);
+  const cls = size === "lg"
+    ? "px-3 py-1 text-sm font-semibold rounded-full border"
+    : "px-2 py-0.5 text-[11px] font-semibold rounded-full border";
+  return <span className={`${cls} ${t.bg} ${t.text} ${t.border}`}>{t.name}</span>;
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const getDisplayName = (c) => `${c.first_name || ""} ${c.last_name || ""}`.trim() || "Customer";
+const getInitials   = (c) =>
+  getDisplayName(c).split(" ").filter(Boolean).map(n => n[0]).join("").toUpperCase().slice(0, 2) || "CU";
+
+function fmtDate(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+function fmtTime(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+}
+
+const EMPTY_CUSTOMER = {
+  first_name: "", last_name: "", phone: "", email: "",
+  address: "", city: "", state: "", zip_code: "", country: "India",
+};
+
+// ── Component ────────────────────────────────────────────────────────────────
+export default function Customers() {
   const navigate = useNavigate();
 
-  // State management
+  // Loyalty config from restaurant settings
+  const [loyaltyConfig, setLoyaltyConfig] = useState({
+    loyalty_point_value: 0.10,
+    loyalty_earn_pct: 2.0,
+    loyalty_min_redeem_pts: 100,
+  });
+
+  useEffect(() => {
+    api.get("/settings").then(res => {
+      const s = res.data;
+      setLoyaltyConfig({
+        loyalty_point_value:    s.loyalty_point_value    ?? 0.10,
+        loyalty_earn_pct:       s.loyalty_earn_pct       ?? 2.0,
+        loyalty_min_redeem_pts: s.loyalty_min_redeem_pts ?? 100,
+      });
+    }).catch(() => {});
+  }, []);
+
   const [view, setView] = useState("list");
-  const [isEditing, setIsEditing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [dateRange, setDateRange] = useState("Last 30 days");
-  const [statusFilter, setStatusFilter] = useState("All / Paid / Pending");
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showOfferModal, setShowOfferModal] = useState(false);
-  const [customerSearchQuery, setCustomerSearchQuery] = useState("");
-  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
-
-  // Customers from backend
   const [customers, setCustomers] = useState([]);
-  const [customerData, setCustomerData] = useState(null);
-  const [editData, setEditData] = useState(null);
-  const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [newCustomer, setNewCustomer] = useState({
-    first_name: '',
-    last_name: '',
-    phone: '',
-    email: '',
-    address: '',
-    city: '',
-    state: '',
-    zip_code: '',
-    country: 'India',
-  });
+  const [loadError, setLoadError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [customerSearch, setCustomerSearch] = useState("");
 
-  // Orders from backend for selected customer
+  // Detail view
+  const [selected, setSelected] = useState(null);       // raw backend object
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [editSaving, setEditSaving] = useState(false);
   const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [expandedOrderId, setExpandedOrderId] = useState(null);
 
-  // Coupons for offer modal
-  const [availableCoupons, setAvailableCoupons] = useState([]);
+  // Add customer modal
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newCustomer, setNewCustomer] = useState(EMPTY_CUSTOMER);
+  const [addSaving, setAddSaving] = useState(false);
+  const [addError, setAddError] = useState("");
+
+  // Add loyalty points modal
+  const [showLoyaltyModal, setShowLoyaltyModal] = useState(false);
+  const [loyaltyPoints, setLoyaltyPoints] = useState("");
+  const [loyaltySaving, setLoyaltySaving] = useState(false);
+
+  // Offer modal
+  const [showOfferModal, setShowOfferModal] = useState(false);
+  const [coupons, setCoupons] = useState([]);
   const [selectedCoupon, setSelectedCoupon] = useState("");
+  const [offerLoading, setOfferLoading] = useState(false);
 
-  // Helpers ------------------------------------------------------
+  // Delete confirm
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteSaving, setDeleteSaving] = useState(false);
 
-  const getDisplayName = (c) =>
-    `${c.first_name || ""} ${c.last_name || ""}`.trim() || "Customer";
-
-  const getInitials = (c) =>
-    getDisplayName(c)
-      .split(" ")
-      .filter(Boolean)
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase() || "CU";
-
-  const mapCustomerToUi = (c) => {
-    const totalSpentNum = (() => {
-      if (!c.total_spent) return 0;
-      try {
-        const n = Number(c.total_spent);
-        return Number.isFinite(n) ? n : 0;
-      } catch {
-        return 0;
-      }
-    })();
-
-    return {
-      id: c.id,
-      name: getDisplayName(c),
-      memberSince: new Date(c.created_at).toLocaleDateString("en-GB", {
-        month: "short",
-        year: "numeric",
-      }),
-      loyaltyPoints: c.loyalty_points ?? 0,
-      phone: c.phone || "",
-      email: c.email || "",
-      address: c.address || "",
-      notes: "",
-      totalOrders: c.orders_count ?? 0,
-      lifetimeSpend: totalSpentNum,
-      avgOrder: 0,
-      lastVisit: "—",
-    };
-  };
-
-  const mapCustomerToEdit = (c) => ({
-    id: c.id,
-    first_name: c.first_name || "",
-    last_name: c.last_name || "",
-    email: c.email || "",
-    phone: c.phone || "",
-    address: c.address || "",
-    city: c.city || "",
-    state: c.state || "",
-    zip_code: c.zip_code || "",
-    country: c.country || "",
-    is_active: c.is_active ?? true,
-  });
-
-  const mapUiToCustomerHeader = (edit) => ({
-    first_name: edit.first_name,
-    last_name: edit.last_name,
-    email: edit.email,
-    phone: edit.phone,
-    address: edit.address,
-    city: edit.city,
-    state: edit.state,
-    zip_code: edit.zip_code,
-    country: edit.country,
-    is_active: edit.is_active,
-  });
-
-  const loadCustomerOrders = async (customerId) => {
-    try {
-      const res = await api.get(`/orders/customer/${customerId}`, {
-        params: { limit: 50 },
-      });
-      const data = res.data || [];
-      setOrders(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("LOAD CUSTOMER ORDERS ERROR:", err?.response?.data || err);
-      setOrders([]);
-    }
-  };
-
-  const loadAvailableCoupons = async () => {
-    try {
-      const res = await api.get("/coupons/available");
-      const data = res.data || {};
-      const eligible = data.eligible || [];
-      setAvailableCoupons(eligible);
-      if (eligible.length > 0) {
-        setSelectedCoupon(eligible[0].code);
-      }
-    } catch (err) {
-      console.error("LOAD COUPONS ERROR:", err?.response?.data || err);
-      setAvailableCoupons([]);
-    }
-  };
-
+  // ── Data loading ────────────────────────────────────────────────────────────
   const loadCustomers = async () => {
+    setLoading(true);
+    setLoadError("");
     try {
-      const res = await api.get("/customers/", {
-        params: { skip: 0, limit: 100 },
-      });
-      const list = res.data.data || res.data || [];
-      setCustomers(list);
+      const res = await api.get("/customers/", { params: { skip: 0, limit: 200 } });
+      setCustomers(res.data.data || res.data || []);
     } catch (err) {
-      console.error("LOAD CUSTOMERS ERROR:", err?.response?.data || err);
-      alert("Failed to load customers");
-    }
-  };
-
-  const addCustomer = async () => {
-    if (!newCustomer.first_name) {
-      alert('Please enter customer first name');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const res = await api.post('/customers/', newCustomer);
-      alert(
-        `Customer ${newCustomer.first_name} ${newCustomer.last_name} added successfully!`
-      );
-      setNewCustomer({
-        first_name: '',
-        last_name: '',
-        phone: '',
-        email: '',
-        address: '',
-        city: '',
-        state: '',
-        zip_code: '',
-        country: 'India',
-      });
-      setShowAddCustomerModal(false);
-      loadCustomers();
-    } catch (error) {
-      console.error('Error adding customer:', error);
-      if (error.response?.status === 401) {
-        alert('You need to be logged in to add customers. Please log in and try again.');
-        setShowAddCustomerModal(false);
-      } else {
-        const errorDetail = error.response?.data?.detail;
-        let msg = 'Failed to add customer';
-
-        if (Array.isArray(errorDetail) && errorDetail.length > 0) {
-          msg = errorDetail[0]?.msg || msg;
-        } else if (typeof errorDetail === 'string') {
-          msg = errorDetail;
-        }
-
-        alert(`Error: ${msg}`);
-      }
+      setLoadError(err?.response?.data?.detail || "Failed to load customers. Check your connection.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Initial load of customers - REMOVED AUTO-SELECTION
-  useEffect(() => {
-    loadCustomers();
-  }, []);
+  const loadOrders = async (customerId) => {
+    setOrdersLoading(true);
+    try {
+      const res = await api.get(`/orders/customer/${customerId}`, { params: { limit: 100 } });
+      setOrders(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setOrders([]);
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
 
-  // Filters ------------------------------------------------------
+  useEffect(() => { loadCustomers(); }, []);
 
+  // ── Derived ─────────────────────────────────────────────────────────────────
   const filteredCustomers = useMemo(() => {
-    if (!customerSearchQuery.trim()) {
-      return customers.map(mapCustomerToUi);
-    }
-    const q = customerSearchQuery.toLowerCase();
-    return customers
-      .map(mapCustomerToUi)
-      .filter(
-        (customer) =>
-          customer.name.toLowerCase().includes(q) ||
-          customer.phone.includes(customerSearchQuery) ||
-          customer.email.toLowerCase().includes(customerSearchQuery)
-      );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customers, customerSearchQuery]);
+    if (!customerSearch.trim()) return customers;
+    const q = customerSearch.toLowerCase();
+    return customers.filter(c =>
+      getDisplayName(c).toLowerCase().includes(q) ||
+      (c.phone || "").includes(q) ||
+      (c.email || "").toLowerCase().includes(q)
+    );
+  }, [customers, customerSearch]);
 
-  const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
-      const matchesSearch =
-        searchQuery === "" ||
-        (order.order_number || "")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase()) ||
-        (order.notes || "")
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase());
+  const lastVisit = useMemo(() => {
+    if (!orders.length) return "—";
+    const sorted = [...orders].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    return fmtDate(sorted[0].created_at);
+  }, [orders]);
 
-      let statusText = (order.status || "").toLowerCase();
-      let displayStatus = "Pending";
-      if (statusText === "completed" || statusText === "paid") {
-        displayStatus = "Paid";
-      }
+  const totalSpent  = useMemo(() => orders.reduce((s, o) => s + Number(o.total || 0), 0), [orders]);
+  const avgOrder    = orders.length ? Math.round(totalSpent / orders.length) : 0;
 
-      const matchesStatus =
-        statusFilter === "All / Paid / Pending" ||
-        displayStatus.toLowerCase() === statusFilter.toLowerCase();
-
-      return matchesSearch && matchesStatus;
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+  const openDetail = async (c) => {
+    setSelected(c);
+    setEditForm({
+      first_name: c.first_name || "", last_name: c.last_name || "",
+      email: c.email || "", phone: c.phone || "",
+      address: c.address || "", city: c.city || "",
+      state: c.state || "", zip_code: c.zip_code || "",
+      country: c.country || "India", is_active: c.is_active ?? true,
     });
-  }, [orders, searchQuery, statusFilter]);
-
-  // Event handlers -----------------------------------------------
-
-  const handleSelectCustomer = async (customerUi) => {
-    const backend = customers.find((c) => c.id === customerUi.id);
-    if (!backend) return;
-
-    setSelectedCustomerId(backend.id);
-    setCustomerData(mapCustomerToUi(backend));
-    setEditData(mapCustomerToEdit(backend));
     setIsEditing(false);
+    setExpandedOrderId(null);
     setView("detail");
-    await loadCustomerOrders(backend.id);
+    await loadOrders(c.id);
   };
 
-  const handleEdit = async () => {
-    if (!customerData || !editData) return;
-
-    if (isEditing) {
-      try {
-        const body = mapUiToCustomerHeader(editData);
-        const res = await api.put(`/customers/${customerData.id}`, body);
-        const updated = res.data;
-
-        setCustomers((prev) =>
-          prev.map((c) => (c.id === updated.id ? updated : c))
-        );
-        setCustomerData(mapCustomerToUi(updated));
-        setEditData(mapCustomerToEdit(updated));
-
-        alert("Customer details saved successfully!");
-      } catch (err) {
-        console.error("UPDATE CUSTOMER ERROR:", err?.response?.data || err);
-        alert("Failed to update customer");
-        return;
-      }
-    } else {
-      const backend = customers.find((c) => c.id === customerData.id);
-      if (backend) setEditData(mapCustomerToEdit(backend));
+  const handleSaveEdit = async () => {
+    setEditSaving(true);
+    try {
+      const res = await api.put(`/customers/${selected.id}`, editForm);
+      const updated = res.data;
+      setSelected(updated);
+      setCustomers(prev => prev.map(c => c.id === updated.id ? updated : c));
+      setIsEditing(false);
+      toastSuccess("Customer updated");
+    } catch (err) {
+      toastError(err, "Failed to update customer");
+    } finally {
+      setEditSaving(false);
     }
-
-    setIsEditing(!isEditing);
   };
 
-  const handleStartPOS = () => {
-    if (!customerData) return;
+  const handleAddCustomer = async (e) => {
+    e.preventDefault();
+    setAddError("");
+    setAddSaving(true);
+    try {
+      await api.post("/customers/", newCustomer);
+      setShowAddModal(false);
+      setNewCustomer(EMPTY_CUSTOMER);
+      loadCustomers();
+    } catch (err) {
+      const d = err?.response?.data?.detail;
+      const msg = Array.isArray(d) ? d[0]?.msg : (typeof d === "string" ? d : "Failed to add customer");
+      setAddError(msg);
+    } finally {
+      setAddSaving(false);
+    }
+  };
 
-    // Navigate to POS page with customer data
-    navigate('/pos', {
-      state: {
-        customer: {
-          id: customerData.id,
-          name: customerData.name,
-          phone: customerData.phone,
-          email: customerData.email
-        }
-      }
-    });
+  const handleAddPoints = async (e) => {
+    e.preventDefault();
+    const pts = Number(loyaltyPoints);
+    if (!pts || pts <= 0) return;
+    setLoyaltySaving(true);
+    try {
+      const res = await api.post(`/customers/${selected.id}/loyalty-points`, null, { params: { points: pts } });
+      const updated = { ...selected, loyalty_points: res.data.loyalty_points };
+      setSelected(updated);
+      setCustomers(prev => prev.map(c => c.id === updated.id ? updated : c));
+      setShowLoyaltyModal(false);
+      setLoyaltyPoints("");
+      toastSuccess(`${pts} loyalty points added`);
+    } catch (err) {
+      toastError(err, "Failed to add points");
+    } finally {
+      setLoyaltySaving(false);
+    }
   };
 
   const handleApplyOffer = async () => {
-    await loadAvailableCoupons();
+    setOfferLoading(true);
+    try {
+      const res = await api.get("/coupons/available");
+      setCoupons(res.data?.eligible || []);
+      if (res.data?.eligible?.length) setSelectedCoupon(res.data.eligible[0].code);
+    } catch { setCoupons([]); }
+    finally { setOfferLoading(false); }
     setShowOfferModal(true);
   };
 
-  const confirmApplyOffer = async () => {
-    if (!customerData || !selectedCoupon) return;
-
+  const confirmOffer = async () => {
+    if (!selectedCoupon) return;
     try {
-      // Validate the coupon first (optional, but good practice)
-      const validateRes = await api.post("/coupons/validate", {
+      const res = await api.post("/coupons/validate", {
         coupon_code: selectedCoupon,
-        subtotal: customerData.lifetimeSpend || 0,
-        customer_id: customerData.id.toString()
+        subtotal: Number(selected.total_spent || 0),
+        customer_id: String(selected.id),
       });
-
-      if (validateRes.data.valid && validateRes.data.eligible) {
-        alert(
-          `✅ Offer "${selectedCoupon}" applied to ${customerData.name}'s account!\n\nDiscount: ${validateRes.data.coupon.discount_type === 'percentage' ? validateRes.data.coupon.discount_value + '%' : '₹' + validateRes.data.coupon.discount_value}\n\nThey can use this coupon on their next order.`
-        );
+      if (res.data.valid && res.data.eligible) {
         setShowOfferModal(false);
+        toastSuccess(`Offer "${selectedCoupon}" applied`);
       } else {
-        alert(`❌ Coupon validation failed: ${validateRes.data.message || 'Not eligible'}`);
+        toastError(res.data.message || "Coupon not eligible for this customer");
       }
-    } catch (err) {
-      console.error("APPLY OFFER ERROR:", err?.response?.data || err);
-      alert("Failed to apply offer. Please try again.");
-    }
+    } catch (err) { toastError(err, "Failed to apply offer"); }
   };
 
-  const handleDeleteCustomer = () => {
-    setShowDeleteModal(true);
-  };
-
-  const confirmDelete = async () => {
-    if (!customerData) return;
-
+  const handleDelete = async () => {
+    setDeleteSaving(true);
     try {
-      await api.delete(`/customers/${customerData.id}`);
-
-      // Remove from local state
-      setCustomers((prev) =>
-        prev.filter((c) => c.id !== customerData.id)
-      );
-
-      alert(
-        `✅ Customer ${customerData.name} has been deactivated successfully.`
-      );
-
+      await api.delete(`/customers/${selected.id}`);
+      setCustomers(prev => prev.filter(c => c.id !== selected.id));
       setShowDeleteModal(false);
       setView("list");
-      setCustomerData(null);
-      setEditData(null);
-      setSelectedCustomerId(null);
-      setOrders([]);
-    } catch (err) {
-      console.error("DELETE CUSTOMER ERROR:", err?.response?.data || err);
-      alert("Failed to delete customer. Please try again.");
-    }
+      setSelected(null);
+      toastSuccess("Customer removed");
+    } catch (err) { toastError(err, "Failed to delete customer"); }
+    finally { setDeleteSaving(false); }
   };
 
-  // Open popup in NEW TAB
-  const handleViewOrder = (order) => {
-    const statusText = (order.status || "").toLowerCase() === "completed" ? "Paid" : "Pending";
+  // ── DETAIL VIEW ──────────────────────────────────────────────────────────────
+  if (view === "detail" && selected) {
+    const tier       = getLoyaltyTier(selected.loyalty_points ?? 0);
+    const pts        = selected.loyalty_points ?? 0;
+    const ptsValue   = (pts * loyaltyConfig.loyalty_point_value).toFixed(2);
+    const tierPct    = tier.next
+      ? Math.min(100, Math.round((pts / tier.nextAt) * 100))
+      : 100;
 
-    // Create HTML content for the popup
-    const popupContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Order Details - ${order.order_number}</title>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            padding: 20px;
-          }
-          .modal {
-            background: #1e293b;
-            border-radius: 16px;
-            padding: 32px;
-            max-width: 450px;
-            width: 100%;
-            color: #f1f5f9;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-          }
-          .modal h3 {
-            margin: 0 0 24px 0;
-            font-size: 24px;
-            font-weight: 600;
-            color: #f1f5f9;
-          }
-          .detail-row {
-            margin-bottom: 20px;
-          }
-          .label {
-            font-size: 13px;
-            color: #94a3b8;
-            margin-bottom: 6px;
-            font-weight: 500;
-          }
-          .value {
-            font-size: 15px;
-            color: #f1f5f9;
-            font-weight: 500;
-          }
-          .total {
-            font-size: 20px;
-            font-weight: 700;
-            color: #0d9488;
-          }
-          .badge {
-            display: inline-block;
-            padding: 6px 14px;
-            border-radius: 16px;
-            font-size: 13px;
-            font-weight: 500;
-            background: ${statusText === "Paid" ? "#0d9488" : "#ca8a04"};
-            color: white;
-          }
-          .btn-ok {
-            width: 100%;
-            padding: 14px;
-            margin-top: 28px;
-            background: #0d9488;
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-          }
-          .btn-ok:hover {
-            background: #0f766e;
-            transform: translateY(-1px);
-          }
-          .btn-ok:active {
-            transform: translateY(0);
-          }
-          .divider {
-            height: 1px;
-            background: #334155;
-            margin: 20px 0;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="modal">
-          <h3>Order Details</h3>
-          
-          <div class="detail-row">
-            <div class="label">Order ID:</div>
-            <div class="value">#${order.order_number}</div>
-          </div>
-          
-          <div class="detail-row">
-            <div class="label">Date:</div>
-            <div class="value">${order.created_at}</div>
-          </div>
-          
-          <div class="divider"></div>
-          
-          <div class="detail-row">
-            <div class="label">Items:</div>
-            <div class="value">${order.notes || "Masala Dosa, Coffee"}</div>
-          </div>
-          
-          <div class="detail-row">
-            <div class="label">Total:</div>
-            <div class="value total">₹${order.total}</div>
-          </div>
-          
-          <div class="divider"></div>
-          
-          <div class="detail-row">
-            <div class="label">Payment:</div>
-            <span class="badge">${statusText}, UPI</span>
-          </div>
-          
-          <button class="btn-ok" onclick="window.close()">OK</button>
-        </div>
-        
-        <script>
-          window.focus();
-        </script>
-      </body>
-      </html>
-    `;
-
-    const newTab = window.open('', '_blank');
-    newTab.document.write(popupContent);
-    newTab.document.close();
-  };
-
-  const handleReorder = (order) => {
-    if (!customerData) return;
-    alert(
-      `Reordering items from Order ${order.order_number}\n\nAdded to POS cart for ${customerData.name}`
-    );
-  };
-
-  const handleExport = () => {
-    alert(
-      "Exporting order history...\n\nFormat: CSV\nIncluding: All orders, payments, and customer details"
-    );
-  };
-
-  // Derived stats for detail view
-  const computedTotalOrders = orders.length;
-  const computedLifetimeSpend = customerData?.lifetimeSpend ?? 0;
-  const computedAvgOrder =
-    computedTotalOrders > 0
-      ? Math.round(computedLifetimeSpend / computedTotalOrders)
-      : 0;
-
-  // DETAIL VIEW --------------------------------------------------
-  if (view === "detail" && customerData && editData) {
     return (
-      <div className="min-h-screen bg-background text-foreground p-3 sm:p-4 md:p-6 lg:p-8">
-        {/* Delete Modal */}
+      <div className="min-h-screen bg-background text-foreground">
+
+        {/* ── Delete modal ── */}
         {showDeleteModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-card rounded-xl p-5 sm:p-6 max-w-md w-full mx-4">
-              <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-3 sm:mb-4">
-                Delete Customer
-              </h3>
-              <p className="text-sm sm:text-base text-muted-foreground mb-5 sm:mb-6">
-                Are you sure you want to delete {customerData.name}? This will
-                deactivate their profile and all order history. This action cannot
-                be undone.
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-background border border-border rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+              <h3 className="text-base font-semibold text-foreground mb-2">Delete Customer</h3>
+              <p className="text-sm text-muted-foreground mb-5">
+                Deactivate <strong>{getDisplayName(selected)}</strong>? Their profile and order history will be preserved but hidden.
               </p>
-              <div className="flex gap-2 sm:gap-3">
-                <button
-                  onClick={confirmDelete}
-                  className="flex-1 py-2 sm:py-2.5 text-sm sm:text-base bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
-                >
+              <div className="flex gap-3">
+                <button onClick={() => setShowDeleteModal(false)}
+                  className="flex-1 border border-border text-foreground hover:bg-secondary rounded-xl py-2.5 text-sm font-medium transition-colors">
+                  Cancel
+                </button>
+                <button onClick={handleDelete} disabled={deleteSaving}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-60 transition-colors">
+                  {deleteSaving && <Loader2 size={14} className="animate-spin" />}
                   Delete
                 </button>
-                <button
-                  onClick={() => setShowDeleteModal(false)}
-                  className="flex-1 py-2 sm:py-2.5 text-sm sm:text-base bg-muted text-foreground rounded-lg hover:bg-secondary font-medium"
-                >
-                  Cancel
-                </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Offer Modal */}
+        {/* ── Offer modal ── */}
         {showOfferModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-card rounded-xl p-5 sm:p-6 max-w-md w-full mx-4">
-              <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-3 sm:mb-4">
-                Apply Offer
-              </h3>
-              <p className="text-sm sm:text-base text-muted-foreground mb-3 sm:mb-4">
-                Select an offer to apply to {customerData.name}'s next order:
-              </p>
-              <select
-                value={selectedCoupon}
-                onChange={(e) => setSelectedCoupon(e.target.value)}
-                className="w-full bg-muted border border-border rounded px-3 py-2 text-sm text-foreground mb-5 sm:mb-6"
-              >
-                {availableCoupons.length > 0 ? (
-                  availableCoupons.map((coupon) => (
-                    <option key={coupon.id} value={coupon.code}>
-                      {coupon.code} - {coupon.description ||
-                        (coupon.discount_type === 'percentage'
-                          ? `${coupon.discount_value}% off`
-                          : `₹${coupon.discount_value} off`)}
-                    </option>
-                  ))
-                ) : (
-                  <option value="">No coupons available</option>
-                )}
-              </select>
-              <div className="flex gap-2 sm:gap-3">
-                <button
-                  onClick={confirmApplyOffer}
-                  disabled={!selectedCoupon || availableCoupons.length === 0}
-                  className="flex-1 py-2 sm:py-2.5 text-sm sm:text-base bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Apply Offer
-                </button>
-                <button
-                  onClick={() => setShowOfferModal(false)}
-                  className="flex-1 py-2 sm:py-2.5 text-sm sm:text-base bg-muted text-foreground rounded-lg hover:bg-secondary font-medium"
-                >
-                  Cancel
-                </button>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-background border border-border rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-semibold text-foreground">Apply Offer</h3>
+                <button onClick={() => setShowOfferModal(false)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground"><X size={16} /></button>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">Select a coupon for {getDisplayName(selected)}'s next order:</p>
+              {coupons.length ? (
+                <select value={selectedCoupon} onChange={e => setSelectedCoupon(e.target.value)}
+                  className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 mb-5 cursor-pointer">
+                  {coupons.map(c => (
+                    <option key={c.id} value={c.code}>{c.code} — {c.discount_type === "percentage" ? `${c.discount_value}% off` : `₹${c.discount_value} off`}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-sm text-muted-foreground bg-muted rounded-xl p-3 mb-5">No coupons available right now.</p>
+              )}
+              <div className="flex gap-3">
+                <button onClick={() => setShowOfferModal(false)} className="flex-1 border border-border text-foreground hover:bg-secondary rounded-xl py-2.5 text-sm font-medium transition-colors">Cancel</button>
+                <button onClick={confirmOffer} disabled={!selectedCoupon || !coupons.length}
+                  className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-xl py-2.5 text-sm font-semibold transition-colors">Apply</button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 lg:mb-8 gap-3 sm:gap-4">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <button
-              onClick={() => {
-                setView("list");
-                setIsEditing(false);
-              }}
-              className="text-teal-400 hover:text-teal-300 p-1"
-            >
-              <ArrowLeft size={20} className="sm:w-6 sm:h-6" />
-            </button>
-            <h2 className="text-xl sm:text-2xl font-semibold text-foreground">
-              Customer Details
-            </h2>
-          </div>
-        </div>
-
-        <div className="mx-auto space-y-4 sm:space-y-5 lg:space-y-6">
-          {/* Basic Details Card */}
-          <div className="bg-card border border-border rounded-xl p-4 sm:p-5 lg:p-6">
-            <div className="flex items-center justify-end mb-4 sm:mb-5 lg:mb-6">
-              <button
-                onClick={handleEdit}
-                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-xs sm:text-sm font-medium"
-              >
-                {isEditing ? (
-                  <>
-                    <Save size={14} className="sm:w-4 sm:h-4" /> Save
-                  </>
-                ) : (
-                  <>
-                    <Edit size={14} className="sm:w-4 sm:h-4" /> Edit
-                  </>
+        {/* ── Add loyalty points modal ── */}
+        {showLoyaltyModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-background border border-border rounded-2xl p-6 max-w-xs w-full shadow-2xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-semibold text-foreground">Add Loyalty Points</h3>
+                <button onClick={() => { setShowLoyaltyModal(false); setLoyaltyPoints(""); }}
+                  className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground"><X size={16} /></button>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">Current balance: <strong className="text-foreground">{pts} pts</strong></p>
+              <form onSubmit={handleAddPoints} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Points to Add</label>
+                  <input type="number" min="1" required autoFocus value={loyaltyPoints}
+                    onChange={e => setLoyaltyPoints(e.target.value)}
+                    className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors"
+                    placeholder="e.g. 50" />
+                </div>
+                {loyaltyPoints && Number(loyaltyPoints) > 0 && (
+                  <p className="text-xs text-teal-600 dark:text-teal-400 bg-teal-500/10 border border-teal-500/20 px-3 py-2 rounded-xl">
+                    New balance: <strong>{pts + Number(loyaltyPoints)} pts</strong> = ₹{((pts + Number(loyaltyPoints)) * loyaltyConfig.loyalty_point_value).toFixed(2)}
+                  </p>
                 )}
-              </button>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => { setShowLoyaltyModal(false); setLoyaltyPoints(""); }}
+                    className="flex-1 border border-border text-foreground hover:bg-secondary rounded-xl py-2.5 text-sm font-medium transition-colors">Cancel</button>
+                  <button type="submit" disabled={loyaltySaving}
+                    className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2 transition-colors">
+                    {loyaltySaving && <Loader2 size={14} className="animate-spin" />}
+                    Add
+                  </button>
+                </div>
+              </form>
             </div>
+          </div>
+        )}
 
-            <div className="flex items-start gap-3 sm:gap-4 mb-4 sm:mb-5 lg:mb-6">
-              <div className="bg-muted text-foreground w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center text-xl sm:text-2xl font-bold shrink-0">
-                {getInitials(customerData)}
+        <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-5">
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <button onClick={() => { setView("list"); setIsEditing(false); }}
+              className="p-2 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
+              <ArrowLeft size={20} />
+            </button>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-lg sm:text-xl font-bold text-foreground truncate">{getDisplayName(selected)}</h2>
+              <p className="text-xs text-muted-foreground">Customer since {fmtDate(selected.created_at)}</p>
+            </div>
+            <button onClick={() => isEditing ? handleSaveEdit() : setIsEditing(true)} disabled={editSaving}
+              className="flex items-center gap-1.5 px-3 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-xl text-sm font-semibold transition-colors">
+              {editSaving ? <Loader2 size={14} className="animate-spin" /> : isEditing ? <Save size={14} /> : <Pencil size={14} />}
+              <span className="hidden sm:inline">{isEditing ? "Save" : "Edit"}</span>
+            </button>
+          </div>
+
+          {/* Profile hero */}
+          <div className="bg-background border border-border rounded-2xl p-5 sm:p-6">
+            <div className="flex items-start gap-4 mb-5">
+              <div className="w-16 h-16 rounded-2xl bg-teal-600 flex items-center justify-center text-white text-xl font-bold shrink-0">
+                {getInitials(selected)}
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="text-base sm:text-lg lg:text-xl font-semibold text-card-foreground mb-1">
-                  {customerData.name}
-                </h4>
-                <p className="text-xs sm:text-sm text-muted-foreground mb-2 sm:mb-3">
-                  Customer since {customerData.memberSince}
-                </p>
-                <span className="inline-block px-2.5 sm:px-3 py-1 bg-teal-600 text-white text-xs sm:text-sm rounded-full font-medium">
-                  Loyalty: {customerData.loyaltyPoints} pts (₹{(customerData.loyaltyPoints / 10).toFixed(2)})
-                </span>
+                <h3 className="text-lg font-bold text-foreground leading-tight">{getDisplayName(selected)}</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">{selected.phone || "No phone"}</p>
+                <p className="text-sm text-muted-foreground truncate">{selected.email || "No email"}</p>
+                <div className="mt-2">
+                  <TierBadge points={pts} size="sm" />
+                </div>
               </div>
             </div>
 
-            <div className="space-y-3 sm:space-y-4">
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Phone
-                </label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={editData.phone}
-                    onChange={(e) =>
-                      setEditData({ ...editData, phone: e.target.value })
-                    }
-                    className="w-full bg-muted text-foreground rounded-lg border border-border px-3 py-2 text-sm sm:text-base outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                  />
-                ) : (
-                  <div className="bg-muted text-foreground rounded-lg px-3 py-2 text-sm sm:text-base">
-                    {customerData.phone}
+            {/* Edit form */}
+            {isEditing && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1 pt-5 border-t border-border">
+                {[
+                  { key: "first_name", label: "First Name" },
+                  { key: "last_name",  label: "Last Name" },
+                  { key: "phone",      label: "Phone (10-digit)" },
+                  { key: "email",      label: "Email", type: "email" },
+                  { key: "address",    label: "Address", span: true },
+                  { key: "city",       label: "City" },
+                  { key: "state",      label: "State" },
+                  { key: "zip_code",   label: "Zip Code" },
+                ].map(f => (
+                  <div key={f.key} className={f.span ? "sm:col-span-2" : ""}>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1">{f.label}</label>
+                    <input type={f.type || "text"} value={editForm[f.key] || ""} onChange={e => setEditForm({ ...editForm, [f.key]: e.target.value })}
+                      className="w-full bg-muted border border-border rounded-xl px-3 py-2 text-sm text-foreground outline-none focus:border-teal-500 transition-colors" />
                   </div>
-                )}
+                ))}
               </div>
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Email
-                </label>
-                {isEditing ? (
-                  <input
-                    type="email"
-                    value={editData.email}
-                    onChange={(e) =>
-                      setEditData({ ...editData, email: e.target.value })
-                    }
-                    className="w-full bg-muted text-foreground rounded-lg border border-border px-3 py-2 text-sm sm:text-base outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                  />
-                ) : (
-                  <div className="bg-muted text-foreground rounded-lg px-3 py-2 text-sm sm:text-base break-all">
-                    {customerData.email}
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Address
-                </label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={editData.address}
-                    onChange={(e) =>
-                      setEditData({ ...editData, address: e.target.value })
-                    }
-                    className="w-full bg-muted text-foreground rounded-lg border border-border px-3 py-2 text-sm sm:text-base outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                  />
-                ) : (
-                  <div className="bg-muted text-foreground rounded-lg px-3 py-2 text-sm sm:text-base">
-                    {customerData.address}
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Notes
-                </label>
-                {isEditing ? (
-                  <textarea
-                    value={customerData.notes}
-                    onChange={(e) =>
-                      setCustomerData({
-                        ...customerData,
-                        notes: e.target.value,
-                      })
-                    }
-                    className="w-full bg-muted text-foreground rounded-lg border border-border px-3 py-2 text-sm sm:text-base outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 min-h-20"
-                  />
-                ) : (
-                  <div className="bg-muted text-foreground rounded-lg px-3 py-2 text-sm sm:text-base">
-                    {customerData.notes}
-                  </div>
-                )}
-              </div>
-            </div>
+            )}
 
             {/* Stats */}
-            <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:gap-4 mt-4 sm:mt-5 lg:mt-6">
-              <div className="bg-muted rounded-lg p-3 sm:p-4">
-                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                  <Copy
-                    size={14}
-                    className="sm:w-4 sm:h-4 text-muted-foreground"
-                  />
-                  <span className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground font-medium">
-                    Total Orders
-                  </span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
+              {[
+                { label: "Orders",       value: orders.length,                   icon: ShoppingBag },
+                { label: "Total Spent",  value: `₹${totalSpent.toLocaleString("en-IN")}`, icon: IndianRupee },
+                { label: "Avg Order",    value: `₹${avgOrder}`,                  icon: TrendingUp },
+                { label: "Last Visit",   value: lastVisit,                        icon: Clock },
+              ].map(s => (
+                <div key={s.label} className="bg-muted/60 rounded-xl p-3 sm:p-4">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <s.icon size={13} className="text-muted-foreground" />
+                    <span className="text-[11px] font-medium text-muted-foreground">{s.label}</span>
+                  </div>
+                  <p className="text-base sm:text-lg font-bold text-foreground leading-none">{s.value}</p>
                 </div>
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-card-foreground">
-                  {computedTotalOrders}
-                </p>
-              </div>
-              <div className="bg-muted rounded-lg p-3 sm:p-4">
-                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                  <IndianRupee
-                    size={14}
-                    className="sm:w-4 sm:h-4 text-muted-foreground"
-                  />
-                  <span className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground font-medium">
-                    Lifetime Spend
-                  </span>
-                </div>
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-card-foreground">
-                  ₹{computedLifetimeSpend.toLocaleString()}
-                </p>
-              </div>
-              <div className="bg-muted rounded-lg p-3 sm:p-4">
-                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                  <ShoppingBag
-                    size={14}
-                    className="sm:w-4 sm:h-4 text-muted-foreground"
-                  />
-                  <span className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground font-medium">
-                    Avg Order
-                  </span>
-                </div>
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-card-foreground">
-                  ₹{computedAvgOrder}
-                </p>
-              </div>
-              <div className="bg-muted rounded-lg p-3 sm:p-4">
-                <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                  <Clock
-                    size={14}
-                    className="sm:w-4 sm:h-4 text-muted-foreground"
-                  />
-                  <span className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground font-medium">
-                    Last Visit
-                  </span>
-                </div>
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-card-foreground">
-                  {customerData.lastVisit}
-                </p>
-              </div>
+              ))}
             </div>
           </div>
-          {/* Past Orders */}
-          <div className="bg-card border border-border rounded-xl p-4 sm:p-5 lg:p-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-5 lg:mb-6 gap-3">
-              <h3 className="text-base sm:text-lg font-semibold text-card-foreground">
-                Past Orders
-              </h3>
-              <button
-                onClick={handleExport}
-                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-xs sm:text-sm font-medium"
-              >
-                <Download size={14} className="sm:w-4.5 sm:h-4.5" />
-                Export
+
+          {/* Loyalty card */}
+          <div className="bg-background border border-border rounded-2xl p-5 sm:p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Star size={16} className="text-amber-500" />
+                <h3 className="text-sm font-semibold text-foreground">Loyalty Points</h3>
+              </div>
+              <button onClick={() => setShowLoyaltyModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 rounded-xl hover:bg-teal-500/20 transition-colors">
+                <Plus size={12} /> Add Points
               </button>
             </div>
-
-            {/* Filters */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-5 lg:mb-6">
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Search orders
-                </label>
-                <input
-                  type="text"
-                  placeholder="Order ID, items..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-xs sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                />
-              </div>
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Date range
-                </label>
-                <select
-                  value={dateRange}
-                  onChange={(e) => setDateRange(e.target.value)}
-                  className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-xs sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                >
-                  <option>Last 30 days</option>
-                  <option>Last 7 days</option>
-                  <option>Last 90 days</option>
-                  <option>All time</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2 font-medium">
-                  Status
-                </label>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="w-full bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-xs sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-                >
-                  <option>All / Paid / Pending</option>
-                  <option>Paid</option>
-                  <option>Pending</option>
-                </select>
-              </div>
+            <div className="flex items-end gap-3 mb-3">
+              <p className="text-3xl font-black text-foreground">{pts.toLocaleString("en-IN")}</p>
+              <p className="text-sm text-muted-foreground mb-1">pts = <span className="font-semibold text-foreground">₹{ptsValue}</span> redeemable</p>
             </div>
-
-            {/* Orders Table - Desktop */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-primary/10 dark:bg-transparent border-b border-border">
-                    <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-bold">
-                      Order ID
-                    </th>
-                    <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-bold">
-                      Date
-                    </th>
-                    <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-bold">
-                      Items
-                    </th>
-                    <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-bold">
-                      Total
-                    </th>
-                    <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-bold">
-                      Payment
-                    </th>
-                    <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-bold">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredOrders.map((order, index) => {
-                    const statusText =
-                      (order.status || "").toLowerCase() === "completed"
-                        ? "Paid"
-                        : "Pending";
-                    const payments = [statusText];
-                    return (
-                      <tr
-                        key={index}
-                        className="border-b border-border hover:bg-muted transition"
-                      >
-                        <td className="py-3 px-2 text-xs lg:text-sm text-foreground font-medium">
-                          {order.order_number}
-                        </td>
-                        <td className="py-3 px-2 text-xs lg:text-sm text-foreground whitespace-nowrap">
-                          {order.created_at}
-                        </td>
-                        <td className="py-3 px-2 text-xs lg:text-sm text-foreground">
-                          {order.notes || "—"}
-                        </td>
-                        <td className="py-3 px-2 text-xs lg:text-sm text-foreground font-semibold">
-                          ₹{order.total}
-                        </td>
-                        <td className="py-3 px-2">
-                          <div className="flex gap-1.5 flex-wrap">
-                            {payments.map((method, i) => (
-                              <span
-                                key={i}
-                                className={`px-2 py-0.5 text-[10px] lg:text-xs rounded-full font-medium ${method === "Pending"
-                                  ? "bg-yellow-600"
-                                  : "bg-teal-600"
-                                  } text-white`}
-                              >
-                                {method}
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="py-3 px-2">
-                          <div className="flex gap-1.5">
-                            <button
-                              onClick={() => handleViewOrder(order)}
-                              className="px-2.5 py-1 bg-teal-600 text-white rounded text-[10px] lg:text-xs hover:bg-teal-700 font-medium"
-                            >
-                              View
-                            </button>
-                            <button
-                              onClick={() => handleReorder(order)}
-                              className="px-2.5 py-1 bg-teal-600 text-white rounded text-[10px] lg:text-xs hover:bg-teal-700 font-medium"
-                            >
-                              Reorder
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="flex items-center gap-3 mb-2">
+              <TierBadge points={pts} size="sm" />
+              {tier.next && <span className="text-xs text-muted-foreground">{tier.nextAt - pts} pts to {tier.next}</span>}
+              {!tier.next && <span className="text-xs text-amber-500 font-medium">Highest tier</span>}
             </div>
-
-            {/* Orders Cards - Mobile */}
-            <div className="md:hidden space-y-3">
-              {filteredOrders.map((order, index) => {
-                const statusText =
-                  (order.status || "").toLowerCase() === "completed"
-                    ? "Paid"
-                    : "Pending";
-                const payments = [statusText];
-                return (
-                  <div
-                    key={index}
-                    className="bg-muted rounded-lg p-3 sm:p-4"
-                  >
-                    <div className="flex justify-between items-start mb-2 sm:mb-3 gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-foreground text-xs sm:text-sm truncate">
-                          {order.order_number}
-                        </p>
-                        <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">
-                          {order.created_at}
-                        </p>
-                      </div>
-                      <div className="flex gap-1.5 shrink-0">
-                        {payments.map((method, i) => (
-                          <span
-                            key={i}
-                            className={`px-2 py-0.5 text-[10px] rounded-full font-medium whitespace-nowrap ${method === "Pending"
-                              ? "bg-yellow-600"
-                              : "bg-teal-600"
-                              } text-white`}
-                          >
-                            {method}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    <p className="text-xs sm:text-sm text-foreground mb-2 sm:mb-3 line-clamp-2">
-                      {order.notes || "—"}
-                    </p>
-                    <div className="flex justify-between items-center gap-2">
-                      <p className="text-base sm:text-lg font-bold text-foreground">
-                        ₹{order.total}
-                      </p>
-                      <div className="flex gap-1.5 sm:gap-2">
-                        <button
-                          onClick={() => handleViewOrder(order)}
-                          className="px-2.5 sm:px-3 py-1 bg-teal-600 text-white rounded text-[10px] sm:text-xs hover:bg-teal-700 font-medium"
-                        >
-                          View
-                        </button>
-                        <button
-                          onClick={() => handleReorder(order)}
-                          className="px-2.5 sm:px-3 py-1 bg-teal-600 text-white rounded text-[10px] sm:text-xs hover:bg-teal-700 font-medium"
-                        >
-                          Reorder
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {filteredOrders.length === 0 && (
-              <div className="text-center py-10 sm:py-12">
-                <p className="text-muted-foreground text-xs sm:text-sm">
-                  No orders found matching your filters
-                </p>
+            {tier.next && (
+              <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                <div className="h-full bg-teal-500 rounded-full transition-all duration-500" style={{ width: `${tierPct}%` }} />
               </div>
             )}
           </div>
 
-          {/* Quick Actions */}
-          <div className="bg-card border border-border rounded-xl p-4 sm:p-5 lg:p-6">
-            <h3 className="text-base sm:text-lg font-semibold text-card-foreground mb-3 sm:mb-4">
-              Quick Actions
-            </h3>
-            <div className="space-y-2.5 sm:space-y-3">
-              <div className="flex items-center justify-between p-3 sm:p-4 bg-muted rounded-lg hover:bg-secondary transition gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-xs sm:text-sm lg:text-base text-foreground mb-0.5 sm:mb-1">
-                    Create New Order
-                  </p>
-                  <p className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground">
-                    Start POS with {customerData.name.split(" ")[0]}'s details
-                  </p>
+          {/* Orders */}
+          <div className="bg-background border border-border rounded-2xl p-5 sm:p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-foreground">Order History</h3>
+              <span className="text-xs text-muted-foreground">{orders.length} orders</span>
+            </div>
+            {ordersLoading ? (
+              <div className="flex justify-center py-8"><Loader2 size={24} className="animate-spin text-teal-500" /></div>
+            ) : orders.length === 0 ? (
+              <div className="text-center py-10">
+                <ShoppingBag size={28} className="mx-auto text-muted-foreground/40 mb-2" />
+                <p className="text-sm text-muted-foreground">No orders yet</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {[...orders].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(order => {
+                  const paid = ["completed", "paid"].includes((order.status || "").toLowerCase());
+                  const expanded = expandedOrderId === order.id;
+                  return (
+                    <div key={order.id} className="border border-border rounded-xl overflow-hidden">
+                      <button
+                        onClick={() => setExpandedOrderId(expanded ? null : order.id)}
+                        className="w-full flex items-center gap-3 p-3 sm:p-4 hover:bg-muted/40 transition-colors text-left"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-semibold text-foreground">{order.order_number || `#${order.id}`}</span>
+                            <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-md ${paid ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-amber-500/10 text-amber-500"}`}>
+                              {paid ? "Paid" : "Pending"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">{fmtDate(order.created_at)} · {fmtTime(order.created_at)}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-sm font-bold text-foreground">₹{Number(order.total || 0).toLocaleString("en-IN")}</p>
+                        </div>
+                        {expanded ? <ChevronUp size={14} className="text-muted-foreground shrink-0" /> : <ChevronDown size={14} className="text-muted-foreground shrink-0" />}
+                      </button>
+                      {expanded && (
+                        <div className="px-4 pb-4 pt-1 border-t border-border bg-muted/30 space-y-1.5">
+                          {order.items?.length ? order.items.map((item, i) => (
+                            <div key={i} className="flex justify-between text-sm">
+                              <span className="text-foreground">{item.product_name || item.name} × {item.quantity}</span>
+                              <span className="text-muted-foreground">₹{Number(item.subtotal || item.price * item.quantity || 0).toLocaleString("en-IN")}</span>
+                            </div>
+                          )) : <p className="text-xs text-muted-foreground">{order.notes || "No item details"}</p>}
+                          <div className="flex justify-between pt-2 border-t border-border text-sm font-semibold">
+                            <span className="text-foreground">Total</span>
+                            <span className="text-foreground">₹{Number(order.total || 0).toLocaleString("en-IN")}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Quick actions */}
+          <div className="bg-background border border-border rounded-2xl p-5 sm:p-6">
+            <h3 className="text-sm font-semibold text-foreground mb-4">Quick Actions</h3>
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between p-3.5 bg-muted/60 rounded-xl hover:bg-muted transition-colors gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">New Order</p>
+                  <p className="text-xs text-muted-foreground">Start POS with {selected.first_name}'s details</p>
                 </div>
-                <button
-                  onClick={handleStartPOS}
-                  className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 whitespace-nowrap text-xs sm:text-sm font-medium shrink-0"
-                >
-                  <PlusCircle
-                    size={14}
-                    className="sm:w-4.5 sm:h-4.5"
-                  />
-                  Start
+                <button onClick={() => navigate("/pos", { state: { customer: { id: selected.id, name: getDisplayName(selected), phone: selected.phone, email: selected.email } } })}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-semibold shrink-0 transition-colors">
+                  <PlusCircle size={13} /> Start
                 </button>
               </div>
-
-              <div className="flex items-center justify-between p-3 sm:p-4 bg-muted rounded-lg hover:bg-secondary transition gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-xs sm:text-sm lg:text-base text-foreground mb-0.5 sm:mb-1">
-                    Send Offer
-                  </p>
-                  <p className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground">
-                    Apply coupon to next order
-                  </p>
+              <div className="flex items-center justify-between p-3.5 bg-muted/60 rounded-xl hover:bg-muted transition-colors gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground">Send Offer</p>
+                  <p className="text-xs text-muted-foreground">Apply a coupon to their next order</p>
                 </div>
-                <button
-                  onClick={handleApplyOffer}
-                  className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 whitespace-nowrap text-xs sm:text-sm font-medium shrink-0"
-                >
-                  <Copy size={14} className="sm:w-4.5 sm:h-4.5" />
-                  Apply
+                <button onClick={handleApplyOffer} disabled={offerLoading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-xl text-xs font-semibold shrink-0 transition-colors">
+                  {offerLoading ? <Loader2 size={13} className="animate-spin" /> : <Copy size={13} />} Offer
                 </button>
               </div>
-
-              <div className="flex items-center justify-between p-3 sm:p-4 bg-muted rounded-lg hover:bg-secondary transition gap-3">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-xs sm:text-sm lg:text-base text-foreground mb-0.5 sm:mb-1">
-                    Delete Customer
-                  </p>
-                  <p className="text-[10px] sm:text-xs lg:text-sm text-muted-foreground">
-                    Remove profile and history
-                  </p>
+              <div className="flex items-center justify-between p-3.5 bg-muted/60 rounded-xl hover:bg-muted transition-colors gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-red-500">Delete Customer</p>
+                  <p className="text-xs text-muted-foreground">Deactivate profile and hide from list</p>
                 </div>
-                <button
-                  onClick={handleDeleteCustomer}
-                  className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 whitespace-nowrap text-xs sm:text-sm font-medium shrink-0"
-                >
-                  <Trash2 size={14} className="sm:w-4.5 sm:h-4.5" />
-                  Delete
+                <button onClick={() => setShowDeleteModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shrink-0 transition-colors">
+                  <Trash2 size={13} /> Delete
                 </button>
               </div>
             </div>
@@ -1112,267 +562,214 @@ function Customers() {
       </div>
     );
   }
-  // LIST VIEW ----------------------------------------------------
+
+  // ── LIST VIEW ────────────────────────────────────────────────────────────────
+  const totalPoints = customers.reduce((s, c) => s + (c.loyalty_points ?? 0), 0);
+
   return (
-    <div className="min-h-screen bg-background text-foreground p-3 sm:p-4 md:p-6 lg:p-8">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-5">
+
+      {/* Add customer modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-background border border-border rounded-2xl p-6 max-w-md w-full shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-semibold text-foreground">Add Customer</h3>
+              <button onClick={() => { setShowAddModal(false); setAddError(""); setNewCustomer(EMPTY_CUSTOMER); }}
+                className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground transition-colors"><X size={16} /></button>
+            </div>
+            <form onSubmit={handleAddCustomer} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">First Name *</label>
+                  <input required value={newCustomer.first_name} onChange={e => setNewCustomer({ ...newCustomer, first_name: e.target.value })}
+                    className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors"
+                    placeholder="Rahul" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Last Name *</label>
+                  <input required value={newCustomer.last_name} onChange={e => setNewCustomer({ ...newCustomer, last_name: e.target.value })}
+                    className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors"
+                    placeholder="Sharma" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Phone (10-digit Indian mobile)</label>
+                <input type="tel" value={newCustomer.phone} onChange={e => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+                  className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors"
+                  placeholder="9876543210" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Email (optional)</label>
+                <input type="email" value={newCustomer.email} onChange={e => setNewCustomer({ ...newCustomer, email: e.target.value })}
+                  className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors"
+                  placeholder="rahul@example.com" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Address</label>
+                <input value={newCustomer.address} onChange={e => setNewCustomer({ ...newCustomer, address: e.target.value })}
+                  className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors"
+                  placeholder="Street / Area" />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">City</label>
+                  <input value={newCustomer.city} onChange={e => setNewCustomer({ ...newCustomer, city: e.target.value })}
+                    className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors" placeholder="Hyderabad" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">State</label>
+                  <input value={newCustomer.state} onChange={e => setNewCustomer({ ...newCustomer, state: e.target.value })}
+                    className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors" placeholder="TS" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">PIN</label>
+                  <input value={newCustomer.zip_code} onChange={e => setNewCustomer({ ...newCustomer, zip_code: e.target.value })}
+                    className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors" placeholder="500032" />
+                </div>
+              </div>
+              {addError && (
+                <p className="text-xs text-red-500 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5 flex items-center gap-2">
+                  <AlertCircle size={13} /> {addError}
+                </p>
+              )}
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={() => { setShowAddModal(false); setAddError(""); setNewCustomer(EMPTY_CUSTOMER); }}
+                  className="flex-1 border border-border text-foreground hover:bg-secondary rounded-xl py-2.5 text-sm font-medium transition-colors">Cancel</button>
+                <button type="submit" disabled={addSaving}
+                  className="flex-1 bg-teal-600 hover:bg-teal-700 disabled:opacity-60 text-white rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2 transition-colors">
+                  {addSaving && <Loader2 size={14} className="animate-spin" />}
+                  {addSaving ? "Adding…" : "Add Customer"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 lg:mb-8 gap-3 sm:gap-4">
-        <h2 className="text-xl sm:text-2xl font-semibold text-foreground">
-          Customer List
-        </h2>
-        <button
-          onClick={() => setShowAddCustomerModal(true)}
-          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-teal-600 text-white border-none rounded-md text-sm cursor-pointer flex items-center gap-1 sm:gap-2 hover:bg-teal-700 shrink-0"
-        >
-          <Plus size={16} />
-          <span>Add </span>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Customers</h1>
+          <p className="text-sm text-muted-foreground mt-1">Manage restaurant guests and loyalty programme</p>
+        </div>
+        <button onClick={() => setShowAddModal(true)}
+          className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors">
+          <Plus size={16} /> Add Customer
         </button>
       </div>
-      <div className="mx-auto space-y-4 sm:space-y-5 lg:space-y-6">
-        {/* Customer List Card */}
-        <div className="bg-card border border-border rounded-xl p-4 sm:p-5 lg:p-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-5 gap-3">
-            <h3 className="text-base sm:text-lg font-semibold text-card-foreground">
-              Customers
-            </h3>
-            <div className="relative w-full sm:w-64">
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                size={16}
-              />
-              <input
-                type="text"
-                placeholder="Search customers..."
-                value={customerSearchQuery}
-                onChange={(e) => setCustomerSearchQuery(e.target.value)}
-                className="w-full bg-muted text-foreground border border-border rounded-lg pl-10 pr-3 py-2 text-xs sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
-              />
-            </div>
-          </div>
 
-          {/* Customer List - Desktop */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-primary/10 dark:bg-transparent border-b border-border">
-                  <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-bold">
-                    Name
-                  </th>
-                  <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-bold">
-                    Phone
-                  </th>
-                  <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-bold">
-                    Email
-                  </th>
-                  <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-bold">
-                    Orders
-                  </th>
-                  <th className="text-left py-3 px-2 text-xs lg:text-sm text-muted-foreground font-bold">
-                    Loyalty
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredCustomers.map((customer) => (
-                  <tr
-                    key={customer.id}
-                    onClick={() => handleSelectCustomer(customer)}
-                    className="border-b border-border cursor-pointer transition hover:bg-muted"
-                  >
-                    <td className="py-3 px-2">
-                      <div className="flex items-center gap-2">
-                        <div className="bg-muted text-foreground w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0">
-                          {customer.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                        </div>
-                        <span className="text-xs lg:text-sm text-foreground font-medium">
-                          {customer.name}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-2 text-xs lg:text-sm text-foreground">
-                      {customer.phone}
-                    </td>
-                    <td className="py-3 px-2 text-xs lg:text-sm text-foreground">
-                      {customer.email}
-                    </td>
-                    <td className="py-3 px-2 text-xs lg:text-sm text-foreground font-semibold">
-                      {customer.totalOrders}
-                    </td>
-                    <td className="py-3 px-2">
-                      <div className="flex flex-col">
-                        <span className="inline-block px-2 py-0.5 bg-teal-600 text-white text-[10px] rounded-full font-medium w-fit">
-                          {customer.loyaltyPoints} pts
-                        </span>
-                        <span className="text-[10px] text-muted-foreground mt-0.5">
-                          Value: ₹{(customer.loyaltyPoints / 10).toFixed(2)}
-                        </span>
-                      </div>
-                    </td>
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="bg-background border border-border rounded-2xl p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Total Customers</p>
+          <p className="text-2xl font-bold text-foreground">{customers.length}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">registered guests</p>
+        </div>
+        <div className="bg-background border border-border rounded-2xl p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Loyalty Points</p>
+          <p className="text-2xl font-bold text-amber-500">{totalPoints.toLocaleString("en-IN")}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">points issued total</p>
+        </div>
+        <div className="bg-background border border-border rounded-2xl p-4 col-span-2 sm:col-span-1">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">Gold Members</p>
+          <p className="text-2xl font-bold text-foreground">{customers.filter(c => (c.loyalty_points ?? 0) >= 2000).length}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">2000+ pts</p>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <input value={customerSearch} onChange={e => setCustomerSearch(e.target.value)}
+          placeholder="Search by name, phone or email…"
+          className="w-full bg-background border border-border rounded-xl pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-teal-500 transition-colors" />
+      </div>
+
+      {/* List */}
+      <div className="bg-background border border-border rounded-2xl overflow-hidden shadow-sm">
+        {loading ? (
+          <div className="flex flex-col items-center gap-3 py-16">
+            <Loader2 size={28} className="animate-spin text-teal-500" />
+            <p className="text-sm text-muted-foreground">Loading customers…</p>
+          </div>
+        ) : loadError ? (
+          <div className="flex flex-col items-center gap-3 py-16 px-4 text-center">
+            <AlertCircle size={28} className="text-red-500" />
+            <p className="text-sm font-medium text-foreground">Failed to load</p>
+            <p className="text-xs text-muted-foreground max-w-xs">{loadError}</p>
+            <button onClick={loadCustomers} className="mt-1 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-sm font-semibold transition-colors">Retry</button>
+          </div>
+        ) : filteredCustomers.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-16">
+            <Users size={28} className="text-muted-foreground/40" />
+            <p className="text-sm font-medium text-foreground">{customerSearch ? "No matching customers" : "No customers yet"}</p>
+            <p className="text-xs text-muted-foreground">{customerSearch ? "Try a different search" : "Add your first customer to get started"}</p>
+          </div>
+        ) : (
+          <>
+            {/* Desktop table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50">
+                    {["Customer", "Phone", "Email", "Orders", "Loyalty", "Tier"].map((h, i) => (
+                      <th key={i} className="py-3 px-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filteredCustomers.map(c => (
+                    <tr key={c.id} onClick={() => openDetail(c)}
+                      className="hover:bg-muted/40 cursor-pointer transition-colors">
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-teal-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                            {getInitials(c)}
+                          </div>
+                          <p className="text-sm font-semibold text-foreground">{getDisplayName(c)}</p>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 text-sm text-muted-foreground">{c.phone || "—"}</td>
+                      <td className="py-3.5 px-4 text-sm text-muted-foreground max-w-45 truncate">{c.email || "—"}</td>
+                      <td className="py-3.5 px-4 text-sm font-semibold text-foreground">{c.orders_count ?? 0}</td>
+                      <td className="py-3.5 px-4">
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{(c.loyalty_points ?? 0).toLocaleString("en-IN")} pts</p>
+                          <p className="text-[11px] text-muted-foreground">= ₹{((c.loyalty_points ?? 0) * loyaltyConfig.loyalty_point_value).toFixed(2)}</p>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <TierBadge points={c.loyalty_points ?? 0} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-          {/* Customer List - Mobile */}
-          <div className="md:hidden space-y-3">
-            {filteredCustomers.map((customer) => (
-              <div
-                key={customer.id}
-                onClick={() => handleSelectCustomer(customer)}
-                className="p-3 sm:p-4 rounded-lg cursor-pointer transition bg-muted hover:bg-secondary"
-              >
-                <div className="flex items-start gap-3 mb-2">
-                  <div className="bg-background text-foreground w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0">
-                    {customer.name
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")}
+            {/* Mobile cards */}
+            <div className="md:hidden divide-y divide-border">
+              {filteredCustomers.map(c => (
+                <div key={c.id} onClick={() => openDetail(c)}
+                  className="flex items-center gap-3 p-4 hover:bg-muted/40 cursor-pointer transition-colors">
+                  <div className="w-11 h-11 rounded-xl bg-teal-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
+                    {getInitials(c)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-foreground text-sm truncate">
-                      {customer.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {customer.email}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {customer.phone}
-                    </p>
+                    <p className="text-sm font-semibold text-foreground truncate">{getDisplayName(c)}</p>
+                    <p className="text-xs text-muted-foreground">{c.phone || c.email || "No contact"}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <TierBadge points={c.loyalty_points ?? 0} />
+                    <p className="text-[11px] text-muted-foreground mt-1">{(c.loyalty_points ?? 0)} pts</p>
                   </div>
                 </div>
-                <div className="flex justify-between items-center mt-2 pt-2 border-t border-border">
-                  <span className="text-xs text-muted-foreground">
-                    Orders:{" "}
-                    <span className="font-semibold text-foreground">{customer.totalOrders}</span>
-                  </span>
-                  <span className="inline-block px-2 py-0.5 bg-teal-600 text-white text-xs rounded-full font-medium">
-                    {customer.loyaltyPoints} pts (₹{(customer.loyaltyPoints / 10).toFixed(2)})
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {filteredCustomers.length === 0 && (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground text-xs sm:text-sm">
-                No customers found
-              </p>
+              ))}
             </div>
-          )}
-          {/* Add Customer Modal */}
-          {showAddCustomerModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-3">
-              <div className="bg-card rounded-lg p-4 sm:p-5 md:p-6 w-full max-w-[92vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-3 sm:mb-4">
-                  <h3 className="text-sm sm:text-lg md:text-xl font-semibold text-card-foreground">
-                    Add New Customer
-                  </h3>
-                  <button
-                    onClick={() => setShowAddCustomerModal(false)}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-
-                <input
-                  type="text"
-                  placeholder="First name *"
-                  value={newCustomer.first_name}
-                  onChange={(e) =>
-                    setNewCustomer({ ...newCustomer, first_name: e.target.value })
-                  }
-                  className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
-                />
-                <input
-                  type="text"
-                  placeholder="Last name"
-                  value={newCustomer.last_name}
-                  onChange={(e) =>
-                    setNewCustomer({ ...newCustomer, last_name: e.target.value })
-                  }
-                  className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
-                />
-                <input
-                  type="text"
-                  placeholder="+91 Phone number"
-                  value={newCustomer.phone}
-                  onChange={(e) =>
-                    setNewCustomer({ ...newCustomer, phone: e.target.value })
-                  }
-                  className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
-                />
-                <input
-                  type="email"
-                  placeholder="example@mail.com (optional)"
-                  value={newCustomer.email}
-                  onChange={(e) =>
-                    setNewCustomer({ ...newCustomer, email: e.target.value })
-                  }
-                  className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
-                />
-                <input
-                  type="text"
-                  placeholder="Address"
-                  value={newCustomer.address}
-                  onChange={(e) =>
-                    setNewCustomer({ ...newCustomer, address: e.target.value })
-                  }
-                  className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
-                />
-                <input
-                  type="text"
-                  placeholder="City"
-                  value={newCustomer.city}
-                  onChange={(e) =>
-                    setNewCustomer({ ...newCustomer, city: e.target.value })
-                  }
-                  className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
-                />
-                <input
-                  type="text"
-                  placeholder="State"
-                  value={newCustomer.state}
-                  onChange={(e) =>
-                    setNewCustomer({ ...newCustomer, state: e.target.value })
-                  }
-                  className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
-                />
-                <input
-                  type="text"
-                  placeholder="Zip code"
-                  value={newCustomer.zip_code}
-                  onChange={(e) =>
-                    setNewCustomer({ ...newCustomer, zip_code: e.target.value })
-                  }
-                  className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-3 sm:mb-4"
-                />
-                <div className="flex gap-2">
-                  <button
-                    onClick={addCustomer}
-                    disabled={loading}
-                    className="flex-1 py-2 sm:py-2.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm sm:text-base font-medium disabled:opacity-50"
-                  >
-                    {loading ? 'Adding...' : 'Add Customer'}
-                  </button>
-                  <button
-                    onClick={() => setShowAddCustomerModal(false)}
-                    className="flex-1 py-2 sm:py-2.5 bg-muted text-foreground rounded-lg text-sm sm:text-base font-medium"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
     </div>
   );
 }
-export default Customers;

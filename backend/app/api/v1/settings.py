@@ -1,9 +1,8 @@
 """Restaurant settings API — GET/PUT /settings"""
-import secrets
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
@@ -35,7 +34,17 @@ class SettingsResponse(BaseModel):
     kot_paper_width: str
     kot_printer_ip: Optional[str]
     kot_printer_port: Optional[int]
-    print_agent_key: Optional[str]
+    loyalty_point_value:    float
+    loyalty_earn_pct:       float
+    loyalty_min_redeem_pts: int
+    module_pos:       bool
+    module_kot:       bool
+    module_inventory: bool
+    module_reports:   bool
+    module_expenses:  bool
+    module_staff:     bool
+    module_customers: bool
+    module_coupons:   bool
     is_active: bool
     trial_expires_at: Optional[datetime]
 
@@ -62,6 +71,9 @@ class SettingsUpdate(BaseModel):
     kot_paper_width: Optional[str] = None
     kot_printer_ip: Optional[str] = None
     kot_printer_port: Optional[int] = None
+    loyalty_point_value:    Optional[float] = None
+    loyalty_earn_pct:       Optional[float] = None
+    loyalty_min_redeem_pts: Optional[int]   = None
 
     @field_validator("bill_printer_ip", "kot_printer_ip", mode="before")
     @classmethod
@@ -90,12 +102,8 @@ class SettingsUpdate(BaseModel):
 def _get_or_create_client(db: Session, client_id: int) -> Client:
     client = db.query(Client).filter(Client.id == client_id).first()
     if not client:
-        client = Client(id=client_id, print_agent_key=secrets.token_urlsafe(32))
+        client = Client(id=client_id)
         db.add(client)
-        db.commit()
-        db.refresh(client)
-    elif not client.print_agent_key:
-        client.print_agent_key = secrets.token_urlsafe(32)
         db.commit()
         db.refresh(client)
     return client
@@ -125,20 +133,6 @@ def update_settings(
         setattr(client, field, value)
 
     client.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(client)
-    return client
-
-
-@router.post("/regenerate-agent-key", response_model=SettingsResponse)
-def regenerate_agent_key(
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Generate a new print agent key (invalidates the old one)."""
-    client_id = int(current_user["client_id"])
-    client = _get_or_create_client(db, client_id)
-    client.print_agent_key = secrets.token_urlsafe(32)
     db.commit()
     db.refresh(client)
     return client

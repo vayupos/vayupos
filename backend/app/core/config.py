@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from dotenv import load_dotenv
 from typing import Optional
 
@@ -12,7 +13,20 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION: int = 3600
-    FRONTEND_URL: str = "http://localhost:8080"
+
+    # Comma-separated list of allowed CORS origins
+    # e.g. https://app.vayupos.com,https://admin.vayupos.com,http://localhost:8080
+    ALLOWED_ORIGINS: list = [
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+    ]
+
+    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @classmethod
+    def parse_origins(cls, v):
+        if isinstance(v, str):
+            return [o.strip() for o in v.split(",") if o.strip()]
+        return v
 
     # Admin
     ADMIN_SECRET_KEY: str

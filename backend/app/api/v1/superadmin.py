@@ -1,6 +1,8 @@
 """Superadmin endpoints — manage all restaurants on the platform."""
 from datetime import datetime, timedelta
 from typing import List, Optional
+import hashlib
+import secrets
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, EmailStr
@@ -12,6 +14,8 @@ from app.core.config import get_settings
 from app.core.security import hash_password
 from app.models.client import Client
 from app.models.user import User, UserRole
+from app.models.invite_token import InviteToken
+from app.utils.auth_email import send_password_reset_email_mock
 
 router = APIRouter(prefix="/superadmin", tags=["Superadmin"])
 settings = get_settings()
@@ -198,3 +202,100 @@ def toggle_restaurant_active(
     client.is_active = not client.is_active
     db.commit()
     return {"client_id": client_id, "is_active": client.is_active}
+
+
+# ── Module flags ────────────────────────────────────────────────────────────
+
+class ModuleFlagsUpdate(BaseModel):
+    module_pos:       Optional[bool] = None
+    module_kot:       Optional[bool] = None
+    module_inventory: Optional[bool] = None
+    module_reports:   Optional[bool] = None
+    module_expenses:  Optional[bool] = None
+    module_staff:     Optional[bool] = None
+    module_customers: Optional[bool] = None
+    module_coupons:   Optional[bool] = None
+
+
+@router.patch("/restaurants/{client_id}/modules")
+def update_module_flags(
+    client_id: int,
+    payload: ModuleFlagsUpdate,
+    _: dict = Depends(get_superadmin_user),
+    db: Session = Depends(get_db),
+):
+    """Enable or disable individual modules for a restaurant."""
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+    for field, value in payload.dict(exclude_unset=True).items():
+        setattr(client, field, value)
+    db.commit()
+    return {
+        "client_id": client_id,
+        "module_pos":       client.module_pos,
+        "module_kot":       client.module_kot,
+        "module_inventory": client.module_inventory,
+        "module_reports":   client.module_reports,
+        "module_expenses":  client.module_expenses,
+        "module_staff":     client.module_staff,
+        "module_customers": client.module_customers,
+        "module_coupons":   client.module_coupons,
+    }
+
+
+# ── Invite users to an existing restaurant ─────────────────────────────────
+
+class InviteUserRequest(BaseModel):
+    client_id: int
+    email: EmailStr
+    role: str = "cashier"
+
+
+@router.post("/invite-user", status_code=201)
+def invite_user(
+    payload: InviteUserRequest,
+    _: dict = Depends(get_superadmin_user),
+    db: Session = Depends(get_db),
+):
+    """Send an invite link to a new user for an existing restaurant."""
+    client = db.query(Client).filter(Client.id == payload.client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+
+    # Invalidate old unused tokens for this email + client
+    db.query(InviteToken).filter(
+        InviteToken.client_id == payload.client_id,
+        InviteToken.email == str(payload.email).lower(),
+        InviteToken.used == False,
+    ).update({InviteToken.used: True}, synchronize_session=False)
+
+    raw_token = secrets.token_urlsafe(48)
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+
+    invite = InviteToken(
+        client_id=payload.client_id,
+        email=str(payload.email).strip().lower(),
+        role=payload.role,
+        token_hash=token_hash,
+        expires_at=datetime.utcnow() + timedelta(hours=48),
+    )
+    db.add(invite)
+    db.commit()
+
+    app_url = next(
+        (o for o in settings.ALLOWED_ORIGINS if "localhost" not in o and "127.0.0.1" not in o),
+        settings.ALLOWED_ORIGINS[0] if settings.ALLOWED_ORIGINS else "http://localhost:8080",
+    )
+    invite_link = f"{app_url}/accept-invite?token={raw_token}"
+
+    # Re-use the email utility (sends real email if SMTP is configured, otherwise logs)
+    send_password_reset_email_mock(
+        email=str(payload.email),
+        reset_link=invite_link,
+    )
+
+    return {
+        "message": f"Invite sent to {payload.email}",
+        "expires_in_hours": 48,
+    }

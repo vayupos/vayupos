@@ -237,7 +237,7 @@ function AgentKeySection({ agentKey, onRegenerate }) {
 }
 
 // ── Main page ───────────────────────────────────────────────────────────
-const TABS = ['Restaurant Info', 'Bill Printer', 'KOT Printer'];
+const TABS = ['Restaurant Info', 'Bill Printer', 'KOT Printer', 'Loyalty'];
 
 const DEFAULT_FORM = {
   restaurant_name: '',
@@ -259,6 +259,9 @@ const DEFAULT_FORM = {
   kot_printer_ip: '',
   kot_printer_port: 9100,
   print_agent_key: '',
+  loyalty_point_value:    0.10,
+  loyalty_earn_pct:       2.0,
+  loyalty_min_redeem_pts: 100,
 };
 
 export default function Settings() {
@@ -494,6 +497,54 @@ export default function Settings() {
             onRegenerate={handleRegenerate}
           />
         </>
+      )}
+
+      {/* ── Tab 3: Loyalty ───────────────────────────────────────────── */}
+      {activeTab === 3 && (
+        <div className="space-y-6 max-w-lg">
+          <p className="text-[13px] text-muted-foreground">
+            Configure how loyalty points are earned and redeemed across your restaurant.
+          </p>
+          <Field label="Points value (₹ per 1 point)" hint="How much cash value 1 loyalty point is worth. e.g. 0.10 means 10 pts = ₹1">
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={form.loyalty_point_value}
+              onChange={e => setForm(f => ({ ...f, loyalty_point_value: parseFloat(e.target.value) || 0 }))}
+              className={inputCls}
+              placeholder="0.10"
+            />
+          </Field>
+          <Field label="Points earned per order (%)" hint="% of order total that becomes loyalty points. e.g. 2 means a ₹500 order earns 10 pts (500 × 2% = 10)">
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              max="100"
+              value={form.loyalty_earn_pct}
+              onChange={e => setForm(f => ({ ...f, loyalty_earn_pct: parseFloat(e.target.value) || 0 }))}
+              className={inputCls}
+              placeholder="2.0"
+            />
+          </Field>
+          <Field label="Minimum points to redeem" hint="Customer must have at least this many points before they can redeem">
+            <input
+              type="number"
+              min="1"
+              step="1"
+              value={form.loyalty_min_redeem_pts}
+              onChange={e => setForm(f => ({ ...f, loyalty_min_redeem_pts: parseInt(e.target.value) || 100 }))}
+              className={inputCls}
+              placeholder="100"
+            />
+          </Field>
+          <div className="p-4 bg-muted/60 rounded-xl border border-border text-[13px] text-muted-foreground space-y-1">
+            <p><strong className="text-foreground">Example with current settings:</strong></p>
+            <p>• ₹500 order → earns <strong className="text-foreground">{Math.round(500 * (form.loyalty_earn_pct / 100))} pts</strong></p>
+            <p>• Minimum {form.loyalty_min_redeem_pts} pts → worth <strong className="text-foreground">₹{(form.loyalty_min_redeem_pts * form.loyalty_point_value).toFixed(2)}</strong></p>
+          </div>
+        </div>
       )}
     </div>
   );

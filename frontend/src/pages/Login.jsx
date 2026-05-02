@@ -158,17 +158,6 @@ const Login = () => {
               Login
             </button>
 
-            {/* Sign Up Link */}
-            <div className="text-center text-gray-400 text-sm">
-              Don't have an account?{" "}
-              <button
-                type="button"
-                onClick={() => navigate("/register")}
-                className="text-[#14b8a6] hover:text-[#0d9488] font-medium transition-colors"
-              >
-                Sign Up
-              </button>
-            </div>
           </form>
         </div>
       </div>

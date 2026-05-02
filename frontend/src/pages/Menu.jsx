@@ -20,6 +20,10 @@ import {
   Upload,
   ChevronDown,
   FileText,
+  SlidersHorizontal,
+  PackageOpen,
+  Inbox,
+  Tag,
 } from "lucide-react";
 import { exportToExcel } from '../utils/exportExcel';
 import jsPDF from 'jspdf';
@@ -127,6 +131,7 @@ const Menu = () => {
     };
   }, [isExportOpen]);
   const [newCategoryIcon, setNewCategoryIcon] = useState("Coffee");
+  const [newCategoryTaxRate, setNewCategoryTaxRate] = useState(5);
 
   const [showNewProductModal, setShowNewProductModal] = useState(false);
   const [newProductData, setNewProductData] = useState({
@@ -163,9 +168,8 @@ const Menu = () => {
   });
   const [showAllEditsModal, setShowAllEditsModal] = useState(false);
 
-  // Tax state
-  const taxOptions = [0, 5, 12, 18, 28];
-  const [selectedTax, setSelectedTax] = useState(5);
+  // Tax options for category GST field
+  const TAX_OPTIONS = [0, 5, 12, 18, 28];
 
   // CONSTANTS for Sizes
   const AVAILABLE_SIZES = [
@@ -180,6 +184,7 @@ const Menu = () => {
   // NEW STATE FOR DISH LIBRARY
   const [dishTemplates, setDishTemplates] = useState([]);
   const [showDishLibrary, setShowDishLibrary] = useState(false);
+  const [dishLibraryChecked, setDishLibraryChecked] = useState(false);
 
   // NEW STATE FOR AUTOCOMPLETE
   const [showAutocomplete, setShowAutocomplete] = useState(false);
@@ -187,6 +192,15 @@ const Menu = () => {
 
   // NEW STATE FOR IMAGE UPLOAD
   const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Inline ingredient quick-create state
+  const [inlineIngredient, setInlineIngredient] = useState({ show: false, name: "", unit: "g", saving: false, targetIdx: null, isEdit: false });
+
+  const [showFilters, setShowFilters] = useState(false);
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [availabilityFilter, setAvailabilityFilter] = useState("all");
+  const [hasImageFilter, setHasImageFilter] = useState(false);
 
   const [loading, setLoading] = useState(true);
 
@@ -229,18 +243,21 @@ const Menu = () => {
     fetchData();
   }, []);
 
-  // LOAD DISH TEMPLATES WHEN NEW PRODUCT MODAL OPENS
+  // LOAD DISH TEMPLATES WHEN NEW OR EDIT PRODUCT MODAL OPENS
   useEffect(() => {
-    if (!showNewProductModal) return;
+    if (!showNewProductModal && !showEditProductModal) return;
+    if (dishLibraryChecked) return;
     (async () => {
       try {
         const res = await api.get("/upload/dish-library");
         setDishTemplates(res.data);
       } catch (err) {
         console.error("LOAD DISH LIBRARY ERROR:", err?.response?.data || err);
+      } finally {
+        setDishLibraryChecked(true);
       }
     })();
-  }, [showNewProductModal]);
+  }, [showNewProductModal, showEditProductModal]);
 
   // LOAD DISH TEMPLATES WHEN LIBRARY OPENS
   useEffect(() => {
@@ -289,8 +306,38 @@ const Menu = () => {
       list = list.filter((g) => g.food_type === foodTypeFilter);
     }
 
+    if (minPrice !== "") {
+      const min = parseFloat(minPrice);
+      if (!isNaN(min)) {
+        list = list.filter((g) => Math.min(...g.sizes.map((s) => s.price)) >= min);
+      }
+    }
+    if (maxPrice !== "") {
+      const max = parseFloat(maxPrice);
+      if (!isNaN(max)) {
+        list = list.filter((g) => Math.min(...g.sizes.map((s) => s.price)) <= max);
+      }
+    }
+
+    if (availabilityFilter === "available") {
+      const now = new Date();
+      const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      list = list.filter((g) => {
+        if (!g.is_time_restricted) return true;
+        return hhmm >= g.available_from && hhmm <= g.available_to;
+      });
+    } else if (availabilityFilter === "restricted") {
+      list = list.filter((g) => g.is_time_restricted);
+    }
+
+    if (hasImageFilter) {
+      list = list.filter((g) => !!g.imageUrl);
+    }
+
     if (sortBy === "name") {
       list.sort((a, b) => a.baseName.localeCompare(b.baseName));
+    } else if (sortBy === "name-desc") {
+      list.sort((a, b) => b.baseName.localeCompare(a.baseName));
     } else if (sortBy === "price-low") {
       list.sort((a, b) => {
         const minA = Math.min(...a.sizes.map((s) => s.price));
@@ -306,7 +353,7 @@ const Menu = () => {
     }
 
     return list;
-  }, [groupedProducts, selectedCategoryId, searchTerm, sortBy, foodTypeFilter]);
+  }, [groupedProducts, selectedCategoryId, searchTerm, sortBy, foodTypeFilter, minPrice, maxPrice, availabilityFilter, hasImageFilter]);
 
   // Filter categories based on search
   const filteredCategories = categories.filter((cat) =>
@@ -521,6 +568,7 @@ const Menu = () => {
         name: newCategoryName,
         description: newCategoryDescription || null,
         icon_name: newCategoryIcon,
+        tax_rate: newCategoryTaxRate,
       });
       const created = res.data;
       setCategories((prev) => [...prev, created]);
@@ -530,6 +578,7 @@ const Menu = () => {
       setNewCategoryName("");
       setNewCategoryDescription("");
       setNewCategoryIcon("Coffee");
+      setNewCategoryTaxRate(5);
       setShowNewCategoryModal(false);
       alert("Category added successfully!");
     } catch (err) {
@@ -576,6 +625,7 @@ const Menu = () => {
       ...cat,
       originalName: cat.name,
       icon_name: cat.icon_name || "Coffee",
+      tax_rate: cat.tax_rate ?? 5,
     });
     setShowEditCategoryModal(true);
   };
@@ -586,12 +636,13 @@ const Menu = () => {
       return;
     }
     try {
-      const { id, name, description, is_active, icon_name } = editingCategory;
+      const { id, name, description, is_active, icon_name, tax_rate } = editingCategory;
       const res = await api.put(`/categories/${id}`, {
         name,
         description,
         is_active,
         icon_name: icon_name || "Coffee",
+        tax_rate: tax_rate ?? 5,
       });
       const updated = res.data;
       setCategories((prev) => prev.map((c) => (c.id === id ? updated : c)));
@@ -625,6 +676,35 @@ const Menu = () => {
     } catch (err) {
       console.error("DELETE CATEGORY ERROR:", err?.response?.data || err);
       alert("Failed to delete category");
+    }
+  };
+
+  // INLINE INGREDIENT CREATE
+  const handleAddInlineIngredient = async () => {
+    if (!inlineIngredient.name.trim()) return;
+    setInlineIngredient(prev => ({ ...prev, saving: true }));
+    try {
+      const res = await api.post("/ingredients", { name: inlineIngredient.name.trim(), unit: inlineIngredient.unit || "g" });
+      const newIng = res.data;
+      setAllIngredients(prev => [...prev, newIng]);
+      const { targetIdx, isEdit } = inlineIngredient;
+      if (isEdit) {
+        setEditingProductGroup(prev => {
+          const copy = [...prev.ingredients];
+          copy[targetIdx].ingredient_id = String(newIng.id);
+          return { ...prev, ingredients: copy };
+        });
+      } else {
+        setNewProductData(prev => {
+          const copy = [...prev.ingredients];
+          copy[targetIdx].ingredient_id = String(newIng.id);
+          return { ...prev, ingredients: copy };
+        });
+      }
+      setInlineIngredient({ show: false, name: "", unit: "g", saving: false, targetIdx: null, isEdit: false });
+    } catch (err) {
+      alert("Failed to create ingredient: " + (err?.response?.data?.detail || err.message));
+      setInlineIngredient(prev => ({ ...prev, saving: false }));
     }
   };
 
@@ -667,6 +747,12 @@ const Menu = () => {
     );
     if (!baseName || validSizes.length === 0) {
       alert("Enter product name and at least one size with a valid price");
+      return;
+    }
+
+    const sizeNames = validSizes.map(s => s.size.trim().toLowerCase());
+    if (new Set(sizeNames).size !== sizeNames.length) {
+      alert("Duplicate size names are not allowed. Each size must be unique.");
       return;
     }
 
@@ -766,6 +852,12 @@ const Menu = () => {
 
     if (validSizes.length === 0) {
       alert("Need at least one size with price");
+      return;
+    }
+
+    const editSizeNames = validSizes.map(s => s.size.trim().toLowerCase());
+    if (new Set(editSizeNames).size !== editSizeNames.length) {
+      alert("Duplicate size names are not allowed. Each size must be unique.");
       return;
     }
 
@@ -954,8 +1046,8 @@ const Menu = () => {
   if (loading && categories.length === 0) {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4">
-        <div className="w-12 h-12 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-muted-foreground animate-pulse font-medium">Preparing your menu...</p>
+        <div className="w-10 h-10 border-[3px] border-teal-500/30 border-t-teal-500 rounded-full animate-spin mb-4"></div>
+        <p className="text-sm text-muted-foreground font-medium">Loading menu...</p>
       </div>
     );
   }
@@ -967,7 +1059,10 @@ const Menu = () => {
     >
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 sm:mb-8 gap-4">
-        <h1 className="text-2xl font-semibold">Menu Categories</h1>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Menu</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Manage your categories and products</p>
+        </div>
         <div className="flex gap-2 sm:gap-3 flex-wrap">
           <input
             type="file"
@@ -978,263 +1073,308 @@ const Menu = () => {
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white transition-colors px-3 sm:px-4 py-2 rounded-lg text-sm border-none"
+            className="flex items-center gap-2 bg-muted hover:bg-secondary border border-border text-foreground transition-all px-3 sm:px-4 py-2 rounded-xl text-sm font-medium"
           >
-            <Upload size={16} />
+            <Upload size={15} />
             <span className="hidden sm:inline">Import CSV</span>
           </button>
           <div className="relative flex-1 sm:flex-none" ref={exportRef}>
             <button
               onClick={() => setIsExportOpen(!isExportOpen)}
-              className="w-full flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white transition-colors px-3 sm:px-4 py-2 rounded-lg text-sm"
+              className="w-full flex items-center justify-center gap-2 bg-muted hover:bg-secondary border border-border text-foreground transition-all px-3 sm:px-4 py-2 rounded-xl text-sm font-medium"
             >
-              <Download size={16} />
+              <Download size={15} />
               <span className="hidden sm:inline">Export</span>
-              <ChevronDown size={14} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown size={13} className={`transition-transform duration-200 ${isExportOpen ? 'rotate-180' : ''}`} />
             </button>
-
             {isExportOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-lg shadow-xl z-50 animate-in fade-in zoom-in-95 duration-200">
-                <div className="p-1">
+              <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-xl shadow-xl z-50 animate-in fade-in zoom-in-95 duration-150">
+                <div className="p-1.5">
                   <button
                     onClick={handleExportPDF}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-foreground hover:bg-muted transition-colors border-none bg-transparent"
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-foreground hover:bg-muted transition-colors border-none bg-transparent"
                   >
-                    <FileText size={16} className="text-red-500" />
+                    <FileText size={15} className="text-red-500" />
                     <span>Export as PDF</span>
                   </button>
                   <button
                     onClick={handleExportExcel}
-                    className="w-full  flex items-center gap-2 px-3 py-2 rounded-md text-sm text-foreground hover:bg-muted transition-colors border-none bg-transparent"
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-foreground hover:bg-muted transition-colors border-none bg-transparent"
                   >
-                    <Download size={16} className="text-green-500" />
+                    <Download size={15} className="text-green-500" />
                     <span>Export as Excel</span>
                   </button>
                 </div>
               </div>
             )}
           </div>
-          <button
-            onClick={() => setShowNewCategoryModal(true)}
-            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white transition-colors px-3 sm:px-4 py-2 rounded-lg text-sm"
-          >
-            <Plus size={16} />
-            <span className="hidden sm:inline">New Category</span>
-          </button>
         </div>
       </div>
 
       {/* Categories list */}
-      <div className="bg-card border border-border rounded-xl p-4 sm:p-6 mb-4 sm:mb-6">
-        <h2 className="text-base sm:text-lg font-semibold text-card-foreground mb-4">
-          Categories
-        </h2>
-
-        {/* Category Search */}
-        <div className="mb-4">
-          <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
-            Search categories (or add custom)
-          </p>
-          <div className="relative">
-            <Search
-              className="text-foreground absolute left-3 top-1/2 transform -translate-y-1/2"
-              size={16}
-            />
-            <input
-              type="text"
-              placeholder="Type to search or add new category..."
-              value={categorySearchTerm}
-              onChange={(e) => setCategorySearchTerm(e.target.value)}
-              onKeyPress={(e) => {
-                if (e.key === "Enter") {
-                  handleAddCategoryFromSearch();
-                }
-              }}
-              className="w-full bg-muted text-foreground border-none outline-none pl-10 pr-16 py-2 sm:py-2.5 rounded-lg text-sm"
-            />
-            <button
-              onClick={handleAddCategoryFromSearch}
-              className="text-teal-500 font-medium bg-transparent border-none cursor-pointer absolute right-3 top-1/2 transform -translate-y-1/2 text-sm hover:text-teal-600 transition-colors"
-            >
-              + Add
-            </button>
+      <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6 shadow-sm">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-base sm:text-lg font-semibold text-card-foreground tracking-tight">Categories</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">{categories.length} {categories.length === 1 ? 'category' : 'categories'}</p>
           </div>
+          <button
+            onClick={() => setShowNewCategoryModal(true)}
+            className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white transition-all px-4 py-2 rounded-xl text-sm font-medium shadow-sm hover:shadow"
+          >
+            <Plus size={15} />
+            <span>Add Category</span>
+          </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-          {filteredCategories.map((cat) => {
+          {categories.map((cat) => {
             const Icon = getIconComponent(cat.icon_name || "Coffee");
             const isSelected = selectedCategoryId === cat.id;
             return (
               <div
                 key={cat.id}
                 onClick={() => setSelectedCategoryId(cat.id)}
-                className={`bg-muted rounded-lg cursor-pointer hover:bg-secondary transition-all p-4 ${!cat.is_active ? 'opacity-60 grayscale-[0.5]' : ''}`}
-                style={{
-                  border: isSelected
-                    ? "2px solid #1ABC9C"
-                    : "1px solid transparent",
-                }}
+                className={`relative rounded-2xl cursor-pointer transition-all duration-200 p-4
+                  ${isSelected
+                    ? 'bg-teal-500/10 ring-2 ring-teal-500 shadow-md'
+                    : 'bg-muted hover:bg-secondary/70 ring-1 ring-transparent hover:ring-border hover:shadow-sm'}
+                  ${!cat.is_active ? 'opacity-50 grayscale' : ''}`}
               >
-                <div className="flex items-center gap-3 mb-3">
-                  <Icon className={`${cat.is_active ? 'text-teal-500' : 'text-muted-foreground'}`} size={18} />
-                  <h3 className="text-foreground font-semibold text-sm sm:text-base flex-1">
-                    {cat.name}
-                  </h3>
+                <div className="flex items-start gap-3 mb-3">
+                  <div className={`p-2 rounded-xl shrink-0 transition-colors ${isSelected ? 'bg-teal-500/20' : 'bg-background'}`}>
+                    <Icon className={`${isSelected ? 'text-teal-500' : 'text-muted-foreground'}`} size={16} />
+                  </div>
+                  <div className="flex-1 min-w-0 pt-0.5">
+                    <h3 className="text-foreground font-semibold text-sm leading-tight truncate">{cat.name}</h3>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {rawProducts.filter(p => p.category_id === cat.id).length} items
+                    </p>
+                  </div>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditCategoryClick(cat);
-                    }}
-                    className="text-teal-500 hover:text-teal-600 transition-colors p-1"
+                    onClick={(e) => { e.stopPropagation(); handleEditCategoryClick(cat); }}
+                    className={`p-1.5 rounded-lg transition-colors ${isSelected ? 'text-teal-500 hover:bg-teal-500/20' : 'text-muted-foreground hover:text-foreground hover:bg-muted/80'}`}
                   >
-                    <Pencil size={16} />
+                    <Pencil size={13} />
                   </button>
                 </div>
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-tight ${cat.is_active ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
-                    {cat.is_active ? "Active" : "Inactive"}
-                  </span>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide ${cat.is_active ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 text-red-500'}`}>
+                      {cat.is_active ? "Active" : "Inactive"}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide bg-blue-500/10 text-blue-500 dark:text-blue-400">
+                      GST {cat.tax_rate ?? 5}%
+                    </span>
+                  </div>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteCategory(cat);
-                    }}
-                    className="border border-red-500/30 text-red-500 bg-transparent hover:bg-red-500 hover:text-white transition-all px-2.5 sm:px-3 py-1 text-xs rounded-md"
+                    onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat); }}
+                    className="text-muted-foreground hover:text-red-500 transition-colors p-1 rounded-lg hover:bg-red-500/10"
                   >
-                    Delete
+                    <Trash2 size={13} />
                   </button>
                 </div>
               </div>
             );
           })}
         </div>
-        {filteredCategories.length === 0 && (
-          <div className="text-center py-8 text-muted-foreground">
-            No categories found matching "{categorySearchTerm}"
+        {categories.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
+              <Tag size={24} className="text-muted-foreground" />
+            </div>
+            <p className="text-sm font-medium text-foreground mb-1">No categories yet</p>
+            <p className="text-xs text-muted-foreground">Add your first category to start building your menu</p>
           </div>
         )}
-      </div>{/* Products for selected category */}
-      <div className="bg-card border border-border rounded-xl mb-4 sm:mb-6">
+      </div>
+
+      {/* Products for selected category */}
+      <div className="bg-card border border-border rounded-2xl mb-4 sm:mb-6 shadow-sm overflow-hidden">
         <div className="border-b border-border flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 sm:p-5 gap-3">
-          <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
-            Category:{" "}
-            {categoriesById[selectedCategoryId]?.name || "Select a category"}
-          </h2>
-          <button
-            onClick={() => {
-              const cat = categoriesById[selectedCategoryId];
-              if (cat && !cat.is_active) {
-                alert(`Cannot add products to Inactive category "${cat.name}". Please activate it first.`);
-                return;
-              }
-              setShowNewProductModal(true);
-            }}
-            disabled={categoriesById[selectedCategoryId]?.is_active === false}
-            className={`flex items-center gap-2 transition-colors px-3 sm:px-4 py-2 rounded-lg text-sm w-full sm:w-auto justify-center ${categoriesById[selectedCategoryId]?.is_active === false
-              ? 'bg-muted text-muted-foreground cursor-not-allowed border border-border'
-              : 'bg-teal-600 hover:bg-teal-700 text-white'}`}
-          >
-            <Plus size={16} />
-            Add Product
-          </button>
+          <div>
+            <h2 className="text-base sm:text-lg font-semibold text-card-foreground tracking-tight">
+              {categoriesById[selectedCategoryId]?.name || "Select a category"}
+            </h2>
+            <p className="text-xs text-muted-foreground mt-0.5">{filteredGroups.length} {filteredGroups.length === 1 ? 'item' : 'items'}</p>
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button
+              onClick={() => setShowFilters(f => !f)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all border ${showFilters ? 'bg-teal-500/10 border-teal-500/40 text-teal-600 dark:text-teal-400' : 'bg-muted border-border text-foreground hover:bg-secondary'}`}
+            >
+              <SlidersHorizontal size={15} />
+              <span className="hidden sm:inline">Filters</span>
+              {(searchTerm || sortBy !== 'name' || foodTypeFilter !== 'all' || minPrice || maxPrice || availabilityFilter !== 'all' || hasImageFilter) && (
+                <span className="w-2 h-2 rounded-full bg-teal-500 shrink-0" />
+              )}
+            </button>
+            <button
+              onClick={() => {
+                const cat = categoriesById[selectedCategoryId];
+                if (cat && !cat.is_active) {
+                  alert(`Cannot add products to Inactive category "${cat.name}". Please activate it first.`);
+                  return;
+                }
+                setShowNewProductModal(true);
+              }}
+              disabled={categoriesById[selectedCategoryId]?.is_active === false}
+              className={`flex items-center gap-2 transition-all px-4 py-2 rounded-xl text-sm font-medium flex-1 sm:flex-none justify-center shadow-sm hover:shadow ${categoriesById[selectedCategoryId]?.is_active === false
+                ? 'bg-muted text-muted-foreground cursor-not-allowed border border-border'
+                : 'bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white'}`}
+            >
+              <Plus size={15} />
+              Add Product
+            </button>
+          </div>
         </div>
 
         <div className="p-4 sm:p-5">
-          {/* search + sort */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-5">
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
-                Product search
-              </p>
-              <input
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder={`Search in ${categoriesById[selectedCategoryId]?.name || "category"
-                  }`}
-                className="w-full bg-muted text-foreground border-none outline-none px-3 py-2 rounded-lg text-sm"
-              />
+          {showFilters && (
+            <div className="mb-4 p-4 bg-muted/50 rounded-xl border border-border/50 animate-in fade-in slide-in-from-top-2 duration-150 space-y-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {/* Search */}
+                <div className="col-span-2 sm:col-span-1">
+                  <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5">Search</p>
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder={`Search in ${categoriesById[selectedCategoryId]?.name || "category"}`}
+                      className="w-full bg-background text-foreground border border-border rounded-lg pl-8 pr-3 py-2 text-sm outline-none focus:border-teal-500 transition-colors"
+                    />
+                  </div>
+                </div>
+                {/* Sort */}
+                <div>
+                  <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5">Sort by</p>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="w-full bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-500 transition-colors cursor-pointer"
+                  >
+                    <option value="name">Name A–Z</option>
+                    <option value="name-desc">Name Z–A</option>
+                    <option value="price-low">Price: Low to High</option>
+                    <option value="price-high">Price: High to Low</option>
+                  </select>
+                </div>
+                {/* Food Type */}
+                <div>
+                  <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5">Food Type</p>
+                  <select
+                    value={foodTypeFilter}
+                    onChange={(e) => setFoodTypeFilter(e.target.value)}
+                    className="w-full bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-500 transition-colors cursor-pointer"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="veg">Veg</option>
+                    <option value="non_veg">Non-Veg</option>
+                    <option value="egg">Egg</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {/* Min Price */}
+                <div>
+                  <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5">Min Price (₹)</p>
+                  <input
+                    type="number"
+                    min="0"
+                    value={minPrice}
+                    onChange={(e) => setMinPrice(e.target.value)}
+                    placeholder="0"
+                    className="w-full bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-500 transition-colors"
+                  />
+                </div>
+                {/* Max Price */}
+                <div>
+                  <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5">Max Price (₹)</p>
+                  <input
+                    type="number"
+                    min="0"
+                    value={maxPrice}
+                    onChange={(e) => setMaxPrice(e.target.value)}
+                    placeholder="Any"
+                    className="w-full bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-500 transition-colors"
+                  />
+                </div>
+                {/* Availability */}
+                <div>
+                  <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5">Availability</p>
+                  <select
+                    value={availabilityFilter}
+                    onChange={(e) => setAvailabilityFilter(e.target.value)}
+                    className="w-full bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-500 transition-colors cursor-pointer"
+                  >
+                    <option value="all">All Items</option>
+                    <option value="available">Available Now</option>
+                    <option value="restricted">Time-Restricted</option>
+                  </select>
+                </div>
+                {/* Has Image */}
+                <div>
+                  <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5">Has Image</p>
+                  <select
+                    value={hasImageFilter ? "yes" : "all"}
+                    onChange={(e) => setHasImageFilter(e.target.value === "yes")}
+                    className="w-full bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-500 transition-colors cursor-pointer"
+                  >
+                    <option value="all">All Items</option>
+                    <option value="yes">With Image Only</option>
+                  </select>
+                </div>
+              </div>
+              {/* Clear all */}
+              {(searchTerm || sortBy !== 'name' || foodTypeFilter !== 'all' || minPrice || maxPrice || availabilityFilter !== 'all' || hasImageFilter) && (
+                <div className="flex justify-end pt-1">
+                  <button
+                    onClick={() => { setSearchTerm(""); setSortBy("name"); setFoodTypeFilter("all"); setMinPrice(""); setMaxPrice(""); setAvailabilityFilter("all"); setHasImageFilter(false); }}
+                    className="text-xs text-teal-600 dark:text-teal-400 hover:underline font-medium transition-colors"
+                  >
+                    Clear all filters
+                  </button>
+                </div>
+              )}
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
-                Sort
-              </p>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="w-full bg-muted text-foreground border-none outline-none cursor-pointer px-3 py-2 rounded-lg text-sm"
-              >
-                <option value="name">Name</option>
-                <option value="price-low">Price: Low to High</option>
-                <option value="price-high">Price: High to Low</option>
-              </select>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
-                Food Type
-              </p>
-              <select
-                value={foodTypeFilter}
-                onChange={(e) => setFoodTypeFilter(e.target.value)}
-                className="w-full bg-muted text-foreground border-none outline-none cursor-pointer px-3 py-2 rounded-lg text-sm"
-              >
-                <option value="all">All</option>
-                <option value="veg">Veg</option>
-                <option value="non_veg">Non-Veg</option>
-                <option value="egg">Egg</option>
-              </select>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-2">
-                Tax
-              </p>
-              <select
-                value={selectedTax}
-                onChange={(e) => setSelectedTax(Number(e.target.value))}
-                className="w-full bg-secondary text-foreground text-center font-medium border-none outline-none cursor-pointer px-3 py-2 rounded-lg text-sm"
-              >
-                {taxOptions.map(tax => (
-                  <option key={tax} value={tax}>GST {tax}%</option>
-                ))}
-              </select>
-            </div>
-          </div>
+          )}
 
           {/* grouped products */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
             {filteredGroups.map((g) => (
               <div
                 key={`${g.categoryId}:${g.baseName}`}
-                className="bg-muted border border-border rounded-lg p-4"
+                className="bg-muted/60 border border-border/70 rounded-2xl p-4 hover:shadow-md hover:border-border transition-all duration-200 group flex flex-col"
               >
                 {g.imageUrl && (
-                  <div className="w-full h-32 bg-gray-200 rounded-lg overflow-hidden mb-3">
+                  <div className="w-full h-28 rounded-xl overflow-hidden mb-3 bg-muted">
                     <img
                       src={g.imageUrl}
                       alt={g.baseName}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                   </div>
                 )}
-                <h3 className="text-foreground font-medium mb-3 text-sm sm:text-base flex items-center gap-2">
-                  <span className={`w-3 h-3 rounded-full shrink-0 border ${
-                    g.food_type === 'non_veg' ? 'bg-red-500 border-red-700' : 
-                    g.food_type === 'egg' ? 'bg-yellow-500 border-yellow-700' : 
-                    'bg-green-500 border-green-700'
-                  }`} title={g.food_type}></span>
-                  {g.baseName}
-                </h3>
-                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                <div className="flex items-start gap-2 mb-2.5">
+                  <span className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 border ${
+                    g.food_type === 'non_veg' ? 'bg-red-500 border-red-700' :
+                    g.food_type === 'egg' ? 'bg-yellow-400 border-yellow-600' :
+                    'bg-emerald-500 border-emerald-700'
+                  }`} title={g.food_type} />
+                  <h3 className="text-foreground font-semibold text-sm leading-snug flex-1">{g.baseName}</h3>
+                </div>
+                <div className="flex items-center gap-1.5 mb-3 flex-wrap flex-1">
                   {g.sizes.map((s) => (
-                    <div
+                    <span
                       key={s.productId}
-                      className="px-3 py-2 rounded-lg text-xs font-medium bg-background text-foreground border border-border"
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-background border border-border text-foreground"
                     >
-                      {s.size} ₹{s.price}
-                    </div>
+                      {g.sizes.length > 1 && <span className="text-muted-foreground">{s.size} · </span>}₹{s.price}
+                    </span>
                   ))}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 mt-auto">
                   <button
                     onClick={() => {
                       if (categoriesById[selectedCategoryId]?.is_active === false) {
@@ -1244,9 +1384,9 @@ const Menu = () => {
                       handleEditProduct(g);
                     }}
                     disabled={categoriesById[selectedCategoryId]?.is_active === false}
-                    className={`flex-1 border transition-all px-3 py-1.5 rounded text-xs ${categoriesById[selectedCategoryId]?.is_active === false
-                      ? 'border-border text-muted-foreground cursor-not-allowed'
-                      : 'border-teal-500 text-teal-500 bg-transparent hover:bg-teal-500 hover:text-white'}`}
+                    className={`flex-1 py-1.5 rounded-xl text-xs font-medium transition-all ${categoriesById[selectedCategoryId]?.is_active === false
+                      ? 'bg-muted text-muted-foreground cursor-not-allowed border border-border'
+                      : 'bg-teal-500/10 text-teal-600 dark:text-teal-400 hover:bg-teal-500 hover:text-white border border-teal-500/30'}`}
                   >
                     Edit
                   </button>
@@ -1259,9 +1399,9 @@ const Menu = () => {
                       handleDeleteWholeProductGroup(g);
                     }}
                     disabled={categoriesById[selectedCategoryId]?.is_active === false}
-                    className={`flex-1 border transition-all px-3 py-1.5 rounded text-xs ${categoriesById[selectedCategoryId]?.is_active === false
-                      ? 'border-border text-muted-foreground cursor-not-allowed'
-                      : 'border-red-500/30 text-red-500 bg-transparent hover:bg-red-500 hover:text-white'}`}
+                    className={`flex-1 py-1.5 rounded-xl text-xs font-medium transition-all ${categoriesById[selectedCategoryId]?.is_active === false
+                      ? 'bg-muted text-muted-foreground cursor-not-allowed border border-border'
+                      : 'bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/30'}`}
                   >
                     Delete
                   </button>
@@ -1270,42 +1410,57 @@ const Menu = () => {
             ))}
           </div>
           {filteredGroups.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              No products found in{" "}
-              {categoriesById[selectedCategoryId]?.name || "this category"}
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
+                <PackageOpen size={24} className="text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium text-foreground mb-1">
+                {searchTerm || foodTypeFilter !== 'all' ? 'No matching products' : 'No products yet'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {searchTerm || foodTypeFilter !== 'all'
+                  ? 'Try adjusting your filters'
+                  : `Add your first product to ${categoriesById[selectedCategoryId]?.name || 'this category'}`}
+              </p>
             </div>
           )}
         </div>
       </div>
 
       {/* Recent edits */}
-      <div className="bg-card border border-border rounded-xl">
+      <div className="bg-card border border-border rounded-2xl shadow-sm">
         <div className="border-b border-border p-4 sm:p-5 flex justify-between items-center">
-          <h2 className="text-base sm:text-lg font-semibold text-card-foreground">
-            Recently Edited
-          </h2>
+          <div>
+            <h2 className="text-base sm:text-lg font-semibold text-card-foreground tracking-tight">Recently Edited</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">Last {Math.min(recentEdits.length, 5)} changes</p>
+          </div>
           <button
-            className="text-sm text-teal-500 hover:text-teal-400 font-medium transition-colors bg-transparent border-none p-0 cursor-pointer"
+            className="text-xs text-teal-500 hover:text-teal-400 font-semibold transition-colors bg-transparent border-none p-0 cursor-pointer tracking-wide uppercase"
             onClick={() => setShowAllEditsModal(true)}
           >
             View All
           </button>
         </div>
-        <div className="p-4 sm:p-5 space-y-3">
+        <div className="p-4 sm:p-5 space-y-2">
           {recentEdits.length === 0 && (
-            <p className="text-sm text-muted-foreground">No recent edits.</p>
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-3">
+                <Inbox size={20} className="text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium text-foreground mb-1">No recent edits</p>
+              <p className="text-xs text-muted-foreground">Changes you make will appear here</p>
+            </div>
           )}
           {recentEdits.slice(0, 5).map((e, i) => (
             <div
               key={i}
-              className="flex items-center justify-between bg-muted border border-border rounded-full px-4 py-3 flex-wrap gap-2"
+              className="flex items-center justify-between bg-muted/60 border border-border/50 rounded-xl px-4 py-3 gap-3"
             >
-              <span className="text-foreground text-xs sm:text-sm">
-                {e.action}
-              </span>
-              <span className="text-muted-foreground text-xs">
-                {formatTimeAgo(e.time)}
-              </span>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-teal-500 shrink-0" />
+                <span className="text-foreground text-xs sm:text-sm truncate">{e.action}</span>
+              </div>
+              <span className="text-muted-foreground text-xs shrink-0">{formatTimeAgo(e.time)}</span>
             </div>
           ))}
         </div>
@@ -1313,8 +1468,8 @@ const Menu = () => {
 
       {/* ALL EDITS HISTORY MODAL */}
       {showAllEditsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card border border-border rounded-xl p-6 max-w-lg w-full max-h-[80vh] flex flex-col">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-lg w-full max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-semibold text-card-foreground">Edit History</h3>
               <button
@@ -1362,8 +1517,8 @@ const Menu = () => {
 
       {/* NEW CATEGORY MODAL */}
       {showNewCategoryModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card border border-border rounded-xl p-6 max-w-md w-full">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-semibold text-card-foreground">
                 Add New Category
@@ -1426,6 +1581,20 @@ const Menu = () => {
                   })}
                 </div>
               </div>
+              <div>
+                <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                  GST Rate
+                </label>
+                <select
+                  value={newCategoryTaxRate}
+                  onChange={(e) => setNewCategoryTaxRate(Number(e.target.value))}
+                  className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-2.5 text-sm outline-none"
+                >
+                  {TAX_OPTIONS.map(t => (
+                    <option key={t} value={t}>{t === 0 ? "0% (Exempt)" : `${t}%`}</option>
+                  ))}
+                </select>
+              </div>
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowNewCategoryModal(false)}
@@ -1447,8 +1616,8 @@ const Menu = () => {
 
       {/* EDIT CATEGORY MODAL */}
       {showEditCategoryModal && editingCategory && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card border border-border rounded-xl p-6 max-w-md w-full">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-semibold text-card-foreground">
                 Edit Category
@@ -1524,6 +1693,20 @@ const Menu = () => {
                   })}
                 </div>
               </div>
+              <div>
+                <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                  GST Rate
+                </label>
+                <select
+                  value={editingCategory.tax_rate ?? 5}
+                  onChange={(e) => setEditingCategory({ ...editingCategory, tax_rate: Number(e.target.value) })}
+                  className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-2.5 text-sm outline-none"
+                >
+                  {TAX_OPTIONS.map(t => (
+                    <option key={t} value={t}>{t === 0 ? "0% (Exempt)" : `${t}%`}</option>
+                  ))}
+                </select>
+              </div>
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -1562,8 +1745,8 @@ const Menu = () => {
 
       {/* NEW PRODUCT MODAL WITH AUTOCOMPLETE AND IMAGE UPLOAD */}
       {showNewProductModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card border border-border rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-semibold text-card-foreground">
                 Add New Product
@@ -1590,15 +1773,17 @@ const Menu = () => {
                   Product Image
                 </label>
 
-                {/* BUTTON TO OPEN DISH LIBRARY */}
-                <button
-                  type="button"
-                  onClick={() => setShowDishLibrary(true)}
-                  className="w-full px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-                >
-                  <Pizza size={16} />
-                  Choose from Dish Library
-                </button>
+                {/* BUTTON TO OPEN DISH LIBRARY — only shown when library has items */}
+                {(!dishLibraryChecked || dishTemplates.length > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => setShowDishLibrary(true)}
+                    className="w-full px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Pizza size={16} />
+                    Choose from Dish Library
+                  </button>
+                )}
 
                 {/* UPLOAD IMAGE BUTTON */}
                 <label className="w-full px-3 py-2 bg-muted border border-border text-foreground hover:bg-secondary transition-colors rounded-lg text-sm flex items-center justify-center gap-2 cursor-pointer">
@@ -1835,38 +2020,82 @@ const Menu = () => {
                   </button>
                 </div>
                 {newProductData.ingredients.map((ing, idx) => (
-                  <div key={idx} className="flex items-center gap-2 mb-3">
-                    <select
-                      value={ing.ingredient_id}
-                      onChange={(e) => {
-                        const copy = [...newProductData.ingredients];
-                        copy[idx].ingredient_id = e.target.value;
-                        setNewProductData({ ...newProductData, ingredients: copy });
-                      }}
-                      className="flex-2 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
-                    >
-                      <option value="" disabled>Select Ingredient</option>
-                      {allIngredients.map(i => (
-                        <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      placeholder="Qty"
-                      value={ing.quantity}
-                      onChange={(e) => {
-                        const copy = [...newProductData.ingredients];
-                        copy[idx].quantity = e.target.value;
-                        setNewProductData({ ...newProductData, ingredients: copy });
-                      }}
-                      className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
-                    />
-                    <button
-                      onClick={() => handleDeleteNewIngredientRow(idx)}
-                      className="text-red-500 hover:text-red-600 transition-colors p-1"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                  <div key={idx} className="flex flex-col gap-1 mb-3">
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={inlineIngredient.show && inlineIngredient.targetIdx === idx && !inlineIngredient.isEdit ? "__create_new__" : ing.ingredient_id}
+                        onChange={(e) => {
+                          if (e.target.value === "__create_new__") {
+                            setInlineIngredient({ show: true, name: "", unit: "g", saving: false, targetIdx: idx, isEdit: false });
+                            return;
+                          }
+                          setInlineIngredient({ show: false, name: "", unit: "g", saving: false, targetIdx: null, isEdit: false });
+                          const copy = [...newProductData.ingredients];
+                          copy[idx].ingredient_id = e.target.value;
+                          setNewProductData({ ...newProductData, ingredients: copy });
+                        }}
+                        className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                      >
+                        <option value="" disabled>Select Ingredient</option>
+                        {allIngredients.map(i => (
+                          <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>
+                        ))}
+                        <option value="__create_new__">+ Create new ingredient...</option>
+                      </select>
+                      <input
+                        type="number"
+                        placeholder="Qty"
+                        value={ing.quantity}
+                        onChange={(e) => {
+                          const copy = [...newProductData.ingredients];
+                          copy[idx].quantity = e.target.value;
+                          setNewProductData({ ...newProductData, ingredients: copy });
+                        }}
+                        className="w-20 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                      />
+                      <button
+                        onClick={() => handleDeleteNewIngredientRow(idx)}
+                        className="text-red-500 hover:text-red-600 transition-colors p-1"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                    {inlineIngredient.show && inlineIngredient.targetIdx === idx && !inlineIngredient.isEdit && (
+                      <div className="flex gap-2 mt-1">
+                        <input
+                          type="text"
+                          placeholder="Ingredient name"
+                          value={inlineIngredient.name}
+                          onChange={e => setInlineIngredient(prev => ({ ...prev, name: e.target.value }))}
+                          className="flex-1 bg-muted text-foreground border border-teal-500 rounded-lg px-3 py-1.5 text-sm outline-none"
+                        />
+                        <select
+                          value={inlineIngredient.unit}
+                          onChange={e => setInlineIngredient(prev => ({ ...prev, unit: e.target.value }))}
+                          className="bg-muted text-foreground border border-border rounded-lg px-2 py-1.5 text-sm outline-none"
+                        >
+                          <option value="g">g</option>
+                          <option value="kg">kg</option>
+                          <option value="ml">ml</option>
+                          <option value="L">L</option>
+                          <option value="pcs">pcs</option>
+                          <option value="nos">nos</option>
+                        </select>
+                        <button
+                          onClick={handleAddInlineIngredient}
+                          disabled={inlineIngredient.saving || !inlineIngredient.name.trim()}
+                          className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                        >
+                          {inlineIngredient.saving ? "..." : "Add"}
+                        </button>
+                        <button
+                          onClick={() => setInlineIngredient({ show: false, name: "", unit: "g", saving: false, targetIdx: null, isEdit: false })}
+                          className="text-muted-foreground hover:text-foreground p-1"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
                 {newProductData.ingredients.length === 0 && (
@@ -1951,8 +2180,8 @@ const Menu = () => {
 
       {/* EDIT PRODUCT MODAL WITH IMAGE UPLOAD */}
       {showEditProductModal && editingProductGroup && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card border border-border rounded-xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-semibold text-card-foreground">
                 Edit Product
@@ -1975,14 +2204,16 @@ const Menu = () => {
                 Product Image
               </label>
 
-              <button
-                type="button"
-                onClick={() => setShowDishLibrary(true)}
-                className="w-full px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-              >
-                <Pizza size={16} />
-                Choose from Dish Library
-              </button>
+              {(!dishLibraryChecked || dishTemplates.length > 0) && (
+                <button
+                  type="button"
+                  onClick={() => setShowDishLibrary(true)}
+                  className="w-full px-3 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  <Pizza size={16} />
+                  Choose from Dish Library
+                </button>
+              )}
 
               <label className="w-full px-3 py-2 bg-muted border border-border text-foreground hover:bg-secondary transition-colors rounded-lg text-sm flex items-center justify-center gap-2 cursor-pointer">
                 <Upload size={16} />
@@ -2216,38 +2447,82 @@ const Menu = () => {
                 </button>
               </div>
               {editingProductGroup.ingredients.map((ing, idx) => (
-                <div key={idx} className="flex items-center gap-2 mb-3">
-                  <select
-                    value={ing.ingredient_id}
-                    onChange={(e) => {
-                      const copy = [...editingProductGroup.ingredients];
-                      copy[idx].ingredient_id = e.target.value;
-                      setEditingProductGroup({ ...editingProductGroup, ingredients: copy });
-                    }}
-                    className="flex-2 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
-                  >
-                    <option value="" disabled>Select Ingredient</option>
-                    {allIngredients.map(i => (
-                      <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    placeholder="Qty"
-                    value={ing.quantity}
-                    onChange={(e) => {
-                      const copy = [...editingProductGroup.ingredients];
-                      copy[idx].quantity = e.target.value;
-                      setEditingProductGroup({ ...editingProductGroup, ingredients: copy });
-                    }}
-                    className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
-                  />
-                  <button
-                    onClick={() => handleDeleteEditIngredientRow(idx)}
-                    className="text-red-500 hover:text-red-600 transition-colors p-1"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                <div key={idx} className="flex flex-col gap-1 mb-3">
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={inlineIngredient.show && inlineIngredient.targetIdx === idx && inlineIngredient.isEdit ? "__create_new__" : ing.ingredient_id}
+                      onChange={(e) => {
+                        if (e.target.value === "__create_new__") {
+                          setInlineIngredient({ show: true, name: "", unit: "g", saving: false, targetIdx: idx, isEdit: true });
+                          return;
+                        }
+                        setInlineIngredient({ show: false, name: "", unit: "g", saving: false, targetIdx: null, isEdit: false });
+                        const copy = [...editingProductGroup.ingredients];
+                        copy[idx].ingredient_id = e.target.value;
+                        setEditingProductGroup({ ...editingProductGroup, ingredients: copy });
+                      }}
+                      className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                    >
+                      <option value="" disabled>Select Ingredient</option>
+                      {allIngredients.map(i => (
+                        <option key={i.id} value={i.id}>{i.name} ({i.unit})</option>
+                      ))}
+                      <option value="__create_new__">+ Create new ingredient...</option>
+                    </select>
+                    <input
+                      type="number"
+                      placeholder="Qty"
+                      value={ing.quantity}
+                      onChange={(e) => {
+                        const copy = [...editingProductGroup.ingredients];
+                        copy[idx].quantity = e.target.value;
+                        setEditingProductGroup({ ...editingProductGroup, ingredients: copy });
+                      }}
+                      className="w-20 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                    />
+                    <button
+                      onClick={() => handleDeleteEditIngredientRow(idx)}
+                      className="text-red-500 hover:text-red-600 transition-colors p-1"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                  {inlineIngredient.show && inlineIngredient.targetIdx === idx && inlineIngredient.isEdit && (
+                    <div className="flex gap-2 mt-1">
+                      <input
+                        type="text"
+                        placeholder="Ingredient name"
+                        value={inlineIngredient.name}
+                        onChange={e => setInlineIngredient(prev => ({ ...prev, name: e.target.value }))}
+                        className="flex-1 bg-muted text-foreground border border-teal-500 rounded-lg px-3 py-1.5 text-sm outline-none"
+                      />
+                      <select
+                        value={inlineIngredient.unit}
+                        onChange={e => setInlineIngredient(prev => ({ ...prev, unit: e.target.value }))}
+                        className="bg-muted text-foreground border border-border rounded-lg px-2 py-1.5 text-sm outline-none"
+                      >
+                        <option value="g">g</option>
+                        <option value="kg">kg</option>
+                        <option value="ml">ml</option>
+                        <option value="L">L</option>
+                        <option value="pcs">pcs</option>
+                        <option value="nos">nos</option>
+                      </select>
+                      <button
+                        onClick={handleAddInlineIngredient}
+                        disabled={inlineIngredient.saving || !inlineIngredient.name.trim()}
+                        className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                      >
+                        {inlineIngredient.saving ? "..." : "Add"}
+                      </button>
+                      <button
+                        onClick={() => setInlineIngredient({ show: false, name: "", unit: "g", saving: false, targetIdx: null, isEdit: false })}
+                        className="text-muted-foreground hover:text-foreground p-1"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
               {editingProductGroup.ingredients.length === 0 && (
@@ -2322,8 +2597,8 @@ const Menu = () => {
         </div>
       )}{/* DISH LIBRARY MODAL */}
       {showDishLibrary && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card border border-border rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-card-foreground">
                 Select Dish
@@ -2387,8 +2662,8 @@ const Menu = () => {
         </div>
       )}
       {showCSVUploadModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card border border-border rounded-xl p-6 max-w-lg w-full max-h-[80vh] flex flex-col">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-lg w-full max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-semibold text-card-foreground">CSV Import Results</h3>
               <button

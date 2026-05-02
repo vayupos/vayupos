@@ -57,7 +57,7 @@ export default function SuperAdminLogin() {
                 type="text"
                 value={identifier}
                 onChange={e => setIdentifier(e.target.value)}
-                placeholder="vayupos20@gmail.com"
+                placeholder="admin@yourdomain.com"
                 autoComplete="username"
                 className="w-full px-4 py-3 bg-[#0a0f1a] border border-[#1e293b] rounded-xl text-white placeholder-[#475569] focus:outline-none focus:border-[#2563eb] text-sm transition-colors"
               />

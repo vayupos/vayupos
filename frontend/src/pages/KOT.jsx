@@ -28,7 +28,7 @@ import {
   DialogDescription
 } from "@/components/ui/dialog";
 
-const KDS = () => {
+const KOT = () => {
   const [kots, setKots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -376,4 +376,4 @@ const KDS = () => {
   );
 };
 
-export default KDS;
+export default KOT;

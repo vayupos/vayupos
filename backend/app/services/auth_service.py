@@ -144,7 +144,12 @@ class AuthService:
     @staticmethod
     def create_password_reset_token(db: Session, email: str) -> None:
         """Create and send password reset token when email exists."""
-        reset_link_base = f"{settings.FRONTEND_URL}/reset-password"
+        # Pick the first non-localhost origin as the app URL for the reset link
+        app_url = next(
+            (o for o in settings.ALLOWED_ORIGINS if "localhost" not in o and "127.0.0.1" not in o),
+            settings.ALLOWED_ORIGINS[0] if settings.ALLOWED_ORIGINS else "http://localhost:8080",
+        )
+        reset_link_base = f"{app_url}/reset-password"
         user = db.query(User).filter(func.lower(User.email) == email.strip().lower()).first()
         if not user:
             return

@@ -9,7 +9,6 @@ from app.models import Order, OrderItem, OrderStatus, Product, Customer, Invento
 from app.schemas import OrderCreate, OrderUpdate, OrderItemCreate
 from app.core.exceptions import not_found_exception, bad_request_exception
 from app.services.inventory_service import InventoryService
-from app.services.print_service import PrintService
 from app.services.ingredient_service import StockService
 
 

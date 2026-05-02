@@ -1,10 +1,13 @@
 """Authentication API routes"""
+import hashlib
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from app.api.dependencies import get_current_user, get_db
 from app.services import AuthService
 from app.schemas import (
-    UserCreate,
     UserResponse,
     LoginRequest,
     TokenResponse,
@@ -12,7 +15,9 @@ from app.schemas import (
     ForgotPasswordRequest,
     ResetPasswordRequest,
 )
-from app.core.security import create_access_token, create_refresh_token
+from app.core.security import create_access_token, create_refresh_token, hash_password
+from app.models.invite_token import InviteToken
+from app.models.user import User, UserRole
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -101,3 +106,54 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
     """Reset password with one-time reset token."""
     AuthService.reset_password(db, payload.token, payload.new_password)
     return {"message": "Password reset successfully"}
+
+
+class AcceptInviteRequest(BaseModel):
+    token: str
+    username: str
+    password: str
+    full_name: str = ""
+
+
+@router.post("/accept-invite", response_model=TokenResponse)
+def accept_invite(payload: AcceptInviteRequest, db: Session = Depends(get_db)):
+    """Accept a superadmin invite: set username + password and get a JWT back."""
+    token_hash = hashlib.sha256(payload.token.encode()).hexdigest()
+    invite = db.query(InviteToken).filter(
+        InviteToken.token_hash == token_hash,
+        InviteToken.used == False,
+    ).first()
+
+    if not invite or invite.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Invalid or expired invite link")
+
+    normalized_username = payload.username.strip().lower()
+    if db.query(User).filter(User.username == normalized_username).first():
+        raise HTTPException(status_code=409, detail="Username already taken")
+
+    user = User(
+        client_id=invite.client_id,
+        username=normalized_username,
+        email=invite.email,
+        hashed_password=hash_password(payload.password),
+        full_name=payload.full_name or normalized_username,
+        role=UserRole(invite.role) if invite.role in UserRole.__members__.values() else UserRole.CASHIER,
+        is_active=True,
+    )
+    db.add(user)
+    invite.used = True
+    db.commit()
+    db.refresh(user)
+
+    token_payload = {
+        "sub": str(user.id),
+        "user_id": user.id,
+        "client_id": user.client_id,
+        "is_superadmin": False,
+    }
+    return {
+        "access_token": create_access_token(data=token_payload),
+        "refresh_token": create_refresh_token(data={"sub": str(user.id)}),
+        "token_type": "bearer",
+        "is_superadmin": False,
+    }

@@ -16,7 +16,7 @@ from app.core.database import init_db, get_db
 from app.api.v1 import (
     auth, users, products, categories,
     customers, orders, inventory, payment, reports,
-    coupons, dish_templates, upload, staff, expense, notification, search, print_jobs, ingredient, kot,
+    coupons, dish_templates, upload, staff, expense, notification, search, ingredient, kot,
     settings as settings_router, admin as admin_router,
     superadmin as superadmin_router,
 )
@@ -69,16 +69,9 @@ app = FastAPI(
 )
 
 # -------------------- CORS --------------------
-ALLOWED_ORIGINS = [
-    "http://localhost:8080",
-    "http://127.0.0.1:8080",
-    settings.FRONTEND_URL,
-    "https://vyoma-vayupos.pages.dev",
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -135,7 +128,6 @@ app.include_router(expense.router, prefix="/api/v1", tags=["Expense"])
 app.include_router(ingredient.router, prefix="/api/v1/ingredients", tags=["Ingredients"])
 app.include_router(notification.router, prefix="/api/v1", tags=["Notifications"])
 app.include_router(search.router, prefix="/api/v1", tags=["Search"])
-app.include_router(print_jobs.router, prefix="/api/v1", tags=["Print Jobs"])
 app.include_router(kot.router, prefix="/api/v1", tags=["KOT"])
 app.include_router(settings_router.router, prefix="/api/v1", tags=["Settings"])
 app.include_router(admin_router.router, prefix="/api/v1", tags=["Admin"])

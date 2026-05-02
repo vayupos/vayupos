@@ -160,11 +160,14 @@ function POS() {
   const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
   const welcomeDiscount = isWelcomeOfferApplied ? subtotal * 0.1 : 0;
   const totalDiscount = discount + welcomeDiscount;
-  const cgstPct = 2.5;
-  const sgstPct = 2.5;
-  const cgst = (subtotal - totalDiscount) * (cgstPct / 100);
-  const sgst = (subtotal - totalDiscount) * (sgstPct / 100);
-  const total = subtotal - totalDiscount + cgst + sgst;
+  // Tax is calculated per item using the category's tax_rate, then split equally as CGST/SGST
+  const taxTotal = cartItems.reduce((sum, item) => {
+    const itemNet = item.price * item.qty * (1 - totalDiscount / (subtotal || 1));
+    return sum + itemNet * ((item.tax_rate ?? 5) / 100);
+  }, 0);
+  const cgst = taxTotal / 2;
+  const sgst = taxTotal / 2;
+  const total = subtotal - totalDiscount + taxTotal;
 
   const fetchCategories = async () => {
     try {
@@ -661,10 +664,14 @@ function POS() {
       const orderSubtotal = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
       const orderWelcomeDiscount = isWelcomeOfferApplied ? orderSubtotal * 0.1 : 0;
       const orderDiscount = discount + orderWelcomeDiscount;
-      const discountedSubtotal = orderSubtotal - orderDiscount;
-      const orderCgst = discountedSubtotal * 0.025;
-      const orderSgst = discountedSubtotal * 0.025;
-      const orderTotal = discountedSubtotal + orderCgst + orderSgst;
+      const discountRatio = orderSubtotal > 0 ? orderDiscount / orderSubtotal : 0;
+      const orderTaxTotal = cartItems.reduce((sum, item) => {
+        const itemNet = item.price * item.qty * (1 - discountRatio);
+        return sum + itemNet * ((item.tax_rate ?? 5) / 100);
+      }, 0);
+      const orderCgst = orderTaxTotal / 2;
+      const orderSgst = orderTaxTotal / 2;
+      const orderTotal = orderSubtotal - orderDiscount + orderTaxTotal;
 
       // ✅ CRITICAL FIX: Ensure payment_method is in snake_case (NOT camelCase)
       const orderPayload = {
@@ -808,10 +815,14 @@ function POS() {
       const orderSubtotal = cartItems.reduce((sum, item) => sum + (item.price * item.qty), 0);
       const orderWelcomeDiscount = isWelcomeOfferApplied ? orderSubtotal * 0.1 : 0;
       const orderDiscount = discount + orderWelcomeDiscount;
-      const discountedSubtotal = orderSubtotal - orderDiscount;
-      const orderCgst = discountedSubtotal * 0.025;
-      const orderSgst = discountedSubtotal * 0.025;
-      const orderTotal = discountedSubtotal + orderCgst + orderSgst;
+      const discountRatio = orderSubtotal > 0 ? orderDiscount / orderSubtotal : 0;
+      const orderTaxTotal = cartItems.reduce((sum, item) => {
+        const itemNet = item.price * item.qty * (1 - discountRatio);
+        return sum + itemNet * ((item.tax_rate ?? 5) / 100);
+      }, 0);
+      const orderCgst = orderTaxTotal / 2;
+      const orderSgst = orderTaxTotal / 2;
+      const orderTotal = orderSubtotal - orderDiscount + orderTaxTotal;
 
       // ✅ CRITICAL: payment_method in snake_case
       const draftPayload = {
@@ -923,8 +934,8 @@ function POS() {
     <div class="totals">
       <div><strong>Subtotal:</strong> ₹${subtotal.toFixed(2)}</div>
       ${discount > 0 ? `<div><strong>Discount ${couponCode ? `(${couponCode})` : ''}:</strong> -₹${discount.toFixed(2)}</div>` : ''}
-      <div><strong>CGST (2.5%):</strong> ₹${cgst.toFixed(2)}</div>
-      <div><strong>SGST (2.5%):</strong> ₹${sgst.toFixed(2)}</div>
+      <div><strong>CGST:</strong> ₹${cgst.toFixed(2)}</div>
+      <div><strong>SGST:</strong> ₹${sgst.toFixed(2)}</div>
       <div class="grand-total"><strong>Grand Total:</strong> ₹${total.toFixed(2)}</div>
     </div>
 
@@ -1073,10 +1084,6 @@ function POS() {
   };
   const visibleItems = allMenuItems.slice(0, visibleRows * itemsPerRow);
   const hasMoreToLoad = visibleItems.length < allMenuItems.length;
-  const avgTaxRate = cartItems.length > 0
-    ? cartItems.reduce((sum, item) => sum + ((item.tax_rate ?? 5) * (item.price || 0) * (item.qty || 0)), 0) /
-    (subtotal || 1)
-    : 5;
   // ---------------- RENDER ----------------
   return (
     <div

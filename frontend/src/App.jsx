@@ -11,7 +11,6 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 // Eagerly loaded — small, used immediately on login
 import Login from './pages/Login';
-import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import NotFound from './pages/NotFound';
@@ -31,7 +30,7 @@ const StaffManagement  = lazy(() => import('./pages/StaffManagement'));
 const ReportsPage      = lazy(() => import('./pages/ReportsPage'));
 const Notifications    = lazy(() => import('./pages/Notifications'));
 const SearchResults    = lazy(() => import('./pages/SearchResults'));
-const KDS              = lazy(() => import('./pages/KDS'));
+const KOT              = lazy(() => import('./pages/KOT'));
 const Profile          = lazy(() => import('./pages/Profile'));
 const Settings         = lazy(() => import('./pages/Settings'));
 const SuperAdminDashboard = lazy(() => import('./pages/SuperAdminDashboard'));
@@ -71,7 +70,6 @@ const AppContent = () => {
   const location = useLocation();
 
   const isAuthRoute = location.pathname === '/login' ||
-    location.pathname === '/register' ||
     location.pathname === '/forgot-password' ||
     location.pathname === '/reset-password' ||
     location.pathname.startsWith('/superadmin');
@@ -88,7 +86,7 @@ const AppContent = () => {
       'offers': '/offers', 'kot-printer': '/kotprintersettings',
       'staff': '/staffmanagement', 'expenses': '/expensesmanagement',
       'notifications': '/notifications', 'search': '/search',
-      'kds': '/kds', 'dashboard': '/',
+      'kot': '/kot', 'dashboard': '/',
     };
     const route = routeMap[page];
     if (route) {
@@ -110,7 +108,6 @@ const AppContent = () => {
             <Routes>
               {/* Public */}
               <Route path="/login"           element={<PublicRoute><Login /></PublicRoute>} />
-              <Route path="/register"        element={<PublicRoute><Register /></PublicRoute>} />
               <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
               <Route path="/reset-password"  element={<PublicRoute><ResetPassword /></PublicRoute>} />
 
@@ -129,7 +126,7 @@ const AppContent = () => {
               <Route path="/staffmanagement"    element={<ProtectedRoute><StaffManagement onNavigate={handleNavigate} /></ProtectedRoute>} />
               <Route path="/expensesmanagement" element={<ProtectedRoute><ExpensesManagement onNavigate={handleNavigate} /></ProtectedRoute>} />
               <Route path="/reportspage"        element={<ProtectedRoute><ReportsPage onNavigate={handleNavigate} /></ProtectedRoute>} />
-              <Route path="/kds"                element={<ProtectedRoute><KDS onNavigate={handleNavigate} /></ProtectedRoute>} />
+              <Route path="/kot"                element={<ProtectedRoute><KOT onNavigate={handleNavigate} /></ProtectedRoute>} />
               <Route path="/profile"            element={<ProtectedRoute><Profile /></ProtectedRoute>} />
               <Route path="/search"             element={<ProtectedRoute><SearchResults /></ProtectedRoute>} />
               <Route path="/settings"           element={<ProtectedRoute><Settings /></ProtectedRoute>} />
@@ -153,7 +150,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AppContent />
       </BrowserRouter>
     </TooltipProvider>

@@ -1,471 +1,408 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, ShoppingBag, TrendingUp, Wallet, RefreshCw, AlertCircle, Lock, AlertTriangle, Utensils, Package, Search, Plus, Tag } from 'lucide-react';
+import {
+  IndianRupee, ShoppingBag, TrendingUp, Wallet,
+  RefreshCw, AlertTriangle, Utensils, Package,
+  ChefHat, BarChart3, ChevronRight, Clock, Zap
+} from 'lucide-react';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
-import { formatDateTime } from '../utils/formatters';
-import axios_api from "../api/axios";
+import axios_api from '../api/axios';
 
-const Dashboard = ({ isDarkMode = true, onNavigate }) => {
-  // Data states
+const getTimeAgo = (dateString) => {
+  if (!dateString) return '--';
+  const diffMins = Math.floor((Date.now() - new Date(dateString)) / 60000);
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const h = Math.floor(diffMins / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+};
+
+const getGreeting = () => {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+};
+
+const StatCard = ({ label, value, icon: Icon, color = 'teal', sub }) => (
+  <div className="bg-white dark:bg-card border border-border rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+    <div className="flex items-center justify-between mb-3">
+      <p className="text-sm text-muted-foreground font-medium">{label}</p>
+      <div className={`p-2 rounded-xl bg-${color}-500/10`}>
+        <Icon className={`text-${color}-500 h-5 w-5`} />
+      </div>
+    </div>
+    <p className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">{value}</p>
+    {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
+  </div>
+);
+
+const Dashboard = ({ onNavigate }) => {
+  const [summary, setSummary] = useState({ todaySales: 0, ordersCount: 0, avgOrderValue: 0, totalExpenses: 0 });
   const [recentOrders, setRecentOrders] = useState([]);
-  const [customers, setCustomers] = useState([]);
-  const [offers, setOffers] = useState([]);
-  const [staff, setStaff] = useState([]);
-  const [expenses, setExpenses] = useState([]);
-  const [dailySummary, setDailySummary] = useState({
-    todaySales: 0,
-    ordersCount: 0,
-    avgTicket: 0,
-    totalExpenses: 0
-  });
-  const [lowStockAlerts, setLowStockAlerts] = useState([]);
-  const [orderTypeStats, setOrderTypeStats] = useState({
-    dine_in: { count: 0, percentage: 0 },
-    takeaway: { count: 0, percentage: 0 }
-  });
-
-  // UI states
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [staffAccessDenied, setStaffAccessDenied] = useState(false);
   const [activities, setActivities] = useState([]);
+  const [lowStockAlerts, setLowStockAlerts] = useState([]);
+  const [orderTypeStats, setOrderTypeStats] = useState({ dine_in: { count: 0, percentage: 0 }, takeaway: { count: 0, percentage: 0 } });
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [restaurantName, setRestaurantName] = useState('');
 
-  useEffect(() => {
-    fetchAllData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { loadAll(); }, []);
 
-  const fetchAllData = async () => {
+  const loadAll = async () => {
     setLoading(true);
-    setError(null);
-    try {
-      await Promise.all([
-        fetchDailySummary(),
-        fetchRecentOrders(),
-        fetchCustomers(),
-        fetchOffers(),
-        fetchStaff(),
-        fetchExpenses(),
-        fetchActivities(),
-        fetchLowStockAlerts(),
-        fetchOrderTypeStats()
-      ]);
-    } catch (err) {
-      console.error('Error fetching dashboard data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchDailySummary = async () => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const response = await axios_api.get('/reports/daily-summary', { params: { date: today } });
-      const data = response.data.data || {};
-      setDailySummary({
-        todaySales: data.total_sales || 0,
-        ordersCount: data.orders_count || 0,
-        avgTicket: data.average_order_value || 0,
-        totalExpenses: data.total_expenses || 0
-      });
-    } catch (err) { console.error(err); }
-  };
-
-  const fetchLowStockAlerts = async () => {
-    try {
-      const response = await axios_api.get('/ingredients/stock/low');
-      setLowStockAlerts(response.data || []);
-    } catch (err) { console.error(err); }
-  };
-
-  const fetchRecentOrders = async () => {
-    try {
-      const response = await axios_api.get('/orders', { params: { skip: 0, limit: 5 } });
-      const data = response.data;
-      const ordersArray = Array.isArray(data) ? data : (data.data || []);
-      setRecentOrders(ordersArray.map(order => ({
-        id: order.order_number || `#${order.id}`,
-        type: order.order_type || 'Dine-In',
-        time: getTimeAgo(order.created_at),
-        amount: parseFloat(order.total || 0)
-      })));
-    } catch (err) { console.error(err); }
-  };
-
-  const fetchCustomers = async () => {
-    try {
-      const response = await axios_api.get('/customers/', { params: { skip: 0, limit: 10 } });
-      const data = response.data;
-      const customersArray = Array.isArray(data) ? data : (data.data || data.items || []);
-      setCustomers(customersArray.map(customer => ({
-        id: customer.id,
-        name: `${customer.first_name || ''} ${customer.last_name || ''}`.trim() || 'No Name',
-        phone: customer.phone || '',
-        orders: customer.total_orders || 0
-      })));
-    } catch (err) { console.error(err); }
-  };
-
-  const fetchOffers = async () => {
-    try {
-      const response = await axios_api.get('/coupons', { params: { skip: 0, limit: 10, active_only: true } });
-      const data = response.data;
-      const offersArray = Array.isArray(data) ? data : (data.data || []);
-      setOffers(offersArray.map(offer => ({
-        id: offer.id,
-        code: offer.code,
-        type: offer.discount_type === 'percentage' ? 'Percentage' : 'Flat',
-        value: offer.discount_type === 'percentage' ? `${offer.discount_value}%` : `₹${offer.discount_value}`,
-        category: offer.description || 'General'
-      })));
-    } catch (err) { console.error(err); }
-  };
-
-  const fetchStaff = async () => {
-    try {
-      const response = await axios_api.get('/staff/', { params: { skip: 0, limit: 10 } });
-      setStaff(Array.isArray(response.data) ? response.data : (response.data.data || []));
-      setStaffAccessDenied(false);
-    } catch (err) {
-      if (err.response?.status === 403) setStaffAccessDenied(true);
-      setStaff([]);
-    }
-  };
-
-  const fetchExpenses = async () => {
-    try {
-      const response = await axios_api.get('/expenses/', { params: { skip: 0, limit: 10 } });
-      const data = response.data;
-      const expensesArray = Array.isArray(data) ? data : (data.data || []);
-      setExpenses(expensesArray.map(exp => ({
-        id: exp.id,
-        title: exp.title,
-        amount: `₹ ${exp.amount?.toLocaleString() || 0}`,
-        date: new Date(exp.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-      })));
-    } catch (err) { console.error(err); }
-  };
-
-  const fetchActivities = async () => {
-    try {
-      const response = await axios_api.get('/notifications', { params: { limit: 5 } });
-      const data = response.data;
-      setActivities((Array.isArray(data) ? data : []).map(notif => ({
-        action: notif.title,
-        time: getTimeAgo(notif.created_at),
-        description: notif.description
-      })));
-    } catch (err) { console.error(err); }
-  };
-
-  const fetchOrderTypeStats = async () => {
-    try {
-      const response = await axios_api.get('/reports/order-type-stats', { params: { days: 30 } });
-      setOrderTypeStats(response.data);
-    } catch (err) { console.error(err); }
-  };
-
-  const getTimeAgo = (dateString) => {
-    if (!dateString) return '--';
-    const now = new Date();
-    const date = new Date(dateString);
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return 'just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    return `${Math.floor(diffHours / 24)}d ago`;
+    await Promise.allSettled([
+      loadSummary(),
+      loadRecentOrders(),
+      loadActivities(),
+      loadLowStock(),
+      loadOrderTypeStats(),
+      loadRestaurantName(),
+    ]);
+    setLoading(false);
   };
 
   const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await fetchAllData();
-    setIsRefreshing(false);
+    setRefreshing(true);
+    await loadAll();
+    setRefreshing(false);
   };
+
+  const loadRestaurantName = async () => {
+    try {
+      const res = await axios_api.get('/settings');
+      setRestaurantName(res.data.restaurant_name || '');
+    } catch { /* silently skip */ }
+  };
+
+  const loadSummary = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const res = await axios_api.get('/reports/daily-summary', { params: { date: today } });
+      const d = res.data.data || {};
+      setSummary({
+        todaySales: d.total_sales || 0,
+        ordersCount: d.orders_count || 0,
+        avgOrderValue: d.average_order_value || 0,
+        totalExpenses: d.total_expenses || 0,
+      });
+    } catch { /* keep defaults */ }
+  };
+
+  const loadRecentOrders = async () => {
+    try {
+      const res = await axios_api.get('/orders', { params: { skip: 0, limit: 5 } });
+      const raw = Array.isArray(res.data) ? res.data : (res.data.data || []);
+      setRecentOrders(raw.map(o => ({
+        id: o.order_number || `#${o.id}`,
+        type: o.order_type === 'dine_in' ? 'Dine-in' : 'Takeaway',
+        amount: parseFloat(o.total || 0),
+        time: getTimeAgo(o.created_at),
+        status: o.status,
+      })));
+    } catch { /* keep empty */ }
+  };
+
+  const loadActivities = async () => {
+    try {
+      const res = await axios_api.get('/notifications', { params: { limit: 6 } });
+      const raw = Array.isArray(res.data) ? res.data : [];
+      setActivities(raw.map(n => ({
+        title: n.title,
+        desc: n.description,
+        time: getTimeAgo(n.created_at),
+      })));
+    } catch { /* keep empty */ }
+  };
+
+  const loadLowStock = async () => {
+    try {
+      const res = await axios_api.get('/ingredients/stock/low');
+      setLowStockAlerts(res.data || []);
+    } catch { /* keep empty */ }
+  };
+
+  const loadOrderTypeStats = async () => {
+    try {
+      const res = await axios_api.get('/reports/order-type-stats', { params: { days: 30 } });
+      setOrderTypeStats(res.data);
+    } catch { /* keep defaults */ }
+  };
+
+  const totalOrders = (orderTypeStats.dine_in?.count || 0) + (orderTypeStats.takeaway?.count || 0);
+  const profit = summary.todaySales - summary.totalExpenses;
+  const pieData = [
+    { name: 'Dine-in', value: orderTypeStats.dine_in?.count || 0 },
+    { name: 'Takeaway', value: orderTypeStats.takeaway?.count || 0 },
+  ];
+  const hasOrders = totalOrders > 0;
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <RefreshCw className="animate-spin h-12 w-12 text-primary mx-auto" />
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-3">
+        <RefreshCw className="animate-spin h-10 w-10 text-primary" />
+        <p className="text-muted-foreground text-sm">Loading dashboard…</p>
       </div>
     );
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
-        <h2 className="text-2xl font-semibold text-foreground">Dashboard</h2>
+    <div className="p-4 sm:p-6 lg:p-8 bg-background min-h-screen max-w-7xl mx-auto">
+
+      {/* ── Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
+            {getGreeting()}{restaurantName ? `, ${restaurantName}` : ''}!
+          </h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
+        </div>
         <button
           onClick={handleRefresh}
-          disabled={isRefreshing}
-          className="flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+          disabled={refreshing}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-medium disabled:opacity-50 self-start sm:self-auto"
         >
-          <RefreshCw size={16} className={isRefreshing ? 'animate-spin' : ''} />
-          <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+          <RefreshCw size={15} className={refreshing ? 'animate-spin' : ''} />
+          {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
 
-      {/* Low Stock Alerts */}
+      {/* ── Low Stock Banner ── */}
       {lowStockAlerts.length > 0 && (
-        <div className="mb-8 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <AlertTriangle className="text-red-500 h-5 w-5" />
-            <h3 className="text-lg font-semibold text-red-700 dark:text-red-400">Low Stock Alerts</h3>
+        <div
+          className="mb-6 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-2xl p-4 cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => onNavigate('stock')}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="text-red-500 h-5 w-5 shrink-0" />
+            <h3 className="font-semibold text-red-700 dark:text-red-400">
+              {lowStockAlerts.length} ingredient{lowStockAlerts.length > 1 ? 's' : ''} running low — tap to restock
+            </h3>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {lowStockAlerts.map(alert => (
-              <div key={alert.id} className="bg-white dark:bg-card border border-red-100 dark:border-red-800/50 rounded-lg p-4 shadow-sm flex justify-between items-center cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate('stock')}>
-                <div>
-                  <p className="font-semibold text-foreground">{alert.ingredient_name}</p>
-                  <p className="text-xs text-muted-foreground">Threshold: {alert.threshold} {alert.ingredient_unit}</p>
-                </div>
-                <div className="text-right">
-                  <p className="font-bold text-red-600 dark:text-red-400">{alert.available_quantity}</p>
-                  <p className="text-xs text-red-500/70">{alert.ingredient_unit}</p>
-                </div>
-              </div>
+          <div className="flex flex-wrap gap-2">
+            {lowStockAlerts.map(a => (
+              <span key={a.id} className="px-3 py-1 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded-full text-xs font-medium">
+                {a.ingredient_name}: {a.available_quantity} {a.ingredient_unit} left
+              </span>
             ))}
           </div>
         </div>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
-        {[
-          { label: 'Today Sales', value: `₹${dailySummary.todaySales.toLocaleString()}`, icon: DollarSign },
-          { label: 'Orders', value: dailySummary.ordersCount, icon: ShoppingBag },
-          { label: 'Avg Ticket', value: `₹${dailySummary.avgTicket.toLocaleString()}`, icon: TrendingUp },
-          { label: 'Expenses', value: `₹${dailySummary.totalExpenses.toLocaleString()}`, icon: Wallet }
-        ].map((stat, i) => (
-          <div key={i} className="bg-white dark:bg-card border border-border shadow-sm hover:shadow-lg rounded-xl p-4 sm:p-6 transition-all duration-300">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-muted-foreground text-xs sm:text-sm">{stat.label}</p>
-              <stat.icon className="text-teal-400" size={18} />
-            </div>
-            <p className="text-xl sm:text-3xl font-bold text-card-foreground">{stat.value}</p>
-          </div>
-        ))}
+      {/* ── Stat Cards ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard
+          label="Today's Revenue"
+          value={`₹${summary.todaySales.toLocaleString('en-IN')}`}
+          icon={IndianRupee}
+          color="teal"
+          sub={profit >= 0 ? `₹${profit.toLocaleString('en-IN')} after expenses` : `₹${Math.abs(profit).toLocaleString('en-IN')} over expenses`}
+        />
+        <StatCard
+          label="Orders Today"
+          value={summary.ordersCount}
+          icon={ShoppingBag}
+          color="blue"
+          sub={summary.ordersCount === 0 ? 'No orders yet' : `${summary.ordersCount} completed`}
+        />
+        <StatCard
+          label="Avg Order Value"
+          value={`₹${summary.avgOrderValue.toLocaleString('en-IN')}`}
+          icon={TrendingUp}
+          color="violet"
+        />
+        <StatCard
+          label="Today's Expenses"
+          value={`₹${summary.totalExpenses.toLocaleString('en-IN')}`}
+          icon={Wallet}
+          color="amber"
+        />
       </div>
 
-      {/* Order Type Statistics */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div className="lg:col-span-2 bg-white dark:bg-card border border-border shadow-sm hover:shadow-md rounded-xl p-6 transition-shadow">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-semibold text-card-foreground">Order Type Distribution</h3>
-            <div className="flex gap-4">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-teal-500"></div>
-                <span className="text-xs text-muted-foreground">Dine-in</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-                <span className="text-xs text-muted-foreground">Takeaway</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={[
-                      { name: 'Dine-in', value: orderTypeStats.dine_in.count || 0 },
-                      { name: 'Takeaway', value: orderTypeStats.takeaway.count || 0 }
-                    ]}
-                    cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value"
-                  >
-                    <Cell fill="#14b8a6" />
-                    <Cell fill="#f59e0b" />
-                  </Pie>
-                  <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+      {/* ── Quick Actions + Order Distribution ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
 
-            <div className="space-y-4">
-              {[
-                { label: 'Dine-in Orders', stats: orderTypeStats.dine_in, color: 'teal', icon: Utensils },
-                { label: 'Takeaway Orders', stats: orderTypeStats.takeaway, color: 'amber', icon: Package }
-              ].map((item, i) => (
-                <div key={i} className={`p-4 bg-${item.color}-500/5 border border-${item.color}-500/10 rounded-xl`}>
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <item.icon size={18} className={`text-${item.color}-600`} />
-                      <span className="font-medium text-foreground">{item.label}</span>
-                    </div>
-                    <span className={`text-lg font-bold text-${item.color}-600`}>{item.stats.count}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-4">
-                    <div className={`flex-1 bg-${item.color}-200 dark:bg-${item.color}-900/40 rounded-full h-1.5`}>
-                      <div className={`bg-${item.color}-500 h-1.5 rounded-full`} style={{ width: `${item.stats.percentage}%` }}></div>
-                    </div>
-                    <span className="text-sm font-semibold text-muted-foreground">{item.stats.percentage}%</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-linear-to-br from-teal-600 to-teal-800 rounded-xl p-6 text-white shadow-lg flex flex-col justify-between">
-          <div>
-            <h3 className="text-xl font-bold mb-2">Business Insight</h3>
-            <p className="text-teal-50 text-sm leading-relaxed">
-              {orderTypeStats.dine_in.count > orderTypeStats.takeaway.count 
-                ? "Dine-in is your primary revenue driver. Consider optimizing table turnover and dining experience."
-                : orderTypeStats.takeaway.count > 0 
-                  ? "Takeaway orders are performing well. You might want to explore delivery partnerships or loyalty perks."
-                  : "Start taking orders to see real-time insights and distribution here!"}
-            </p>
-          </div>
-          <div className="mt-6 p-4 bg-white/10 rounded-lg backdrop-blur-sm border border-white/20">
-            <p className="text-xs text-teal-100 uppercase tracking-wider mb-1">Total Orders (30d)</p>
-            <p className="text-3xl font-bold">{orderTypeStats.dine_in.count + orderTypeStats.takeaway.count}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Lower Grids */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Quick Links */}
-        <div className="bg-white dark:bg-card border border-border shadow-sm rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-card-foreground mb-4">Quick Links</h3>
-          <div className="space-y-3">
+        {/* Quick Actions */}
+        <div className="bg-white dark:bg-card border border-border rounded-2xl p-5 shadow-sm">
+          <h2 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+            <Zap className="h-4 w-4 text-primary" /> Quick Actions
+          </h2>
+          <div className="space-y-2.5">
             {[
-              { label: 'Open POS', desc: 'Start billing and print KOT', action: 'pos', btn: 'Open' },
-              { label: 'Manage Menu', desc: 'Categories, items and prices', action: 'menu', btn: 'Menu' },
-              { label: 'View Reports', desc: 'Sales and orders', action: 'reports', btn: 'Reports' }
-            ].map((link, i) => (
-              <button key={i} onClick={() => onNavigate(link.action)} className="w-full flex items-center justify-between p-3 bg-muted rounded-lg hover:bg-secondary transition text-foreground">
-                <div className="text-left">
-                  <p className="font-medium text-sm sm:text-base">{link.label}</p>
-                  <p className="text-xs text-muted-foreground">{link.desc}</p>
+              { label: 'Open POS', desc: 'Start billing customers', action: 'pos', icon: IndianRupee, color: 'bg-teal-600 hover:bg-teal-700' },
+              { label: 'Kitchen Orders', desc: 'View & manage KOT', action: 'kot', icon: ChefHat, color: 'bg-orange-500 hover:bg-orange-600' },
+              { label: 'Business Reports', desc: 'Sales and analytics', action: 'reports', icon: BarChart3, color: 'bg-blue-600 hover:bg-blue-700' },
+            ].map((item) => (
+              <button
+                key={item.action}
+                onClick={() => onNavigate(item.action)}
+                className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-border hover:bg-muted transition-colors text-left group"
+              >
+                <div className={`p-2 rounded-lg ${item.color} transition-colors`}>
+                  <item.icon className="h-4 w-4 text-white" />
                 </div>
-                <span className="px-3 py-1 bg-teal-600 text-xs rounded text-white">{link.btn}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm text-foreground">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">{item.desc}</p>
+                </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
               </button>
             ))}
           </div>
         </div>
 
+        {/* Order Type Distribution */}
+        <div className="lg:col-span-2 bg-white dark:bg-card border border-border rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-foreground">Order Distribution <span className="text-xs text-muted-foreground font-normal ml-1">(last 30 days)</span></h2>
+            {hasOrders && (
+              <span className="text-xs bg-muted px-2.5 py-1 rounded-full text-muted-foreground font-medium">
+                {totalOrders} total
+              </span>
+            )}
+          </div>
+
+          {!hasOrders ? (
+            <div className="flex flex-col items-center justify-center h-40 text-center">
+              <ShoppingBag className="h-10 w-10 text-muted-foreground/30 mb-3" />
+              <p className="text-muted-foreground font-medium">No orders in the last 30 days</p>
+              <p className="text-xs text-muted-foreground mt-1">Open POS to start taking orders</p>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row items-center gap-6">
+              <div className="h-44 w-44 shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={72} paddingAngle={4} dataKey="value">
+                      <Cell fill="#14b8a6" />
+                      <Cell fill="#f59e0b" />
+                    </Pie>
+                    <Tooltip
+                      formatter={(v) => [`${v} orders`]}
+                      contentStyle={{ borderRadius: '10px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.12)', fontSize: '13px' }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="flex-1 w-full space-y-3">
+                {[
+                  { label: 'Dine-in', stats: orderTypeStats.dine_in, color: 'teal', icon: Utensils },
+                  { label: 'Takeaway', stats: orderTypeStats.takeaway, color: 'amber', icon: Package },
+                ].map((item) => (
+                  <div key={item.label} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <item.icon className={`h-4 w-4 text-${item.color}-500`} />
+                        <span className="font-medium text-foreground">{item.label}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`font-bold text-${item.color}-600`}>{item.stats?.count || 0}</span>
+                        <span className="text-muted-foreground text-xs">({item.stats?.percentage || 0}%)</span>
+                      </div>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={`h-full bg-${item.color}-500 rounded-full transition-all duration-500`}
+                        style={{ width: `${item.stats?.percentage || 0}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+
+                <div className="pt-2 border-t border-border">
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    {orderTypeStats.dine_in?.count > orderTypeStats.takeaway?.count
+                      ? 'Dine-in is your main revenue stream. Focus on table experience.'
+                      : orderTypeStats.takeaway?.count > orderTypeStats.dine_in?.count
+                        ? 'Takeaway is leading. Consider packaging and speed.'
+                        : 'Even split between dine-in and takeaway.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Recent Orders + Activity ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
         {/* Recent Orders */}
-        <div className="bg-white dark:bg-card border border-border shadow-sm rounded-xl p-6">
+        <div className="bg-white dark:bg-card border border-border rounded-2xl p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-card-foreground">Recent Orders</h3>
-            <button onClick={() => onNavigate('past-orders')} className="text-teal-400 text-sm hover:underline">See all</button>
+            <h2 className="font-semibold text-foreground">Recent Orders</h2>
+            <button
+              onClick={() => onNavigate('past-orders')}
+              className="text-xs text-primary hover:underline font-medium flex items-center gap-1"
+            >
+              See all <ChevronRight className="h-3 w-3" />
+            </button>
           </div>
-          <div className="space-y-3">
-            {recentOrders.length === 0 ? <p className="text-sm text-muted-foreground text-center py-4">No recent orders</p> :
-              recentOrders.slice(0, 3).map(order => (
-                <div key={order.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="text-foreground">
-                    <p className="font-medium text-xs sm:text-sm">{order.id} • {order.type}</p>
-                    <p className="text-xs text-muted-foreground">{order.time}</p>
+
+          {recentOrders.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <ShoppingBag className="h-8 w-8 text-muted-foreground/30 mb-2" />
+              <p className="text-muted-foreground text-sm">No orders yet today</p>
+              <button
+                onClick={() => onNavigate('pos')}
+                className="mt-3 px-4 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:bg-primary/90 transition-colors"
+              >
+                Open POS
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {recentOrders.map((order, i) => (
+                <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-muted hover:bg-muted/80 transition-colors">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`p-1.5 rounded-lg ${order.type === 'Dine-in' ? 'bg-teal-500/10' : 'bg-amber-500/10'}`}>
+                      {order.type === 'Dine-in'
+                        ? <Utensils className="h-3.5 w-3.5 text-teal-500" />
+                        : <Package className="h-3.5 w-3.5 text-amber-500" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium text-sm text-foreground truncate">{order.id}</p>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Clock className="h-3 w-3" /> {order.time} · {order.type}
+                      </p>
+                    </div>
                   </div>
-                  <p className="font-semibold text-foreground text-sm sm:text-base">₹{order.amount.toLocaleString()}</p>
+                  <p className="font-bold text-foreground text-sm shrink-0 ml-2">₹{order.amount.toLocaleString('en-IN')}</p>
                 </div>
               ))}
-          </div>
+            </div>
+          )}
         </div>
 
-        {/* Activity Log */}
-        <div className="bg-white dark:bg-card border border-border shadow-sm rounded-xl p-6">
-          <h3 className="text-lg font-semibold text-card-foreground mb-4">Activity Log</h3>
-          <div className="space-y-3">
-            {activities.length === 0 ? <p className="text-sm text-muted-foreground text-center py-4">No recent activities</p> :
-              activities.map((activity, i) => (
-                <div key={i} className="p-3 bg-muted rounded-lg">
-                  <p className="font-medium text-foreground text-sm sm:text-base">{activity.action}</p>
-                  <p className="text-xs text-muted-foreground">{activity.time}</p>
-                  {activity.description && <p className="text-xs text-muted-foreground mt-1 italic">{activity.description}</p>}
-                </div>
-              ))}
-          </div>
-        </div>
-      </div>
+        {/* Activity / Notifications */}
+        <div className="bg-white dark:bg-card border border-border rounded-2xl p-5 shadow-sm">
+          <h2 className="font-semibold text-foreground mb-4">Recent Activity</h2>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Customers */}
-        <div className="bg-white dark:bg-card border border-border shadow-sm rounded-xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-card-foreground">Customers</h3>
-            <button onClick={() => onNavigate('customers')} className="px-3 py-1 bg-teal-600 text-white rounded text-sm hover:bg-teal-700">Add</button>
-          </div>
-          <div className="space-y-2">
-            {customers.length === 0 ? <p className="text-sm text-muted-foreground text-center py-4">No customers yet</p> :
-              customers.slice(0, 5).map((cust, i) => (
-                <div key={i} className="p-3 bg-muted rounded-lg">
-                  <p className="font-medium text-foreground">{cust.name}</p>
-                  <p className="text-xs text-muted-foreground">{cust.phone} • {cust.orders} orders</p>
-                </div>
-              ))}
-          </div>
-        </div>
-
-        {/* Offers */}
-        <div className="bg-white dark:bg-card border border-border shadow-sm rounded-xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-card-foreground">Offers</h3>
-            <button onClick={() => onNavigate('offers')} className="px-3 py-1 bg-teal-600 text-white rounded text-sm hover:bg-teal-700">Create</button>
-          </div>
-          <div className="space-y-2">
-            {offers.length === 0 ? <p className="text-sm text-muted-foreground text-center py-4">No active offers</p> :
-              offers.map((offer, i) => (
-                <div key={i} className="p-3 bg-muted rounded-lg">
-                  <p className="font-medium text-foreground">{offer.code}</p>
-                  <p className="text-xs text-muted-foreground">{offer.type} • {offer.value} • {offer.category}</p>
-                </div>
-              ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Staff */}
-        <div className="bg-white dark:bg-card border border-border shadow-sm rounded-xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-card-foreground">Staff</h3>
-            <button onClick={() => onNavigate('staff')} className="px-3 py-1 bg-teal-600 text-white rounded text-sm hover:bg-teal-700">Add</button>
-          </div>
-          <div className="space-y-2">
-            {staffAccessDenied ? (
-              <div className="text-center py-6">
-                <Lock className="h-8 w-8 text-amber-500 mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">Staff data requires authentication</p>
-              </div>
-            ) : staff.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No staff members yet</p>
-            ) : staff.map((member, i) => (
-              <div key={i} className="p-3 bg-muted rounded-lg">
-                <p className="font-medium text-foreground">{member.name}</p>
-                <p className="text-xs text-muted-foreground">{member.role} • {member.payscale}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Expenses */}
-        <div className="bg-white dark:bg-card border border-border shadow-sm rounded-xl p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-card-foreground">Expenses</h3>
-            <button onClick={() => onNavigate('expenses')} className="px-3 py-1 bg-teal-600 text-white rounded text-sm hover:bg-teal-700">Add</button>
-          </div>
-          <div className="space-y-2">
-            {expenses.length === 0 ? <p className="text-sm text-muted-foreground text-center py-4">No expenses recorded</p> :
-              expenses.slice(0, 5).map((exp, i) => (
-                <div key={i} className="p-3 bg-muted rounded-lg">
-                  <p className="font-medium text-sm text-foreground">{exp.title}</p>
-                  <div className="flex justify-between items-center mt-1">
-                    <p className="text-xs text-muted-foreground">{exp.date}</p>
-                    <p className="font-semibold text-foreground">{exp.amount}</p>
+          {activities.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <Clock className="h-8 w-8 text-muted-foreground/30 mb-2" />
+              <p className="text-muted-foreground text-sm">No recent activity</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {activities.map((a, i) => (
+                <div key={i} className="flex gap-3 p-3 rounded-xl bg-muted">
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm text-foreground">{a.title}</p>
+                    {a.desc && <p className="text-xs text-muted-foreground mt-0.5 italic">{a.desc}</p>}
+                    <p className="text-xs text-muted-foreground mt-1">{a.time}</p>
                   </div>
                 </div>
               ))}
-          </div>
+            </div>
+          )}
         </div>
       </div>
+
     </div>
   );
 };

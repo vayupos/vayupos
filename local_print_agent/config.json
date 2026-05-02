@@ -1,6 +1,0 @@
-{
-    "backend_url": "https://api.vayupos.com/api/v1",
-    "agent_key": "",
-    "poll_interval": 2,
-    "log_level": "INFO"
-}

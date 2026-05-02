@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float
 from sqlalchemy.orm import declarative_base
 from datetime import datetime
 
@@ -38,8 +38,20 @@ class Client(Base):
     kot_printer_ip = Column(String(45), nullable=True)
     kot_printer_port = Column(Integer, nullable=True, default=9100)
 
-    # Print agent authentication key — shown in Settings so the local agent can be configured
-    print_agent_key = Column(String(64), nullable=True, index=True)
+    # Loyalty programme config
+    loyalty_point_value    = Column(Float, nullable=False, default=0.10)   # ₹ per 1 point
+    loyalty_earn_pct       = Column(Float, nullable=False, default=2.0)    # % of order total → points
+    loyalty_min_redeem_pts = Column(Integer, nullable=False, default=100)  # minimum pts to redeem
+
+    # Module flags — control which features are enabled per restaurant
+    module_pos        = Column(Boolean, nullable=False, default=True)
+    module_kot        = Column(Boolean, nullable=False, default=True)
+    module_inventory  = Column(Boolean, nullable=False, default=True)
+    module_reports    = Column(Boolean, nullable=False, default=True)
+    module_expenses   = Column(Boolean, nullable=False, default=True)
+    module_staff      = Column(Boolean, nullable=False, default=True)
+    module_customers  = Column(Boolean, nullable=False, default=True)
+    module_coupons    = Column(Boolean, nullable=False, default=True)
 
     # Lifecycle
     is_active = Column(Boolean, nullable=False, default=True)

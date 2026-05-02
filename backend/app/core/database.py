@@ -46,7 +46,10 @@ from app.models.expense import Expense
 from app.models.order_coupon import OrderCoupon
 from app.models.staff import Staff
 from app.models.password_reset_token import PasswordResetToken
+from app.models.invite_token import InviteToken
 from app.models.client import Client
+from app.models.kot import KOT, KOTItem
+from app.models.ingredient import Ingredient, ProductIngredient, Stock
 
 # Dependency to get DB session (Sync)
 def get_db():
