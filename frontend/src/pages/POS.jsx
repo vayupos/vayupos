@@ -1547,8 +1547,9 @@ function POS() {
                   const quantity = getMenuItemQuantity(item);
                   const imageUrl = item.image_url;
                   const itemName = item.name || 'Item';
-                  const fallbackImage = `https://via.placeholder.com/200x200/1ABC9C/FFFFFF?text=${encodeURIComponent(
-                    itemName.substring(0, 3)
+                  const initials = itemName.substring(0, 2).toUpperCase();
+                  const fallbackImage = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
+                    `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect width="200" height="200" fill="#1ABC9C"/><text x="100" y="115" font-family="sans-serif" font-size="64" font-weight="bold" fill="white" text-anchor="middle">${initials}</text></svg>`
                   )}`;
 
                   return (
