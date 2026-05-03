@@ -101,8 +101,12 @@ function PrinterSection({ title, prefix, form, setForm, onTestPrint, testStatus 
         </div>
         {isCustom && (
           <div className="mt-3 flex items-center gap-2">
+            <label htmlFor={`${prefix}-custom-width`} className="sr-only">Custom paper width (mm)</label>
             <input
+              id={`${prefix}-custom-width`}
               type="number"
+              name={`${prefix}_custom_width`}
+              autoComplete="off"
               min="40"
               max="120"
               value={customWidth || form[widthKey]}
@@ -123,9 +127,12 @@ function PrinterSection({ title, prefix, form, setForm, onTestPrint, testStatus 
           </p>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-[13px] font-medium text-muted-foreground mb-1">Printer IP</label>
+              <label htmlFor={`${prefix}-printer-ip`} className="block text-[13px] font-medium text-muted-foreground mb-1">Printer IP</label>
               <input
+                id={`${prefix}-printer-ip`}
                 type="text"
+                name={`${prefix}_printer_ip`}
+                autoComplete="off"
                 value={form[ipKey] || ''}
                 onChange={e => setForm(f => ({ ...f, [ipKey]: e.target.value }))}
                 placeholder="192.168.1.150"
@@ -133,9 +140,12 @@ function PrinterSection({ title, prefix, form, setForm, onTestPrint, testStatus 
               />
             </div>
             <div>
-              <label className="block text-[13px] font-medium text-muted-foreground mb-1">Port</label>
+              <label htmlFor={`${prefix}-printer-port`} className="block text-[13px] font-medium text-muted-foreground mb-1">Port</label>
               <input
+                id={`${prefix}-printer-port`}
                 type="number"
+                name={`${prefix}_printer_port`}
+                autoComplete="off"
                 value={form[portKey] || 9100}
                 onChange={e => setForm(f => ({ ...f, [portKey]: parseInt(e.target.value) || 9100 }))}
                 placeholder="9100"
@@ -210,7 +220,11 @@ function AgentKeySection({ agentKey, onRegenerate }) {
         Each restaurant has its own unique key — the agent will only fetch jobs for this restaurant.
       </p>
       <div className="flex items-center gap-2">
+        <label htmlFor="s-agent-key" className="sr-only">Print agent key</label>
         <input
+          id="s-agent-key"
+          name="print_agent_key"
+          autoComplete="off"
           readOnly
           value={agentKey || '—'}
           className="flex-1 px-3 py-2 rounded-lg border border-border bg-card text-foreground text-[13px] font-mono focus:outline-none"
@@ -386,49 +400,67 @@ export default function Settings() {
       {activeTab === 0 && (
         <div className="space-y-5">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <Field label="Restaurant name" required>
+            <Field label="Restaurant name" required htmlFor="s-restaurant-name">
               <input
+                id="s-restaurant-name"
+                name="restaurant_name"
+                autoComplete="organization"
                 value={form.restaurant_name}
                 onChange={e => setForm(f => ({ ...f, restaurant_name: e.target.value }))}
                 placeholder="Spice Garden"
                 className={inputCls}
               />
             </Field>
-            <Field label="Owner name">
+            <Field label="Owner name" htmlFor="s-owner-name">
               <input
+                id="s-owner-name"
+                name="owner_name"
+                autoComplete="name"
                 value={form.owner_name || ''}
                 onChange={e => setForm(f => ({ ...f, owner_name: e.target.value }))}
                 placeholder="Rajesh Kumar"
                 className={inputCls}
               />
             </Field>
-            <Field label="Phone">
+            <Field label="Phone" htmlFor="s-phone">
               <input
+                id="s-phone"
+                name="phone"
+                autoComplete="tel"
                 value={form.phone || ''}
                 onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
                 placeholder="+91 98765 43210"
                 className={inputCls}
               />
             </Field>
-            <Field label="Email">
+            <Field label="Email" htmlFor="s-email">
               <input
+                id="s-email"
                 type="email"
+                name="email"
+                autoComplete="email"
                 value={form.email || ''}
                 onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                 placeholder="owner@spicegarden.com"
                 className={inputCls}
               />
             </Field>
-            <Field label="City">
+            <Field label="City" htmlFor="s-city">
               <input
+                id="s-city"
+                name="city"
+                autoComplete="address-level2"
                 value={form.city || ''}
                 onChange={e => setForm(f => ({ ...f, city: e.target.value }))}
                 placeholder="Hyderabad"
                 className={inputCls}
               />
             </Field>
-            <Field label="Currency symbol">
+            <Field label="Currency symbol" htmlFor="s-currency">
               <input
+                id="s-currency"
+                name="currency_symbol"
+                autoComplete="off"
                 value={form.currency_symbol || '₹'}
                 onChange={e => setForm(f => ({ ...f, currency_symbol: e.target.value }))}
                 placeholder="₹"
@@ -436,8 +468,11 @@ export default function Settings() {
               />
             </Field>
           </div>
-          <Field label="Address">
+          <Field label="Address" htmlFor="s-address">
             <textarea
+              id="s-address"
+              name="address"
+              autoComplete="street-address"
               value={form.address || ''}
               onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
               placeholder="Plot 12, Road No 5, Kukatpally, Hyderabad – 500072"
@@ -447,8 +482,11 @@ export default function Settings() {
           </Field>
           <div className="border-t border-border pt-5 space-y-4">
             <h3 className="text-[15px] font-semibold text-foreground">Bill text</h3>
-            <Field label="Bill header" hint="Printed at the top of every bill (e.g. GSTIN, tagline)">
+            <Field label="Bill header" hint="Printed at the top of every bill (e.g. GSTIN, tagline)" htmlFor="s-bill-header">
               <textarea
+                id="s-bill-header"
+                name="bill_header"
+                autoComplete="off"
                 value={form.bill_header || ''}
                 onChange={e => setForm(f => ({ ...f, bill_header: e.target.value }))}
                 placeholder="GSTIN: 22AAAAA0000A1Z5"
@@ -456,8 +494,11 @@ export default function Settings() {
                 className={inputCls + ' resize-none'}
               />
             </Field>
-            <Field label="Bill footer" hint="Printed at the bottom of every bill">
+            <Field label="Bill footer" hint="Printed at the bottom of every bill" htmlFor="s-bill-footer">
               <textarea
+                id="s-bill-footer"
+                name="bill_footer"
+                autoComplete="off"
                 value={form.bill_footer || ''}
                 onChange={e => setForm(f => ({ ...f, bill_footer: e.target.value }))}
                 placeholder="Thank you for visiting! Please come again."
@@ -505,9 +546,12 @@ export default function Settings() {
           <p className="text-[13px] text-muted-foreground">
             Configure how loyalty points are earned and redeemed across your restaurant.
           </p>
-          <Field label="Points value (₹ per 1 point)" hint="How much cash value 1 loyalty point is worth. e.g. 0.10 means 10 pts = ₹1">
+          <Field label="Points value (₹ per 1 point)" hint="How much cash value 1 loyalty point is worth. e.g. 0.10 means 10 pts = ₹1" htmlFor="s-loyalty-point-value">
             <input
+              id="s-loyalty-point-value"
               type="number"
+              name="loyalty_point_value"
+              autoComplete="off"
               min="0.01"
               step="0.01"
               value={form.loyalty_point_value}
@@ -516,9 +560,12 @@ export default function Settings() {
               placeholder="0.10"
             />
           </Field>
-          <Field label="Points earned per order (%)" hint="% of order total that becomes loyalty points. e.g. 2 means a ₹500 order earns 10 pts (500 × 2% = 10)">
+          <Field label="Points earned per order (%)" hint="% of order total that becomes loyalty points. e.g. 2 means a ₹500 order earns 10 pts (500 × 2% = 10)" htmlFor="s-loyalty-earn-pct">
             <input
+              id="s-loyalty-earn-pct"
               type="number"
+              name="loyalty_earn_pct"
+              autoComplete="off"
               min="0"
               step="0.1"
               max="100"
@@ -528,9 +575,12 @@ export default function Settings() {
               placeholder="2.0"
             />
           </Field>
-          <Field label="Minimum points to redeem" hint="Customer must have at least this many points before they can redeem">
+          <Field label="Minimum points to redeem" hint="Customer must have at least this many points before they can redeem" htmlFor="s-loyalty-min-redeem">
             <input
+              id="s-loyalty-min-redeem"
               type="number"
+              name="loyalty_min_redeem_pts"
+              autoComplete="off"
               min="1"
               step="1"
               value={form.loyalty_min_redeem_pts}
@@ -554,10 +604,10 @@ export default function Settings() {
 const inputCls =
   'w-full px-3 py-2.5 rounded-lg border border-border bg-muted text-foreground text-[14px] focus:outline-none focus:ring-1 focus:ring-primary placeholder-muted-foreground';
 
-function Field({ label, hint, required, children }) {
+function Field({ label, hint, required, htmlFor, children }) {
   return (
     <div>
-      <label className="block text-[13px] font-medium text-muted-foreground mb-1.5">
+      <label htmlFor={htmlFor} className="block text-[13px] font-medium text-muted-foreground mb-1.5">
         {label}{required && <span className="text-red-500 ml-0.5"> *</span>}
       </label>
       {children}

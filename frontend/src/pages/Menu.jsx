@@ -1058,7 +1058,11 @@ const Menu = () => {
           <p className="text-sm text-muted-foreground mt-0.5">Manage your categories and products</p>
         </div>
         <div className="flex gap-2 sm:gap-3 flex-wrap">
+          <label htmlFor="menu-csv-upload" className="sr-only">Import CSV file</label>
           <input
+            id="menu-csv-upload"
+            name="csv_upload"
+            autoComplete="off"
             type="file"
             ref={fileInputRef}
             onChange={handleCSVUpload}
@@ -1229,10 +1233,13 @@ const Menu = () => {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {/* Search */}
                 <div className="col-span-2 sm:col-span-1">
-                  <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5">Search</p>
+                  <label htmlFor="menu-search" className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5 block">Search</label>
                   <div className="relative">
                     <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                     <input
+                      id="menu-search"
+                      name="search_term"
+                      autoComplete="off"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       placeholder={`Search in ${categoriesById[selectedCategoryId]?.name || "category"}`}
@@ -1242,8 +1249,11 @@ const Menu = () => {
                 </div>
                 {/* Sort */}
                 <div>
-                  <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5">Sort by</p>
+                  <label htmlFor="menu-sort" className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5 block">Sort by</label>
                   <select
+                    id="menu-sort"
+                    name="sort_by"
+                    autoComplete="off"
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
                     className="w-full bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-500 transition-colors cursor-pointer"
@@ -1256,8 +1266,11 @@ const Menu = () => {
                 </div>
                 {/* Food Type */}
                 <div>
-                  <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5">Food Type</p>
+                  <label htmlFor="menu-food-type" className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5 block">Food Type</label>
                   <select
+                    id="menu-food-type"
+                    name="food_type_filter"
+                    autoComplete="off"
                     value={foodTypeFilter}
                     onChange={(e) => setFoodTypeFilter(e.target.value)}
                     className="w-full bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-500 transition-colors cursor-pointer"
@@ -1272,8 +1285,11 @@ const Menu = () => {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {/* Min Price */}
                 <div>
-                  <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5">Min Price (₹)</p>
+                  <label htmlFor="menu-min-price" className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5 block">Min Price (₹)</label>
                   <input
+                    id="menu-min-price"
+                    name="min_price"
+                    autoComplete="off"
                     type="number"
                     min="0"
                     value={minPrice}
@@ -1284,8 +1300,11 @@ const Menu = () => {
                 </div>
                 {/* Max Price */}
                 <div>
-                  <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5">Max Price (₹)</p>
+                  <label htmlFor="menu-max-price" className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5 block">Max Price (₹)</label>
                   <input
+                    id="menu-max-price"
+                    name="max_price"
+                    autoComplete="off"
                     type="number"
                     min="0"
                     value={maxPrice}
@@ -1296,8 +1315,11 @@ const Menu = () => {
                 </div>
                 {/* Availability */}
                 <div>
-                  <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5">Availability</p>
+                  <label htmlFor="menu-availability" className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5 block">Availability</label>
                   <select
+                    id="menu-availability"
+                    name="availability_filter"
+                    autoComplete="off"
                     value={availabilityFilter}
                     onChange={(e) => setAvailabilityFilter(e.target.value)}
                     className="w-full bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-500 transition-colors cursor-pointer"
@@ -1309,8 +1331,11 @@ const Menu = () => {
                 </div>
                 {/* Has Image */}
                 <div>
-                  <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5">Has Image</p>
+                  <label htmlFor="menu-has-image" className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider mb-1.5 block">Has Image</label>
                   <select
+                    id="menu-has-image"
+                    name="has_image_filter"
+                    autoComplete="off"
                     value={hasImageFilter ? "yes" : "all"}
                     onChange={(e) => setHasImageFilter(e.target.value === "yes")}
                     className="w-full bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none focus:border-teal-500 transition-colors cursor-pointer"
@@ -1526,10 +1551,13 @@ const Menu = () => {
             </div>
             <div className="space-y-4">
               <div>
-                <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                <label htmlFor="add-category-name" className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
                   Category Name*
                 </label>
                 <input
+                  id="add-category-name"
+                  name="name"
+                  autoComplete="off"
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
                   placeholder="e.g., Beverages"
@@ -1537,10 +1565,13 @@ const Menu = () => {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                <label htmlFor="add-category-description" className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
                   Description
                 </label>
                 <textarea
+                  id="add-category-description"
+                  name="description"
+                  autoComplete="off"
                   value={newCategoryDescription}
                   onChange={(e) => setNewCategoryDescription(e.target.value)}
                   placeholder="Optional description"
@@ -1576,10 +1607,13 @@ const Menu = () => {
                 </div>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                <label htmlFor="add-category-tax-rate" className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
                   GST Rate
                 </label>
                 <select
+                  id="add-category-tax-rate"
+                  name="tax_rate"
+                  autoComplete="off"
                   value={newCategoryTaxRate}
                   onChange={(e) => setNewCategoryTaxRate(Number(e.target.value))}
                   className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-2.5 text-sm outline-none"
@@ -1628,10 +1662,13 @@ const Menu = () => {
             </div>
             <div className="space-y-4">
               <div>
-                <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                <label htmlFor="edit-category-name" className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
                   Category Name*
                 </label>
                 <input
+                  id="edit-category-name"
+                  name="name"
+                  autoComplete="off"
                   value={editingCategory.name}
                   onChange={(e) =>
                     setEditingCategory({ ...editingCategory, name: e.target.value })
@@ -1640,10 +1677,13 @@ const Menu = () => {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                <label htmlFor="edit-category-description" className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
                   Description
                 </label>
                 <textarea
+                  id="edit-category-description"
+                  name="description"
+                  autoComplete="off"
                   value={editingCategory.description || ""}
                   onChange={(e) =>
                     setEditingCategory({
@@ -1688,10 +1728,13 @@ const Menu = () => {
                 </div>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                <label htmlFor="edit-category-tax-rate" className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
                   GST Rate
                 </label>
                 <select
+                  id="edit-category-tax-rate"
+                  name="tax_rate"
+                  autoComplete="off"
                   value={editingCategory.tax_rate ?? 5}
                   onChange={(e) => setEditingCategory({ ...editingCategory, tax_rate: Number(e.target.value) })}
                   className="w-full bg-muted text-foreground border border-border rounded-lg px-4 py-2.5 text-sm outline-none"
@@ -1703,6 +1746,9 @@ const Menu = () => {
               </div>
               <div className="flex items-center gap-2">
                 <input
+                  id="edit-category-is-active"
+                  name="is_active"
+                  autoComplete="off"
                   type="checkbox"
                   checked={editingCategory.is_active}
                   onChange={(e) =>
@@ -1713,7 +1759,7 @@ const Menu = () => {
                   }
                   className="w-4 h-4"
                 />
-                <label className="text-sm">Active</label>
+                <label htmlFor="edit-category-is-active" className="text-sm">Active</label>
               </div>
               <div className="flex gap-3">
                 <button
@@ -1784,6 +1830,9 @@ const Menu = () => {
                   <Upload size={16} />
                   {uploadingImage ? "Uploading..." : "Upload Image from Computer"}
                   <input
+                    id="new-product-image-upload"
+                    name="product_image"
+                    autoComplete="off"
                     type="file"
                     accept="image/*"
                     onChange={(e) => handleImageUpload(e, false)}
@@ -1814,10 +1863,13 @@ const Menu = () => {
 
               {/* Product Name Input with Autocomplete */}
               <div className="relative">
-                <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+                <label htmlFor="new-product-name" className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
                   Product Name*
                 </label>
                 <input
+                  id="new-product-name"
+                  name="name"
+                  autoComplete="off"
                   type="text"
                   placeholder="Product name"
                   value={newProductData.baseName}
@@ -1835,10 +1887,12 @@ const Menu = () => {
                     Food Type*
                   </label>
                   <div className="flex gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer">
+                    <label htmlFor="new-food-type-veg" className="flex items-center gap-2 cursor-pointer">
                       <input
+                        id="new-food-type-veg"
                         type="radio"
                         name="food_type"
+                        autoComplete="off"
                         value="veg"
                         checked={newProductData.food_type === "veg"}
                         onChange={(e) => setNewProductData({...newProductData, food_type: e.target.value})}
@@ -1848,10 +1902,12 @@ const Menu = () => {
                         <span className="w-2 h-2 rounded-full bg-green-500"></span> Veg
                       </span>
                     </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
+                    <label htmlFor="new-food-type-non-veg" className="flex items-center gap-2 cursor-pointer">
                       <input
+                        id="new-food-type-non-veg"
                         type="radio"
                         name="food_type"
+                        autoComplete="off"
                         value="non_veg"
                         checked={newProductData.food_type === "non_veg"}
                         onChange={(e) => setNewProductData({...newProductData, food_type: e.target.value})}
@@ -1861,10 +1917,12 @@ const Menu = () => {
                         <span className="w-2 h-2 rounded-full bg-red-500"></span> Non-Veg
                       </span>
                     </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
+                    <label htmlFor="new-food-type-egg" className="flex items-center gap-2 cursor-pointer">
                       <input
+                        id="new-food-type-egg"
                         type="radio"
                         name="food_type"
+                        autoComplete="off"
                         value="egg"
                         checked={newProductData.food_type === "egg"}
                         onChange={(e) => setNewProductData({...newProductData, food_type: e.target.value})}
@@ -1935,7 +1993,11 @@ const Menu = () => {
                   <div key={idx} className="flex items-center gap-2 mb-3">
                     {s.size === "Custom" || (s.size !== "" && !AVAILABLE_SIZES.includes(s.size)) ? (
                       <div className="flex-1 flex gap-2">
+                        <label htmlFor={`new-size-select-${idx}`} className="sr-only">Size type for row {idx + 1}</label>
                         <select
+                          id={`new-size-select-${idx}`}
+                          name={`size_select_${idx}`}
+                          autoComplete="off"
                           value="Custom"
                           onChange={(e) => {
                             const copy = [...newProductData.sizes];
@@ -1950,7 +2012,11 @@ const Menu = () => {
                             <option key={sizeOption} value={sizeOption}>{sizeOption}</option>
                           ))}
                         </select>
+                        <label htmlFor={`new-size-custom-name-${idx}`} className="sr-only">Custom size name for row {idx + 1}</label>
                         <input
+                          id={`new-size-custom-name-${idx}`}
+                          name={`size_custom_name_${idx}`}
+                          autoComplete="off"
                           type="text"
                           placeholder="Custom size name"
                           value={s.size === "Custom" ? "" : s.size}
@@ -1963,22 +2029,32 @@ const Menu = () => {
                         />
                       </div>
                     ) : (
-                      <select
-                        value={s.size || "Regular"}
-                        onChange={(e) => {
-                          const copy = [...newProductData.sizes];
-                          copy[idx].size = e.target.value;
-                          setNewProductData({ ...newProductData, sizes: copy });
-                        }}
-                        className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
-                      >
-                        <option value="" disabled>Select Size</option>
-                        {AVAILABLE_SIZES.map(sizeOption => (
-                          <option key={sizeOption} value={sizeOption}>{sizeOption}</option>
-                        ))}
-                      </select>
+                      <>
+                        <label htmlFor={`new-size-select-${idx}`} className="sr-only">Size for row {idx + 1}</label>
+                        <select
+                          id={`new-size-select-${idx}`}
+                          name={`size_select_${idx}`}
+                          autoComplete="off"
+                          value={s.size || "Regular"}
+                          onChange={(e) => {
+                            const copy = [...newProductData.sizes];
+                            copy[idx].size = e.target.value;
+                            setNewProductData({ ...newProductData, sizes: copy });
+                          }}
+                          className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                        >
+                          <option value="" disabled>Select Size</option>
+                          {AVAILABLE_SIZES.map(sizeOption => (
+                            <option key={sizeOption} value={sizeOption}>{sizeOption}</option>
+                          ))}
+                        </select>
+                      </>
                     )}
+                    <label htmlFor={`new-size-price-${idx}`} className="sr-only">Price for row {idx + 1}</label>
                     <input
+                      id={`new-size-price-${idx}`}
+                      name={`size_price_${idx}`}
+                      autoComplete="off"
                       type="number"
                       placeholder="Price"
                       value={s.price}
@@ -2016,7 +2092,11 @@ const Menu = () => {
                 {newProductData.ingredients.map((ing, idx) => (
                   <div key={idx} className="flex flex-col gap-1 mb-3">
                     <div className="flex items-center gap-2">
+                      <label htmlFor={`new-ingredient-${idx}`} className="sr-only">Ingredient {idx + 1}</label>
                       <select
+                        id={`new-ingredient-${idx}`}
+                        name={`ingredient_id_${idx}`}
+                        autoComplete="off"
                         value={inlineIngredient.show && inlineIngredient.targetIdx === idx && !inlineIngredient.isEdit ? "__create_new__" : ing.ingredient_id}
                         onChange={(e) => {
                           if (e.target.value === "__create_new__") {
@@ -2036,7 +2116,11 @@ const Menu = () => {
                         ))}
                         <option value="__create_new__">+ Create new ingredient...</option>
                       </select>
+                      <label htmlFor={`new-ingredient-qty-${idx}`} className="sr-only">Quantity for ingredient {idx + 1}</label>
                       <input
+                        id={`new-ingredient-qty-${idx}`}
+                        name={`ingredient_qty_${idx}`}
+                        autoComplete="off"
                         type="number"
                         placeholder="Qty"
                         value={ing.quantity}
@@ -2056,14 +2140,22 @@ const Menu = () => {
                     </div>
                     {inlineIngredient.show && inlineIngredient.targetIdx === idx && !inlineIngredient.isEdit && (
                       <div className="flex gap-2 mt-1">
+                        <label htmlFor="new-inline-ingredient-name" className="sr-only">New ingredient name</label>
                         <input
+                          id="new-inline-ingredient-name"
+                          name="ingredient_name"
+                          autoComplete="off"
                           type="text"
                           placeholder="Ingredient name"
                           value={inlineIngredient.name}
                           onChange={e => setInlineIngredient(prev => ({ ...prev, name: e.target.value }))}
                           className="flex-1 bg-muted text-foreground border border-teal-500 rounded-lg px-3 py-1.5 text-sm outline-none"
                         />
+                        <label htmlFor="new-inline-ingredient-unit" className="sr-only">New ingredient unit</label>
                         <select
+                          id="new-inline-ingredient-unit"
+                          name="ingredient_unit"
+                          autoComplete="off"
                           value={inlineIngredient.unit}
                           onChange={e => setInlineIngredient(prev => ({ ...prev, unit: e.target.value }))}
                           className="bg-muted text-foreground border border-border rounded-lg px-2 py-1.5 text-sm outline-none"
@@ -2102,8 +2194,10 @@ const Menu = () => {
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <input
-                      type="checkbox"
                       id="is_time_restricted_new"
+                      name="is_time_restricted"
+                      autoComplete="off"
+                      type="checkbox"
                       checked={newProductData.is_time_restricted}
                       onChange={(e) => setNewProductData({ ...newProductData, is_time_restricted: e.target.checked })}
                       className="w-4 h-4 accent-teal-600"
@@ -2116,10 +2210,13 @@ const Menu = () => {
                 {newProductData.is_time_restricted && (
                   <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
                     <div>
-                      <label className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">
+                      <label htmlFor="new-available-from" className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">
                         Available From
                       </label>
                       <input
+                        id="new-available-from"
+                        name="available_from"
+                        autoComplete="off"
                         type="time"
                         value={newProductData.available_from}
                         onChange={(e) => setNewProductData({ ...newProductData, available_from: e.target.value })}
@@ -2127,10 +2224,13 @@ const Menu = () => {
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">
+                      <label htmlFor="new-available-to" className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">
                         Available To
                       </label>
                       <input
+                        id="new-available-to"
+                        name="available_to"
+                        autoComplete="off"
                         type="time"
                         value={newProductData.available_to}
                         onChange={(e) => setNewProductData({ ...newProductData, available_to: e.target.value })}
@@ -2213,6 +2313,9 @@ const Menu = () => {
                 <Upload size={16} />
                 {uploadingImage ? "Uploading..." : "Upload Image from Computer"}
                 <input
+                  id="edit-product-image-upload"
+                  name="product_image"
+                  autoComplete="off"
                   type="file"
                   accept="image/*"
                   onChange={(e) => handleImageUpload(e, true)}
@@ -2244,10 +2347,13 @@ const Menu = () => {
             )}
 
             <div className="mb-4">
-              <label className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
+              <label htmlFor="edit-product-name" className="text-xs text-muted-foreground uppercase tracking-wide mb-2 block">
                 Product Name*
               </label>
               <input
+                id="edit-product-name"
+                name="name"
+                autoComplete="off"
                 type="text"
                 placeholder="Product name"
                 value={editingProductGroup.baseName}
@@ -2265,10 +2371,12 @@ const Menu = () => {
                   Food Type*
                 </label>
                 <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
+                  <label htmlFor="edit-food-type-veg" className="flex items-center gap-2 cursor-pointer">
                     <input
+                      id="edit-food-type-veg"
                       type="radio"
                       name="edit_food_type"
+                      autoComplete="off"
                       value="veg"
                       checked={editingProductGroup.food_type === "veg"}
                       onChange={(e) => setEditingProductGroup({...editingProductGroup, food_type: e.target.value})}
@@ -2278,10 +2386,12 @@ const Menu = () => {
                       <span className="w-2 h-2 rounded-full bg-green-500"></span> Veg
                     </span>
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
+                  <label htmlFor="edit-food-type-non-veg" className="flex items-center gap-2 cursor-pointer">
                     <input
+                      id="edit-food-type-non-veg"
                       type="radio"
                       name="edit_food_type"
+                      autoComplete="off"
                       value="non_veg"
                       checked={editingProductGroup.food_type === "non_veg"}
                       onChange={(e) => setEditingProductGroup({...editingProductGroup, food_type: e.target.value})}
@@ -2291,10 +2401,12 @@ const Menu = () => {
                       <span className="w-2 h-2 rounded-full bg-red-500"></span> Non-Veg
                     </span>
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
+                  <label htmlFor="edit-food-type-egg" className="flex items-center gap-2 cursor-pointer">
                     <input
+                      id="edit-food-type-egg"
                       type="radio"
                       name="edit_food_type"
+                      autoComplete="off"
                       value="egg"
                       checked={editingProductGroup.food_type === "egg"}
                       onChange={(e) => setEditingProductGroup({...editingProductGroup, food_type: e.target.value})}
@@ -2326,7 +2438,11 @@ const Menu = () => {
                     <div className="flex items-center gap-2">
                       {s.size === "Custom" || (s.size !== "" && !AVAILABLE_SIZES.includes(s.size)) ? (
                         <div className="flex-1 flex gap-2">
+                          <label htmlFor={`edit-size-select-${idx}`} className="sr-only">Size type for row {idx + 1}</label>
                           <select
+                            id={`edit-size-select-${idx}`}
+                            name={`edit_size_select_${idx}`}
+                            autoComplete="off"
                             value="Custom"
                             onChange={(e) => {
                               const copy = [...editingProductGroup.sizes];
@@ -2341,7 +2457,11 @@ const Menu = () => {
                               <option key={sizeOption} value={sizeOption}>{sizeOption}</option>
                             ))}
                           </select>
+                          <label htmlFor={`edit-size-custom-name-${idx}`} className="sr-only">Custom size name for row {idx + 1}</label>
                           <input
+                            id={`edit-size-custom-name-${idx}`}
+                            name={`edit_size_custom_name_${idx}`}
+                            autoComplete="off"
                             type="text"
                             placeholder="Custom size name"
                             value={s.size === "Custom" ? "" : s.size}
@@ -2354,22 +2474,32 @@ const Menu = () => {
                           />
                         </div>
                       ) : (
-                        <select
-                          value={s.size || "Regular"}
-                          onChange={(e) => {
-                            const copy = [...editingProductGroup.sizes];
-                            copy[idx].size = e.target.value;
-                            setEditingProductGroup({ ...editingProductGroup, sizes: copy });
-                          }}
-                          className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
-                        >
-                          <option value="" disabled>Select Size</option>
-                          {AVAILABLE_SIZES.map(sizeOption => (
-                            <option key={sizeOption} value={sizeOption}>{sizeOption}</option>
-                          ))}
-                        </select>
+                        <>
+                          <label htmlFor={`edit-size-select-${idx}`} className="sr-only">Size for row {idx + 1}</label>
+                          <select
+                            id={`edit-size-select-${idx}`}
+                            name={`edit_size_select_${idx}`}
+                            autoComplete="off"
+                            value={s.size || "Regular"}
+                            onChange={(e) => {
+                              const copy = [...editingProductGroup.sizes];
+                              copy[idx].size = e.target.value;
+                              setEditingProductGroup({ ...editingProductGroup, sizes: copy });
+                            }}
+                            className="flex-1 bg-muted text-foreground border border-border rounded-lg px-3 py-2 text-sm outline-none"
+                          >
+                            <option value="" disabled>Select Size</option>
+                            {AVAILABLE_SIZES.map(sizeOption => (
+                              <option key={sizeOption} value={sizeOption}>{sizeOption}</option>
+                            ))}
+                          </select>
+                        </>
                       )}
+                      <label htmlFor={`edit-size-price-${idx}`} className="sr-only">Price for row {idx + 1}</label>
                       <input
+                        id={`edit-size-price-${idx}`}
+                        name={`edit_size_price_${idx}`}
+                        autoComplete="off"
                         type="number"
                         placeholder="Price"
                         value={s.price}
@@ -2443,7 +2573,11 @@ const Menu = () => {
               {editingProductGroup.ingredients.map((ing, idx) => (
                 <div key={idx} className="flex flex-col gap-1 mb-3">
                   <div className="flex items-center gap-2">
+                    <label htmlFor={`edit-ingredient-${idx}`} className="sr-only">Ingredient {idx + 1}</label>
                     <select
+                      id={`edit-ingredient-${idx}`}
+                      name={`ingredient_id_${idx}`}
+                      autoComplete="off"
                       value={inlineIngredient.show && inlineIngredient.targetIdx === idx && inlineIngredient.isEdit ? "__create_new__" : ing.ingredient_id}
                       onChange={(e) => {
                         if (e.target.value === "__create_new__") {
@@ -2463,7 +2597,11 @@ const Menu = () => {
                       ))}
                       <option value="__create_new__">+ Create new ingredient...</option>
                     </select>
+                    <label htmlFor={`edit-ingredient-qty-${idx}`} className="sr-only">Quantity for ingredient {idx + 1}</label>
                     <input
+                      id={`edit-ingredient-qty-${idx}`}
+                      name={`ingredient_qty_${idx}`}
+                      autoComplete="off"
                       type="number"
                       placeholder="Qty"
                       value={ing.quantity}
@@ -2483,14 +2621,22 @@ const Menu = () => {
                   </div>
                   {inlineIngredient.show && inlineIngredient.targetIdx === idx && inlineIngredient.isEdit && (
                     <div className="flex gap-2 mt-1">
+                      <label htmlFor="edit-inline-ingredient-name" className="sr-only">New ingredient name</label>
                       <input
+                        id="edit-inline-ingredient-name"
+                        name="ingredient_name"
+                        autoComplete="off"
                         type="text"
                         placeholder="Ingredient name"
                         value={inlineIngredient.name}
                         onChange={e => setInlineIngredient(prev => ({ ...prev, name: e.target.value }))}
                         className="flex-1 bg-muted text-foreground border border-teal-500 rounded-lg px-3 py-1.5 text-sm outline-none"
                       />
+                      <label htmlFor="edit-inline-ingredient-unit" className="sr-only">New ingredient unit</label>
                       <select
+                        id="edit-inline-ingredient-unit"
+                        name="ingredient_unit"
+                        autoComplete="off"
                         value={inlineIngredient.unit}
                         onChange={e => setInlineIngredient(prev => ({ ...prev, unit: e.target.value }))}
                         className="bg-muted text-foreground border border-border rounded-lg px-2 py-1.5 text-sm outline-none"
@@ -2529,8 +2675,10 @@ const Menu = () => {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <input
-                    type="checkbox"
                     id="is_time_restricted_edit"
+                    name="is_time_restricted"
+                    autoComplete="off"
+                    type="checkbox"
                     checked={editingProductGroup.is_time_restricted}
                     onChange={(e) => setEditingProductGroup({ ...editingProductGroup, is_time_restricted: e.target.checked })}
                     className="w-4 h-4 accent-teal-600"
@@ -2543,10 +2691,13 @@ const Menu = () => {
               {editingProductGroup.is_time_restricted && (
                 <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
                   <div>
-                    <label className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">
+                    <label htmlFor="edit-available-from" className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">
                       Available From
                     </label>
                     <input
+                      id="edit-available-from"
+                      name="available_from"
+                      autoComplete="off"
                       type="time"
                       value={editingProductGroup.available_from}
                       onChange={(e) => setEditingProductGroup({ ...editingProductGroup, available_from: e.target.value })}
@@ -2554,10 +2705,13 @@ const Menu = () => {
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">
+                    <label htmlFor="edit-available-to" className="text-xs text-muted-foreground uppercase tracking-wide mb-1 block">
                       Available To
                     </label>
                     <input
+                      id="edit-available-to"
+                      name="available_to"
+                      autoComplete="off"
                       type="time"
                       value={editingProductGroup.available_to}
                       onChange={(e) => setEditingProductGroup({ ...editingProductGroup, available_to: e.target.value })}

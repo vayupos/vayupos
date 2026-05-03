@@ -457,8 +457,12 @@ const PastOrders = () => {
             <div className="md:col-span-6">
               <form onSubmit={(e) => e.preventDefault()} className="relative">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={17} />
+                <label htmlFor="order-search" className="sr-only">Search orders</label>
                 <input
+                  id="order-search"
                   type="text"
+                  name="order_search"
+                  autoComplete="off"
                   placeholder="Order ID, customer name..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -469,8 +473,12 @@ const PastOrders = () => {
 
             <div className="md:col-span-3">
               <div className="relative">
+                <label htmlFor="order-date" className="sr-only">Filter by date</label>
                 <input
+                  id="order-date"
                   type="date"
+                  name="order_date"
+                  autoComplete="off"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
                   className="w-full text-sm sm:text-[15px] px-3.5 py-2.5 rounded-md border border-border bg-muted text-foreground focus:outline-none"
@@ -480,7 +488,11 @@ const PastOrders = () => {
             </div>
 
             <div className="md:col-span-3">
+              <label htmlFor="payment-filter" className="sr-only">Filter by payment method</label>
               <select
+                id="payment-filter"
+                name="payment_filter"
+                autoComplete="off"
                 value={paymentFilter}
                 onChange={(e) => setPaymentFilter(e.target.value)}
                 className="w-full text-sm sm:text-[15px] px-3.5 py-2.5 rounded-md border border-border bg-muted text-foreground focus:outline-none appearance-none cursor-pointer"

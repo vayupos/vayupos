@@ -73,7 +73,7 @@ const ForgotPassword = () => {
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-2">
-                  <label className="block text-gray-200 text-sm font-semibold ml-1">
+                  <label htmlFor="email" className="block text-gray-200 text-sm font-semibold ml-1">
                     Email Address
                   </label>
                   <div className="relative group">
@@ -81,7 +81,10 @@ const ForgotPassword = () => {
                       <Mail size={18} />
                     </div>
                     <input
+                      id="email"
                       type="email"
+                      name="email"
+                      autoComplete="email"
                       value={email}
                       onChange={handleInputChange}
                       placeholder="name@example.com"

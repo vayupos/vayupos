@@ -246,13 +246,16 @@ const Profile = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {/* Name */}
               <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+                <label htmlFor="profile-name" className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
                   <User size={16} />
                   Full Name
                 </label>
                 {isEditing ? (
                   <input
+                    id="profile-name"
                     type="text"
+                    name="name"
+                    autoComplete="name"
                     value={editData.name}
                     onChange={(e) =>
                       setEditData({ ...editData, name: e.target.value })
@@ -268,13 +271,16 @@ const Profile = () => {
 
               {/* Phone */}
               <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+                <label htmlFor="profile-phone" className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
                   <Phone size={16} />
                   Phone Number
                 </label>
                 {isEditing ? (
                   <input
+                    id="profile-phone"
                     type="text"
+                    name="phone"
+                    autoComplete="tel"
                     value={editData.phone}
                     onChange={(e) =>
                       setEditData({ ...editData, phone: e.target.value })
@@ -290,13 +296,16 @@ const Profile = () => {
 
               {/* Email */}
               <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+                <label htmlFor="profile-email" className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
                   <Mail size={16} />
                   Email Address
                 </label>
                 {isEditing ? (
                   <input
+                    id="profile-email"
                     type="email"
+                    name="email"
+                    autoComplete="email"
                     value={editData.email}
                     onChange={(e) =>
                       setEditData({ ...editData, email: e.target.value })
@@ -313,13 +322,16 @@ const Profile = () => {
 
               {/* Address */}
               <div>
-                <label className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+                <label htmlFor="profile-address" className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
                   <MapPin size={16} />
                   Address
                 </label>
                 {isEditing ? (
                   <input
+                    id="profile-address"
                     type="text"
+                    name="address"
+                    autoComplete="street-address"
                     value={editData.address}
                     onChange={(e) =>
                       setEditData({ ...editData, address: e.target.value })
@@ -389,11 +401,14 @@ const Profile = () => {
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-2">
+                <label htmlFor="profile-current-password" className="block text-sm font-medium text-muted-foreground mb-2">
                   Current Password
                 </label>
                 <input
+                  id="profile-current-password"
                   type="password"
+                  name="currentPassword"
+                  autoComplete="current-password"
                   value={passwordData.currentPassword}
                   onChange={(e) =>
                     setPasswordData({
@@ -407,11 +422,14 @@ const Profile = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-2">
+                <label htmlFor="profile-new-password" className="block text-sm font-medium text-muted-foreground mb-2">
                   New Password
                 </label>
                 <input
+                  id="profile-new-password"
                   type="password"
+                  name="newPassword"
+                  autoComplete="new-password"
                   value={passwordData.newPassword}
                   onChange={(e) =>
                     setPasswordData({
@@ -425,11 +443,14 @@ const Profile = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-muted-foreground mb-2">
+                <label htmlFor="profile-confirm-password" className="block text-sm font-medium text-muted-foreground mb-2">
                   Confirm New Password
                 </label>
                 <input
+                  id="profile-confirm-password"
                   type="password"
+                  name="confirmPassword"
+                  autoComplete="new-password"
                   value={passwordData.confirmPassword}
                   onChange={(e) =>
                     setPasswordData({

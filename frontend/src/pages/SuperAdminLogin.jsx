@@ -52,9 +52,11 @@ export default function SuperAdminLogin() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-[#94a3b8] mb-1.5">Email</label>
+              <label htmlFor="sa_identifier" className="block text-sm font-medium text-[#94a3b8] mb-1.5">Email</label>
               <input
+                id="sa_identifier"
                 type="text"
+                name="identifier"
                 value={identifier}
                 onChange={e => setIdentifier(e.target.value)}
                 placeholder="admin@yourdomain.com"
@@ -64,10 +66,12 @@ export default function SuperAdminLogin() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-[#94a3b8] mb-1.5">Password</label>
+              <label htmlFor="sa_password" className="block text-sm font-medium text-[#94a3b8] mb-1.5">Password</label>
               <div className="relative">
                 <input
+                  id="sa_password"
                   type={showPwd ? 'text' : 'password'}
+                  name="password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••"

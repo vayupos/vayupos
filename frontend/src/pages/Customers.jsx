@@ -305,12 +305,15 @@ export default function Customers() {
               </div>
               <p className="text-sm text-muted-foreground mb-4">Select a coupon for {getDisplayName(selected)}'s next order:</p>
               {coupons.length ? (
-                <select value={selectedCoupon} onChange={e => setSelectedCoupon(e.target.value)}
-                  className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 mb-5 cursor-pointer">
-                  {coupons.map(c => (
-                    <option key={c.id} value={c.code}>{c.code} — {c.discount_type === "percentage" ? `${c.discount_value}% off` : `₹${c.discount_value} off`}</option>
-                  ))}
-                </select>
+                <>
+                  <label htmlFor="offer-coupon-select" className="sr-only">Select coupon</label>
+                  <select id="offer-coupon-select" name="coupon_code" autoComplete="off" value={selectedCoupon} onChange={e => setSelectedCoupon(e.target.value)}
+                    className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 mb-5 cursor-pointer">
+                    {coupons.map(c => (
+                      <option key={c.id} value={c.code}>{c.code} — {c.discount_type === "percentage" ? `${c.discount_value}% off` : `₹${c.discount_value} off`}</option>
+                    ))}
+                  </select>
+                </>
               ) : (
                 <p className="text-sm text-muted-foreground bg-muted rounded-xl p-3 mb-5">No coupons available right now.</p>
               )}
@@ -335,8 +338,8 @@ export default function Customers() {
               <p className="text-sm text-muted-foreground mb-4">Current balance: <strong className="text-foreground">{pts} pts</strong></p>
               <form onSubmit={handleAddPoints} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Points to Add</label>
-                  <input type="number" min="1" required autoFocus value={loyaltyPoints}
+                  <label htmlFor="loyalty-points-input" className="block text-xs font-medium text-muted-foreground mb-1.5">Points to Add</label>
+                  <input id="loyalty-points-input" name="loyalty_points" autoComplete="off" type="number" min="1" required autoFocus value={loyaltyPoints}
                     onChange={e => setLoyaltyPoints(e.target.value)}
                     className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors"
                     placeholder="e.g. 50" />
@@ -398,18 +401,18 @@ export default function Customers() {
             {isEditing && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1 pt-5 border-t border-border">
                 {[
-                  { key: "first_name", label: "First Name" },
-                  { key: "last_name",  label: "Last Name" },
-                  { key: "phone",      label: "Phone (10-digit)" },
-                  { key: "email",      label: "Email", type: "email" },
-                  { key: "address",    label: "Address", span: true },
-                  { key: "city",       label: "City" },
-                  { key: "state",      label: "State" },
-                  { key: "zip_code",   label: "Zip Code" },
+                  { key: "first_name", label: "First Name",        autoComplete: "name" },
+                  { key: "last_name",  label: "Last Name",         autoComplete: "name" },
+                  { key: "phone",      label: "Phone (10-digit)",  autoComplete: "tel",            type: "tel" },
+                  { key: "email",      label: "Email",             autoComplete: "email",          type: "email" },
+                  { key: "address",    label: "Address",           autoComplete: "street-address", span: true },
+                  { key: "city",       label: "City",              autoComplete: "address-level2" },
+                  { key: "state",      label: "State",             autoComplete: "off" },
+                  { key: "zip_code",   label: "Zip Code",          autoComplete: "off" },
                 ].map(f => (
                   <div key={f.key} className={f.span ? "sm:col-span-2" : ""}>
-                    <label className="block text-xs font-medium text-muted-foreground mb-1">{f.label}</label>
-                    <input type={f.type || "text"} value={editForm[f.key] || ""} onChange={e => setEditForm({ ...editForm, [f.key]: e.target.value })}
+                    <label htmlFor={`edit-customer-${f.key}`} className="block text-xs font-medium text-muted-foreground mb-1">{f.label}</label>
+                    <input id={`edit-customer-${f.key}`} name={f.key} autoComplete={f.autoComplete} type={f.type || "text"} value={editForm[f.key] || ""} onChange={e => setEditForm({ ...editForm, [f.key]: e.target.value })}
                       className="w-full bg-muted border border-border rounded-xl px-3 py-2 text-sm text-foreground outline-none focus:border-teal-500 transition-colors" />
                   </div>
                 ))}
@@ -581,50 +584,50 @@ export default function Customers() {
             <form onSubmit={handleAddCustomer} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">First Name *</label>
-                  <input required value={newCustomer.first_name} onChange={e => setNewCustomer({ ...newCustomer, first_name: e.target.value })}
+                  <label htmlFor="add-customer-first-name" className="block text-xs font-medium text-muted-foreground mb-1.5">First Name *</label>
+                  <input id="add-customer-first-name" name="first_name" autoComplete="name" required value={newCustomer.first_name} onChange={e => setNewCustomer({ ...newCustomer, first_name: e.target.value })}
                     className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors"
                     placeholder="Rahul" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Last Name *</label>
-                  <input required value={newCustomer.last_name} onChange={e => setNewCustomer({ ...newCustomer, last_name: e.target.value })}
+                  <label htmlFor="add-customer-last-name" className="block text-xs font-medium text-muted-foreground mb-1.5">Last Name *</label>
+                  <input id="add-customer-last-name" name="last_name" autoComplete="name" required value={newCustomer.last_name} onChange={e => setNewCustomer({ ...newCustomer, last_name: e.target.value })}
                     className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors"
                     placeholder="Sharma" />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Phone (10-digit Indian mobile)</label>
-                <input type="tel" value={newCustomer.phone} onChange={e => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+                <label htmlFor="add-customer-phone" className="block text-xs font-medium text-muted-foreground mb-1.5">Phone (10-digit Indian mobile)</label>
+                <input id="add-customer-phone" name="phone" autoComplete="tel" type="tel" value={newCustomer.phone} onChange={e => setNewCustomer({ ...newCustomer, phone: e.target.value })}
                   className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors"
                   placeholder="9876543210" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Email (optional)</label>
-                <input type="email" value={newCustomer.email} onChange={e => setNewCustomer({ ...newCustomer, email: e.target.value })}
+                <label htmlFor="add-customer-email" className="block text-xs font-medium text-muted-foreground mb-1.5">Email (optional)</label>
+                <input id="add-customer-email" name="email" autoComplete="email" type="email" value={newCustomer.email} onChange={e => setNewCustomer({ ...newCustomer, email: e.target.value })}
                   className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors"
                   placeholder="rahul@example.com" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Address</label>
-                <input value={newCustomer.address} onChange={e => setNewCustomer({ ...newCustomer, address: e.target.value })}
+                <label htmlFor="add-customer-address" className="block text-xs font-medium text-muted-foreground mb-1.5">Address</label>
+                <input id="add-customer-address" name="address" autoComplete="street-address" value={newCustomer.address} onChange={e => setNewCustomer({ ...newCustomer, address: e.target.value })}
                   className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors"
                   placeholder="Street / Area" />
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">City</label>
-                  <input value={newCustomer.city} onChange={e => setNewCustomer({ ...newCustomer, city: e.target.value })}
+                  <label htmlFor="add-customer-city" className="block text-xs font-medium text-muted-foreground mb-1.5">City</label>
+                  <input id="add-customer-city" name="city" autoComplete="address-level2" value={newCustomer.city} onChange={e => setNewCustomer({ ...newCustomer, city: e.target.value })}
                     className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors" placeholder="Hyderabad" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">State</label>
-                  <input value={newCustomer.state} onChange={e => setNewCustomer({ ...newCustomer, state: e.target.value })}
+                  <label htmlFor="add-customer-state" className="block text-xs font-medium text-muted-foreground mb-1.5">State</label>
+                  <input id="add-customer-state" name="state" autoComplete="off" value={newCustomer.state} onChange={e => setNewCustomer({ ...newCustomer, state: e.target.value })}
                     className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors" placeholder="TS" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">PIN</label>
-                  <input value={newCustomer.zip_code} onChange={e => setNewCustomer({ ...newCustomer, zip_code: e.target.value })}
+                  <label htmlFor="add-customer-zip" className="block text-xs font-medium text-muted-foreground mb-1.5">PIN</label>
+                  <input id="add-customer-zip" name="zip_code" autoComplete="off" value={newCustomer.zip_code} onChange={e => setNewCustomer({ ...newCustomer, zip_code: e.target.value })}
                     className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors" placeholder="500032" />
                 </div>
               </div>
@@ -681,7 +684,8 @@ export default function Customers() {
       {/* Search */}
       <div className="relative">
         <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input value={customerSearch} onChange={e => setCustomerSearch(e.target.value)}
+        <label htmlFor="customers-search" className="sr-only">Search customers</label>
+        <input id="customers-search" name="customer_search" autoComplete="off" value={customerSearch} onChange={e => setCustomerSearch(e.target.value)}
           placeholder="Search by name, phone or email…"
           className="w-full bg-background border border-border rounded-xl pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-teal-500 transition-colors" />
       </div>

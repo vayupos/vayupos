@@ -285,14 +285,22 @@ const Stock = () => {
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <label htmlFor="stock-search" className="sr-only">Search ingredients</label>
           <input
+            id="stock-search"
+            name="search_term"
+            autoComplete="off"
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
             placeholder="Search ingredients..."
             className="w-full bg-background border border-border rounded-xl pl-9 pr-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-teal-500 transition-colors"
           />
         </div>
+        <label htmlFor="stock-status-filter" className="sr-only">Filter by status</label>
         <select
+          id="stock-status-filter"
+          name="status_filter"
+          autoComplete="off"
           value={statusFilter}
           onChange={e => setStatusFilter(e.target.value)}
           className="bg-background border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors cursor-pointer"
@@ -446,8 +454,11 @@ const Stock = () => {
             </div>
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Ingredient Name</label>
+                <label htmlFor="add-ingredient-name" className="block text-xs font-medium text-muted-foreground mb-1.5">Ingredient Name</label>
                 <input
+                  id="add-ingredient-name"
+                  name="name"
+                  autoComplete="off"
                   type="text"
                   required
                   autoFocus
@@ -458,8 +469,11 @@ const Stock = () => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Unit</label>
+                <label htmlFor="add-ingredient-unit" className="block text-xs font-medium text-muted-foreground mb-1.5">Unit</label>
                 <select
+                  id="add-ingredient-unit"
+                  name="unit"
+                  autoComplete="off"
                   value={newIng.unit}
                   onChange={e => setNewIng({ ...newIng, unit: e.target.value })}
                   className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors cursor-pointer"
@@ -478,10 +492,13 @@ const Stock = () => {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                  <label htmlFor="add-ingredient-threshold" className="block text-xs font-medium text-muted-foreground mb-1.5">
                     Min Stock ({getUnitAbbr(newIng.unit)})
                   </label>
                   <input
+                    id="add-ingredient-threshold"
+                    name="threshold"
+                    autoComplete="off"
                     type="number"
                     min="0"
                     step="0.01"
@@ -494,10 +511,13 @@ const Stock = () => {
                   <p className="text-[11px] text-muted-foreground mt-1">Alert below this</p>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                  <label htmlFor="add-ingredient-initial-stock" className="block text-xs font-medium text-muted-foreground mb-1.5">
                     Opening Stock ({getUnitAbbr(newIng.unit)})
                   </label>
                   <input
+                    id="add-ingredient-initial-stock"
+                    name="initial_stock"
+                    autoComplete="off"
                     type="number"
                     min="0"
                     step="0.01"
@@ -546,8 +566,11 @@ const Stock = () => {
             </div>
             <form onSubmit={handleSaveEdit} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Name</label>
+                <label htmlFor="edit-ingredient-name" className="block text-xs font-medium text-muted-foreground mb-1.5">Name</label>
                 <input
+                  id="edit-ingredient-name"
+                  name="name"
+                  autoComplete="off"
                   type="text"
                   required
                   autoFocus
@@ -557,8 +580,11 @@ const Stock = () => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Unit</label>
+                <label htmlFor="edit-ingredient-unit" className="block text-xs font-medium text-muted-foreground mb-1.5">Unit</label>
                 <select
+                  id="edit-ingredient-unit"
+                  name="unit"
+                  autoComplete="off"
                   value={editForm.unit}
                   onChange={e => setEditForm({ ...editForm, unit: e.target.value })}
                   className="w-full bg-muted border border-border rounded-xl px-3 py-2.5 text-sm text-foreground outline-none focus:border-teal-500 transition-colors cursor-pointer"
@@ -576,10 +602,13 @@ const Stock = () => {
                 </p>
               </div>
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                <label htmlFor="edit-ingredient-threshold" className="block text-xs font-medium text-muted-foreground mb-1.5">
                   Min Stock ({getUnitAbbr(editForm.unit)})
                 </label>
                 <input
+                  id="edit-ingredient-threshold"
+                  name="threshold"
+                  autoComplete="off"
                   type="number"
                   min="0"
                   step="0.01"
@@ -628,8 +657,11 @@ const Stock = () => {
             <form onSubmit={handleAddStock} className="space-y-4">
               {/* Ingredient selector — shown when opened from top button */}
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Ingredient</label>
+                <label htmlFor="add-stock-ingredient" className="block text-xs font-medium text-muted-foreground mb-1.5">Ingredient</label>
                 <select
+                  id="add-stock-ingredient"
+                  name="ingredient_id"
+                  autoComplete="off"
                   required
                   value={stockTarget?.id ?? ''}
                   onChange={e => {
@@ -670,10 +702,13 @@ const Stock = () => {
               )}
 
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                <label htmlFor="add-stock-quantity" className="block text-xs font-medium text-muted-foreground mb-1.5">
                   Quantity to Add{stockTarget ? ` (${getUnitAbbr(stockTarget.unit)})` : ''}
                 </label>
                 <input
+                  id="add-stock-quantity"
+                  name="quantity"
+                  autoComplete="off"
                   type="number"
                   step="0.01"
                   min="0.01"
@@ -687,10 +722,13 @@ const Stock = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                <label htmlFor="add-stock-note" className="block text-xs font-medium text-muted-foreground mb-1.5">
                   Note <span className="font-normal opacity-60">(optional)</span>
                 </label>
                 <input
+                  id="add-stock-note"
+                  name="note"
+                  autoComplete="off"
                   type="text"
                   value={stockNote}
                   onChange={e => setStockNote(e.target.value)}

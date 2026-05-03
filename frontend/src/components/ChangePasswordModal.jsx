@@ -138,14 +138,16 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
 
           {/* Current Password */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <label htmlFor="modal_current_password" className="text-sm font-semibold text-foreground flex items-center gap-2">
               <Lock size={14} className="text-muted-foreground" />
               Current Password
             </label>
             <div className="relative group">
               <input
+                id="modal_current_password"
                 type={showPasswords.current ? 'text' : 'password'}
                 name="current_password"
+                autoComplete="current-password"
                 value={formData.current_password}
                 onChange={handleInputChange}
                 className={`w-full pl-4 pr-10 py-2.5 bg-background border rounded-lg focus:ring-2 focus:ring-primary/20 transition-all outline-none ${
@@ -170,14 +172,16 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
 
           {/* New Password */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <label htmlFor="modal_new_password" className="text-sm font-semibold text-foreground flex items-center gap-2">
               <ShieldCheck size={14} className="text-muted-foreground" />
               New Password
             </label>
             <div className="relative group">
               <input
+                id="modal_new_password"
                 type={showPasswords.new ? 'text' : 'password'}
                 name="new_password"
+                autoComplete="new-password"
                 value={formData.new_password}
                 onChange={handleInputChange}
                 className={`w-full pl-4 pr-10 py-2.5 bg-background border rounded-lg focus:ring-2 focus:ring-primary/20 transition-all outline-none ${
@@ -213,14 +217,16 @@ const ChangePasswordModal = ({ isOpen, onClose }) => {
 
           {/* Confirm Password */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <label htmlFor="modal_confirm_password" className="text-sm font-semibold text-foreground flex items-center gap-2">
               <Lock size={14} className="text-muted-foreground" />
               Confirm New Password
             </label>
             <div className="relative group">
               <input
+                id="modal_confirm_password"
                 type={showPasswords.confirm ? 'text' : 'password'}
                 name="confirm_password"
+                autoComplete="new-password"
                 value={formData.confirm_password}
                 onChange={handleInputChange}
                 className={`w-full pl-4 pr-10 py-2.5 bg-background border rounded-lg focus:ring-2 focus:ring-primary/20 transition-all outline-none ${

@@ -135,11 +135,13 @@ const ResetPassword = () => {
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* New Password */}
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-300 ml-1">New Password</label>
+                  <label htmlFor="new_password" className="text-sm font-semibold text-gray-300 ml-1">New Password</label>
                   <div className="relative group">
                     <input
+                      id="new_password"
                       type={showPasswords.new ? 'text' : 'password'}
                       name="new_password"
+                      autoComplete="new-password"
                       value={formData.new_password}
                       onChange={handleInputChange}
                       disabled={isLoading || !token}
@@ -176,11 +178,13 @@ const ResetPassword = () => {
 
                 {/* Confirm Password */}
                 <div className="space-y-2">
-                  <label className="text-sm font-semibold text-gray-300 ml-1">Confirm New Password</label>
+                  <label htmlFor="confirm_password" className="text-sm font-semibold text-gray-300 ml-1">Confirm New Password</label>
                   <div className="relative group">
                     <input
+                      id="confirm_password"
                       type={showPasswords.confirm ? 'text' : 'password'}
                       name="confirm_password"
+                      autoComplete="new-password"
                       value={formData.confirm_password}
                       onChange={handleInputChange}
                       disabled={isLoading || !token}

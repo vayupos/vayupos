@@ -1080,7 +1080,11 @@ function POS() {
               </button>
             </div>
 
+            <label htmlFor="pos-add-first-name" className="sr-only">First name</label>
             <input
+              id="pos-add-first-name"
+              name="first_name"
+              autoComplete="name"
               type="text"
               placeholder="First name *"
               value={newCustomer.first_name}
@@ -1089,7 +1093,11 @@ function POS() {
               }
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
             />
+            <label htmlFor="pos-add-last-name" className="sr-only">Last name</label>
             <input
+              id="pos-add-last-name"
+              name="last_name"
+              autoComplete="off"
               type="text"
               placeholder="Last name"
               value={newCustomer.last_name}
@@ -1098,7 +1106,11 @@ function POS() {
               }
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
             />
+            <label htmlFor="pos-add-phone" className="sr-only">Phone number</label>
             <input
+              id="pos-add-phone"
+              name="phone"
+              autoComplete="tel"
               type="text"
               placeholder="+91 Phone number"
               value={newCustomer.phone}
@@ -1107,7 +1119,11 @@ function POS() {
               }
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
             />
+            <label htmlFor="pos-add-email" className="sr-only">Email address</label>
             <input
+              id="pos-add-email"
+              name="email"
+              autoComplete="email"
               type="email"
               placeholder="example@mail.com (optional)"
               value={newCustomer.email}
@@ -1116,7 +1132,11 @@ function POS() {
               }
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
             />
+            <label htmlFor="pos-add-address" className="sr-only">Address</label>
             <input
+              id="pos-add-address"
+              name="address"
+              autoComplete="street-address"
               type="text"
               placeholder="Address"
               value={newCustomer.address}
@@ -1125,7 +1145,11 @@ function POS() {
               }
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
             />
+            <label htmlFor="pos-add-city" className="sr-only">City</label>
             <input
+              id="pos-add-city"
+              name="city"
+              autoComplete="address-level2"
               type="text"
               placeholder="City"
               value={newCustomer.city}
@@ -1134,7 +1158,11 @@ function POS() {
               }
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
             />
+            <label htmlFor="pos-add-state" className="sr-only">State</label>
             <input
+              id="pos-add-state"
+              name="state"
+              autoComplete="off"
               type="text"
               placeholder="State"
               value={newCustomer.state}
@@ -1143,7 +1171,11 @@ function POS() {
               }
               className="w-full bg-muted border border-border rounded px-3 py-2 text-sm sm:text-base text-foreground mb-2 sm:mb-3"
             />
+            <label htmlFor="pos-add-zip" className="sr-only">Zip code</label>
             <input
+              id="pos-add-zip"
+              name="zip_code"
+              autoComplete="off"
               type="text"
               placeholder="Zip code"
               value={newCustomer.zip_code}
@@ -1191,7 +1223,11 @@ function POS() {
             </div>
 
             {/* Manual Input */}
+            <label htmlFor="pos-coupon-code" className="sr-only">Coupon code</label>
             <input
+              id="pos-coupon-code"
+              name="coupon_code"
+              autoComplete="off"
               type="text"
               placeholder="Enter coupon code"
               value={inputCoupon}
@@ -1344,7 +1380,7 @@ function POS() {
           </div>
         </div>
         <div className="mb-3 sm:mb-4">
-          <label className="text-muted-foreground text-sm mb-2 block">
+          <label htmlFor="pos-search-customer" className="text-muted-foreground text-sm mb-2 block">
             Select customer
           </label>
           <div className={`flex flex-wrap items-center gap-2 p-2 border rounded-md min-h-12 transition-all ${
@@ -1385,6 +1421,9 @@ function POS() {
                   className="text-muted-foreground absolute left-2 top-1/2 transform -translate-y-1/2"
                 />
                 <input
+                  id="pos-search-customer"
+                  name="customer_search"
+                  autoComplete="off"
                   type="text"
                   placeholder={selectedCustomerId > 0 ? "Change customer..." : "Search name, phone..."}
                   value={searchCustomer}
@@ -1471,8 +1510,11 @@ function POS() {
           </div>
 
           <div>
-            <label className="text-muted-foreground text-sm mb-2 block">Notes</label>
+            <label htmlFor="pos-order-notes" className="text-muted-foreground text-sm mb-2 block">Notes</label>
             <textarea
+              id="pos-order-notes"
+              name="notes"
+              autoComplete="off"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows="2"
@@ -1498,7 +1540,7 @@ function POS() {
             </button>
           </div>
           <div className="mb-3 sm:mb-4">
-            <label className="text-muted-foreground text-sm mb-2 block">
+            <label htmlFor="pos-search-menu" className="text-muted-foreground text-sm mb-2 block">
               Search items
             </label>
             <div className="relative">
@@ -1507,6 +1549,9 @@ function POS() {
                 className="text-muted-foreground absolute left-3 top-1/2 transform -translate-y-1/2"
               />
               <input
+                id="pos-search-menu"
+                name="menu_search"
+                autoComplete="off"
                 type="text"
                 placeholder="Search..."
                 value={searchMenu}
@@ -1516,10 +1561,13 @@ function POS() {
             </div>
           </div>
           <div className="mb-3 sm:mb-4">
-            <label className="text-muted-foreground text-sm mb-2 block">
+            <label htmlFor="pos-category-select" className="text-muted-foreground text-sm mb-2 block">
               Categories
             </label>
             <select
+              id="pos-category-select"
+              name="category"
+              autoComplete="off"
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
               className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base"
@@ -1675,7 +1723,11 @@ function POS() {
                         >
                           <Minus size={14} />
                         </button>
+                        <label htmlFor={`cart-qty-${i}`} className="sr-only">Quantity for {item.name}</label>
                         <input
+                          id={`cart-qty-${i}`}
+                          name={`cart_qty_${i}`}
+                          autoComplete="off"
                           type="text"
                           inputMode="numeric"
                           value={item._qtyInput !== undefined ? item._qtyInput : (item.qty || 1)}
@@ -1809,7 +1861,11 @@ function POS() {
               {selectedPaymentMethod === 'cash' && (
                 <div className="mb-3 p-2.5 bg-muted rounded-lg border border-teal-500">
                   <p className="text-xs text-teal-500 font-medium mb-1">Cash Payment — Total: ₹{total.toFixed(2)}</p>
+                  <label htmlFor="pos-cash-amount" className="sr-only">Amount received</label>
                   <input
+                    id="pos-cash-amount"
+                    name="cash_amount"
+                    autoComplete="off"
                     type="number"
                     placeholder="Amount received"
                     className="w-full bg-background text-foreground border border-border rounded px-2 py-1.5 text-xs outline-none mt-1"

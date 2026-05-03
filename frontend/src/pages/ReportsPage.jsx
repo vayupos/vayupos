@@ -781,9 +781,12 @@ const ReportsPage = () => {
               {/* Row 1 */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
                 <div>
-                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Report Type</label>
+                  <label htmlFor="reports-report-type" className="block text-xs mb-1 text-muted-foreground font-medium">Report Type</label>
                   <div className="relative">
                     <select
+                      id="reports-report-type"
+                      name="report_type"
+                      autoComplete="off"
                       value={filters.reportType}
                       onChange={(e) => setFilters({ ...filters, reportType: e.target.value })}
                       className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
@@ -796,9 +799,12 @@ const ReportsPage = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs mb-1 text-muted-foreground font-medium">View</label>
+                  <label htmlFor="reports-view" className="block text-xs mb-1 text-muted-foreground font-medium">View</label>
                   <div className="relative">
                     <select
+                      id="reports-view"
+                      name="view"
+                      autoComplete="off"
                       value={filters.view}
                       onChange={(e) => setFilters({ ...filters, view: e.target.value })}
                       className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
@@ -811,8 +817,11 @@ const ReportsPage = () => {
                   </div>
                 </div>
                 <div className="sm:col-span-2 lg:col-span-1">
-                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Days</label>
+                  <label htmlFor="reports-days" className="block text-xs mb-1 text-muted-foreground font-medium">Days</label>
                   <input
+                    id="reports-days"
+                    name="days"
+                    autoComplete="off"
                     type="number"
                     value={filters.days}
                     onChange={(e) => setFilters({ ...filters, days: parseInt(e.target.value) || 30 })}
@@ -826,9 +835,12 @@ const ReportsPage = () => {
               {/* Row 2 */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
                 <div>
-                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Outlet</label>
+                  <label htmlFor="reports-outlet" className="block text-xs mb-1 text-muted-foreground font-medium">Outlet</label>
                   <div className="relative">
                     <select
+                      id="reports-outlet"
+                      name="outlet"
+                      autoComplete="off"
                       value={filters.outlet}
                       onChange={(e) => setFilters({ ...filters, outlet: e.target.value })}
                       className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
@@ -841,9 +853,12 @@ const ReportsPage = () => {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Payment Mode</label>
+                  <label htmlFor="reports-payment-mode" className="block text-xs mb-1 text-muted-foreground font-medium">Payment Mode</label>
                   <div className="relative">
                     <select
+                      id="reports-payment-mode"
+                      name="payment_mode"
+                      autoComplete="off"
                       value={filters.paymentMode}
                       onChange={(e) => setFilters({ ...filters, paymentMode: e.target.value })}
                       className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"
@@ -857,9 +872,12 @@ const ReportsPage = () => {
                   </div>
                 </div>
                 <div className="sm:col-span-2 lg:col-span-1">
-                  <label className="block text-xs mb-1 text-muted-foreground font-medium">Sort</label>
+                  <label htmlFor="reports-sort" className="block text-xs mb-1 text-muted-foreground font-medium">Sort</label>
                   <div className="relative">
                     <select
+                      id="reports-sort"
+                      name="sort"
+                      autoComplete="off"
                       value={filters.sort}
                       onChange={(e) => setFilters({ ...filters, sort: e.target.value })}
                       className="w-full text-sm px-2.5 py-1.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500 appearance-none"

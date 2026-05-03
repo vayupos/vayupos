@@ -152,7 +152,11 @@ const KOTPrinterSettings = () => {
               <div className="mb-4">
                 <div className="relative">
                   <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" size={17} />
+                  <label htmlFor="printer-search" className="sr-only">Search printer by name or MAC</label>
                   <input
+                    id="printer-search"
+                    name="printer_search"
+                    autoComplete="off"
                     type="text"
                     placeholder="Printer name or MAC"
                     value={searchQuery}
@@ -241,8 +245,11 @@ const KOTPrinterSettings = () => {
                 {/* Settings Grid */}
                 <div className="grid grid-cols-3 gap-4 mb-5">
                   <div>
-                    <label className="block text-[14px] mb-2 text-muted-foreground">Paper Width</label>
+                    <label htmlFor="printer-paper-width" className="block text-[14px] mb-2 text-muted-foreground">Paper Width</label>
                     <input
+                      id="printer-paper-width"
+                      name="paper_width"
+                      autoComplete="off"
                       type="text"
                       value={settings.paperWidth}
                       onChange={(e) => setSettings({...settings, paperWidth: e.target.value})}
@@ -251,8 +258,11 @@ const KOTPrinterSettings = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-[14px] mb-2 text-muted-foreground">Character Set</label>
+                    <label htmlFor="printer-character-set" className="block text-[14px] mb-2 text-muted-foreground">Character Set</label>
                     <input
+                      id="printer-character-set"
+                      name="character_set"
+                      autoComplete="off"
                       type="text"
                       value={settings.characterSet}
                       onChange={(e) => setSettings({...settings, characterSet: e.target.value})}
@@ -261,8 +271,11 @@ const KOTPrinterSettings = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-[14px] mb-2 text-muted-foreground">Density</label>
+                    <label htmlFor="printer-density" className="block text-[14px] mb-2 text-muted-foreground">Density</label>
                     <input
+                      id="printer-density"
+                      name="density"
+                      autoComplete="off"
                       type="text"
                       value={settings.density}
                       onChange={(e) => setSettings({...settings, density: e.target.value})}
@@ -274,8 +287,11 @@ const KOTPrinterSettings = () => {
 
                 <div className="grid grid-cols-2 gap-4 mb-5">
                   <div>
-                    <label className="block text-[14px] mb-2 text-muted-foreground">Header Text</label>
+                    <label htmlFor="printer-header-text" className="block text-[14px] mb-2 text-muted-foreground">Header Text</label>
                     <input
+                      id="printer-header-text"
+                      name="header_text"
+                      autoComplete="off"
                       type="text"
                       value={settings.headerText}
                       onChange={(e) => setSettings({...settings, headerText: e.target.value})}
@@ -284,8 +300,11 @@ const KOTPrinterSettings = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-[14px] mb-2 text-muted-foreground">Footer Text</label>
+                    <label htmlFor="printer-footer-text" className="block text-[14px] mb-2 text-muted-foreground">Footer Text</label>
                     <input
+                      id="printer-footer-text"
+                      name="footer_text"
+                      autoComplete="off"
                       type="text"
                       value={settings.footerText}
                       onChange={(e) => setSettings({...settings, footerText: e.target.value})}
@@ -297,8 +316,11 @@ const KOTPrinterSettings = () => {
 
                 <div className="grid grid-cols-3 gap-4 mb-5">
                   <div>
-                    <label className="block text-[14px] mb-2 text-muted-foreground">Show GST</label>
+                    <label htmlFor="printer-show-gst" className="block text-[14px] mb-2 text-muted-foreground">Show GST</label>
                     <input
+                      id="printer-show-gst"
+                      name="show_gst"
+                      autoComplete="off"
                       type="text"
                       value="Enabled"
                       className="w-full px-3 py-2.5 rounded-lg border border-border bg-muted text-foreground focus:outline-none text-[15px]"
@@ -306,8 +328,11 @@ const KOTPrinterSettings = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-[14px] mb-2 text-muted-foreground">Cut Mode</label>
+                    <label htmlFor="printer-cut-mode" className="block text-[14px] mb-2 text-muted-foreground">Cut Mode</label>
                     <input
+                      id="printer-cut-mode"
+                      name="cut_mode"
+                      autoComplete="off"
                       type="text"
                       value={settings.cutMode}
                       onChange={(e) => setSettings({...settings, cutMode: e.target.value})}
@@ -316,8 +341,11 @@ const KOTPrinterSettings = () => {
                     />
                   </div>
                   <div>
-                    <label className="block text-[14px] mb-2 text-muted-foreground">Print Copies</label>
+                    <label htmlFor="printer-print-copies" className="block text-[14px] mb-2 text-muted-foreground">Print Copies</label>
                     <input
+                      id="printer-print-copies"
+                      name="print_copies"
+                      autoComplete="off"
                       type="text"
                       value={settings.printCopies}
                       onChange={(e) => setSettings({...settings, printCopies: e.target.value})}
@@ -328,8 +356,11 @@ const KOTPrinterSettings = () => {
                 </div>
 
                 <div className="mb-5">
-                  <label className="block text-[14px] mb-2 text-muted-foreground">Font Size</label>
+                  <label htmlFor="printer-font-size" className="block text-[14px] mb-2 text-muted-foreground">Font Size</label>
                   <input
+                    id="printer-font-size"
+                    name="font_size"
+                    autoComplete="off"
                     type="text"
                     value={settings.fontSize}
                     onChange={(e) => setSettings({...settings, fontSize: e.target.value})}

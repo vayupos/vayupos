@@ -586,10 +586,13 @@ const ExpensesManagement = () => {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                                     {/* Search */}
                                     <div className="lg:col-span-2">
-                                        <label className="block text-xs text-muted-foreground mb-1.5">Search</label>
+                                        <label htmlFor="expenses-search" className="block text-xs text-muted-foreground mb-1.5">Search</label>
                                         <div className="relative">
                                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
                                             <input
+                                                id="expenses-search"
+                                                name="search_query"
+                                                autoComplete="off"
                                                 type="text"
                                                 placeholder="Search by title, category..."
                                                 value={searchQuery}
@@ -601,8 +604,11 @@ const ExpensesManagement = () => {
 
                                     {/* Category */}
                                     <div>
-                                        <label className="block text-xs text-muted-foreground mb-1.5">Category</label>
+                                        <label htmlFor="expenses-category-filter" className="block text-xs text-muted-foreground mb-1.5">Category</label>
                                         <select
+                                            id="expenses-category-filter"
+                                            name="category_filter"
+                                            autoComplete="off"
                                             value={categoryFilter}
                                             onChange={(e) => setCategoryFilter(e.target.value)}
                                             className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
@@ -615,8 +621,11 @@ const ExpensesManagement = () => {
 
                                     {/* Payment Mode */}
                                     <div>
-                                        <label className="block text-xs text-muted-foreground mb-1.5">Payment Mode</label>
+                                        <label htmlFor="expenses-payment-mode-filter" className="block text-xs text-muted-foreground mb-1.5">Payment Mode</label>
                                         <select
+                                            id="expenses-payment-mode-filter"
+                                            name="payment_mode_filter"
+                                            autoComplete="off"
                                             value={paymentModeFilter}
                                             onChange={(e) => setPaymentModeFilter(e.target.value)}
                                             className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
@@ -629,8 +638,11 @@ const ExpensesManagement = () => {
 
                                     {/* Date Range */}
                                     <div>
-                                        <label className="block text-xs text-muted-foreground mb-1.5">Date Range</label>
+                                        <label htmlFor="expenses-date-range-filter" className="block text-xs text-muted-foreground mb-1.5">Date Range</label>
                                         <select
+                                            id="expenses-date-range-filter"
+                                            name="date_range_filter"
+                                            autoComplete="off"
                                             value={dateRangeFilter}
                                             onChange={(e) => setDateRangeFilter(e.target.value)}
                                             className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
@@ -648,8 +660,11 @@ const ExpensesManagement = () => {
                                     {dateRangeFilter === 'Custom' && (
                                         <>
                                             <div>
-                                                <label className="block text-xs text-muted-foreground mb-1.5">Start Date</label>
+                                                <label htmlFor="expenses-start-date" className="block text-xs text-muted-foreground mb-1.5">Start Date</label>
                                                 <input
+                                                    id="expenses-start-date"
+                                                    name="start_date"
+                                                    autoComplete="off"
                                                     type="date"
                                                     value={startDate}
                                                     onChange={(e) => setStartDate(e.target.value)}
@@ -657,8 +672,11 @@ const ExpensesManagement = () => {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs text-muted-foreground mb-1.5">End Date</label>
+                                                <label htmlFor="expenses-end-date" className="block text-xs text-muted-foreground mb-1.5">End Date</label>
                                                 <input
+                                                    id="expenses-end-date"
+                                                    name="end_date"
+                                                    autoComplete="off"
                                                     type="date"
                                                     value={endDate}
                                                     onChange={(e) => setEndDate(e.target.value)}
@@ -995,8 +1013,11 @@ const ExpensesManagement = () => {
 
                             <div className="space-y-3">
                                 <div>
-                                    <label className="block text-xs mb-1.5 text-muted-foreground">Title</label>
+                                    <label htmlFor="expense-title" className="block text-xs mb-1.5 text-muted-foreground">Title</label>
                                     <input
+                                        id="expense-title"
+                                        name="title"
+                                        autoComplete="off"
                                         type="text"
                                         placeholder="Enter expense title"
                                         value={formData.title}
@@ -1006,8 +1027,11 @@ const ExpensesManagement = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs mb-1.5 text-muted-foreground">Date</label>
+                                    <label htmlFor="expense-date" className="block text-xs mb-1.5 text-muted-foreground">Date</label>
                                     <input
+                                        id="expense-date"
+                                        name="date"
+                                        autoComplete="off"
                                         type="datetime-local"
                                         value={formData.date}
                                         onChange={(e) => setFormData({ ...formData, date: e.target.value })}
@@ -1016,8 +1040,11 @@ const ExpensesManagement = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs mb-1.5 text-muted-foreground">Category</label>
+                                    <label htmlFor="expense-category" className="block text-xs mb-1.5 text-muted-foreground">Category</label>
                                     <select
+                                        id="expense-category"
+                                        name="category"
+                                        autoComplete="off"
                                         value={formData.category}
                                         onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                                         className="w-full text-sm px-3 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary appearance-none"
@@ -1031,8 +1058,11 @@ const ExpensesManagement = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs mb-1.5 text-muted-foreground">Account</label>
+                                    <label htmlFor="expense-account" className="block text-xs mb-1.5 text-muted-foreground">Account</label>
                                     <input
+                                        id="expense-account"
+                                        name="account"
+                                        autoComplete="off"
                                         type="text"
                                         value={formData.account}
                                         onChange={(e) => setFormData({ ...formData, account: e.target.value })}
@@ -1042,8 +1072,11 @@ const ExpensesManagement = () => {
 
                                 <div className="grid grid-cols-3 gap-2">
                                     <div>
-                                        <label className="block text-xs mb-1.5 text-muted-foreground">Amount</label>
+                                        <label htmlFor="expense-amount" className="block text-xs mb-1.5 text-muted-foreground">Amount</label>
                                         <input
+                                            id="expense-amount"
+                                            name="amount"
+                                            autoComplete="off"
                                             type="number"
                                             step="0.01"
                                             value={formData.amount}
@@ -1052,8 +1085,11 @@ const ExpensesManagement = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs mb-1.5 text-muted-foreground">Tax (%)</label>
+                                        <label htmlFor="expense-tax" className="block text-xs mb-1.5 text-muted-foreground">Tax (%)</label>
                                         <input
+                                            id="expense-tax"
+                                            name="tax"
+                                            autoComplete="off"
                                             type="number"
                                             step="0.01"
                                             value={formData.tax}
@@ -1062,8 +1098,11 @@ const ExpensesManagement = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs mb-1.5 text-muted-foreground">Mode</label>
+                                        <label htmlFor="expense-payment-mode" className="block text-xs mb-1.5 text-muted-foreground">Mode</label>
                                         <input
+                                            id="expense-payment-mode"
+                                            name="payment_mode"
+                                            autoComplete="off"
                                             type="text"
                                             value={formData.payment_mode}
                                             onChange={(e) => setFormData({ ...formData, payment_mode: e.target.value })}
@@ -1073,8 +1112,11 @@ const ExpensesManagement = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs mb-1.5 text-muted-foreground">Notes</label>
+                                    <label htmlFor="expense-notes" className="block text-xs mb-1.5 text-muted-foreground">Notes</label>
                                     <textarea
+                                        id="expense-notes"
+                                        name="notes"
+                                        autoComplete="off"
                                         placeholder="Optional notes"
                                         value={formData.notes}
                                         onChange={(e) => setFormData({ ...formData, notes: e.target.value })}

@@ -537,8 +537,12 @@ const StaffManagement = () => {
                         <div className="flex-1 w-full">
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                                <label htmlFor="staff-search" className="sr-only">Search staff</label>
                                 <input
+                                    id="staff-search"
                                     type="text"
+                                    name="staff_search"
+                                    autoComplete="off"
                                     placeholder="Search staff by name or phone"
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -556,7 +560,11 @@ const StaffManagement = () => {
 
                         {showSearch && (
                             <div className="w-full lg:w-auto flex flex-wrap gap-2 lg:gap-3">
+                                <label htmlFor="staff-role-filter" className="sr-only">Filter by role</label>
                                 <select
+                                    id="staff-role-filter"
+                                    name="role_filter"
+                                    autoComplete="off"
                                     value={roleFilter}
                                     onChange={(e) => setRoleFilter(e.target.value)}
                                     className="bg-muted border border-border rounded-lg px-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
@@ -567,7 +575,11 @@ const StaffManagement = () => {
                                     <option value="Chef">Chef</option>
                                 </select>
 
+                                <label htmlFor="staff-status-filter" className="sr-only">Filter by status</label>
                                 <select
+                                    id="staff-status-filter"
+                                    name="status_filter"
+                                    autoComplete="off"
                                     value={statusFilter}
                                     onChange={(e) => setStatusFilter(e.target.value)}
                                     className="bg-muted border border-border rounded-lg px-3 py-2 text-xs sm:text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-teal-500"
@@ -785,11 +797,14 @@ const StaffManagement = () => {
 
                         <div className="space-y-3">
                             <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                <label htmlFor="add-staff-name" className="block text-xs text-muted-foreground mb-1.5">
                                     Name *
                                 </label>
                                 <input
+                                    id="add-staff-name"
                                     type="text"
+                                    name="name"
+                                    autoComplete="name"
                                     value={newStaff.name}
                                     onChange={(e) =>
                                         setNewStaff({ ...newStaff, name: e.target.value })
@@ -799,11 +814,14 @@ const StaffManagement = () => {
                             </div>
 
                             <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                <label htmlFor="add-staff-phone" className="block text-xs text-muted-foreground mb-1.5">
                                     Phone *
                                 </label>
                                 <input
+                                    id="add-staff-phone"
                                     type="text"
+                                    name="phone"
+                                    autoComplete="tel"
                                     value={newStaff.phone}
                                     onChange={(e) =>
                                         setNewStaff({ ...newStaff, phone: e.target.value })
@@ -814,10 +832,13 @@ const StaffManagement = () => {
 
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                    <label htmlFor="add-staff-role" className="block text-xs text-muted-foreground mb-1.5">
                                         Role
                                     </label>
                                     <select
+                                        id="add-staff-role"
+                                        name="role"
+                                        autoComplete="off"
                                         value={newStaff.role}
                                         onChange={(e) =>
                                             setNewStaff({ ...newStaff, role: e.target.value })
@@ -831,11 +852,14 @@ const StaffManagement = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                    <label htmlFor="add-staff-joined" className="block text-xs text-muted-foreground mb-1.5">
                                         Joined On
                                     </label>
                                     <input
+                                        id="add-staff-joined"
                                         type="date"
+                                        name="joined"
+                                        autoComplete="off"
                                         value={newStaff.joined}
                                         onChange={(e) =>
                                             setNewStaff({ ...newStaff, joined: e.target.value })
@@ -846,11 +870,14 @@ const StaffManagement = () => {
                             </div>
 
                             <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                <label htmlFor="add-staff-salary" className="block text-xs text-muted-foreground mb-1.5">
                                     Salary (₹ / month) *
                                 </label>
                                 <input
+                                    id="add-staff-salary"
                                     type="number"
+                                    name="salary"
+                                    autoComplete="off"
                                     min="101"
                                     value={newStaff.salary}
                                     onChange={(e) =>
@@ -861,11 +888,14 @@ const StaffManagement = () => {
                             </div>
 
                             <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                <label htmlFor="add-staff-aadhar" className="block text-xs text-muted-foreground mb-1.5">
                                     Aadhar Number
                                 </label>
                                 <input
+                                    id="add-staff-aadhar"
                                     type="text"
+                                    name="aadhar"
+                                    autoComplete="off"
                                     value={newStaff.aadhar}
                                     onChange={(e) =>
                                         setNewStaff({
@@ -917,11 +947,14 @@ const StaffManagement = () => {
 
                         <div className="space-y-3">
                             <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                <label htmlFor="edit-staff-name" className="block text-xs text-muted-foreground mb-1.5">
                                     Name *
                                 </label>
                                 <input
+                                    id="edit-staff-name"
                                     type="text"
+                                    name="name"
+                                    autoComplete="name"
                                     value={editingStaff.name}
                                     onChange={(e) =>
                                         setEditingStaff({ ...editingStaff, name: e.target.value })
@@ -931,11 +964,14 @@ const StaffManagement = () => {
                             </div>
 
                             <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                <label htmlFor="edit-staff-phone" className="block text-xs text-muted-foreground mb-1.5">
                                     Phone *
                                 </label>
                                 <input
+                                    id="edit-staff-phone"
                                     type="text"
+                                    name="phone"
+                                    autoComplete="tel"
                                     value={editingStaff.phone}
                                     onChange={(e) =>
                                         setEditingStaff({
@@ -949,10 +985,13 @@ const StaffManagement = () => {
 
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                    <label htmlFor="edit-staff-role" className="block text-xs text-muted-foreground mb-1.5">
                                         Role
                                     </label>
                                     <select
+                                        id="edit-staff-role"
+                                        name="role"
+                                        autoComplete="off"
                                         value={editingStaff.role}
                                         onChange={(e) =>
                                             setEditingStaff({
@@ -969,10 +1008,13 @@ const StaffManagement = () => {
                                 </div>
 
                                 <div>
-                                    <label className="block text-xs text-muted-foreground mb-1.5">
+                                    <label htmlFor="edit-staff-status" className="block text-xs text-muted-foreground mb-1.5">
                                         Status
                                     </label>
                                     <select
+                                        id="edit-staff-status"
+                                        name="status"
+                                        autoComplete="off"
                                         value={editingStaff.status}
                                         onChange={(e) =>
                                             setEditingStaff({
@@ -989,11 +1031,14 @@ const StaffManagement = () => {
                             </div>
 
                             <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                <label htmlFor="edit-staff-salary" className="block text-xs text-muted-foreground mb-1.5">
                                     Salary (₹ / month) *
                                 </label>
                                 <input
+                                    id="edit-staff-salary"
                                     type="number"
+                                    name="salary"
+                                    autoComplete="off"
                                     min="101"
                                     value={editingStaff.salary}
                                     onChange={(e) =>
@@ -1007,11 +1052,14 @@ const StaffManagement = () => {
                             </div>
 
                             <div>
-                                <label className="block text-xs text-muted-foreground mb-1.5">
+                                <label htmlFor="edit-staff-aadhar" className="block text-xs text-muted-foreground mb-1.5">
                                     Aadhar Number
                                 </label>
                                 <input
+                                    id="edit-staff-aadhar"
                                     type="text"
+                                    name="aadhar"
+                                    autoComplete="off"
                                     value={editingStaff.aadhar}
                                     onChange={(e) =>
                                         setEditingStaff({

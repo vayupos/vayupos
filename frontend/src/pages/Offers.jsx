@@ -512,8 +512,11 @@ function Offers() {
       >
         <div className="flex flex-col gap-3 sm:gap-4">
           <div>
-            <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Coupon Code</label>
+            <label htmlFor="coupon-code" className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Coupon Code</label>
             <input
+              id="coupon-code"
+              name="code"
+              autoComplete="off"
               type="text"
               value={formData.code}
               onChange={(e) => handleInputChange('code', e.target.value.toUpperCase())}
@@ -524,8 +527,11 @@ function Offers() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Discount Type</label>
+              <label htmlFor="coupon-discount-type" className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Discount Type</label>
               <select
+                id="coupon-discount-type"
+                name="discount_type"
+                autoComplete="off"
                 value={formData.discount_type}
                 onChange={(e) => handleInputChange('discount_type', e.target.value)}
                 className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base focus:border-teal-600"
@@ -536,10 +542,13 @@ function Offers() {
             </div>
 
             <div>
-              <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">
+              <label htmlFor="coupon-discount-value" className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">
                 {formData.discount_type === 'percentage' ? 'Discount (%)' : 'Discount Amount'}
               </label>
               <input
+                id="coupon-discount-value"
+                name="discount_value"
+                autoComplete="off"
                 type="number"
                 step="0.01"
                 min="1"
@@ -552,10 +561,13 @@ function Offers() {
           </div>
 
           <div>
-            <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">
+            <label htmlFor="coupon-product-id" className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">
               Apply To Product {productsLoading ? "(Loading products...)" : "(Optional)"}
             </label>
             <select
+              id="coupon-product-id"
+              name="product_id"
+              autoComplete="off"
               value={formData.product_id}
               onChange={(e) => handleInputChange('product_id', e.target.value)}
               className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-sm sm:text-base focus:border-teal-600 appearance-none cursor-pointer"
@@ -571,8 +583,11 @@ function Offers() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Valid From</label>
+              <label htmlFor="coupon-valid-from" className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Valid From</label>
               <input
+                id="coupon-valid-from"
+                name="valid_from"
+                autoComplete="off"
                 type="date"
                 value={formData.valid_from}
                 onChange={(e) => handleInputChange('valid_from', e.target.value)}
@@ -580,8 +595,11 @@ function Offers() {
               />
             </div>
             <div>
-              <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Valid Until</label>
+              <label htmlFor="coupon-valid-until" className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Valid Until</label>
               <input
+                id="coupon-valid-until"
+                name="valid_until"
+                autoComplete="off"
                 type="date"
                 value={formData.valid_until}
                 onChange={(e) => handleInputChange('valid_until', e.target.value)}
@@ -592,8 +610,11 @@ function Offers() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Min Order Amount</label>
+              <label htmlFor="coupon-min-order" className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Min Order Amount</label>
               <input
+                id="coupon-min-order"
+                name="min_order_amount"
+                autoComplete="off"
                 type="number"
                 step="50"
                 min="0"
@@ -605,8 +626,11 @@ function Offers() {
               <p className="text-muted-foreground text-xs mt-1">Must be a rounded value: ₹100, ₹150, ₹200, ₹300…</p>
             </div>
             <div>
-              <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Max Uses</label>
+              <label htmlFor="coupon-max-uses" className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Max Uses</label>
               <input
+                id="coupon-max-uses"
+                name="max_uses"
+                autoComplete="off"
                 type="number"
                 min="1"
                 value={formData.max_uses}
@@ -618,8 +642,11 @@ function Offers() {
           </div>
 
           <div>
-            <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Description</label>
+            <label htmlFor="coupon-description" className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">Description</label>
             <textarea
+              id="coupon-description"
+              name="description"
+              autoComplete="off"
               value={formData.description}
               onChange={(e) => handleInputChange('description', e.target.value)}
               rows={3}
@@ -736,10 +763,13 @@ function Offers() {
               {/* Filters */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
                 <div>
-                  <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">
+                  <label htmlFor="offers-search" className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">
                     Search coupons
                   </label>
                   <input
+                    id="offers-search"
+                    name="search_query"
+                    autoComplete="off"
                     type="text"
                     placeholder="Code or description..."
                     value={searchQuery}
@@ -748,10 +778,13 @@ function Offers() {
                   />
                 </div>
                 <div>
-                  <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">
+                  <label htmlFor="offers-type-filter" className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">
                     Type
                   </label>
                   <select
+                    id="offers-type-filter"
+                    name="type_filter"
+                    autoComplete="off"
                     value={typeFilter}
                     onChange={(e) => setTypeFilter(e.target.value)}
                     className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-xs sm:text-sm lg:text-base focus:border-teal-600 appearance-none cursor-pointer"
@@ -762,10 +795,13 @@ function Offers() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">
+                  <label htmlFor="offers-status-filter" className="text-muted-foreground text-xs sm:text-sm mb-1.5 block">
                     Status
                   </label>
                   <select
+                    id="offers-status-filter"
+                    name="status_filter"
+                    autoComplete="off"
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
                     className="w-full bg-muted text-foreground border border-border rounded-md outline-none px-3 py-2 text-xs sm:text-sm lg:text-base focus:border-teal-600 appearance-none cursor-pointer"

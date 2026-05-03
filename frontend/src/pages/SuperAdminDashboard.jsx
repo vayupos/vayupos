@@ -67,34 +67,34 @@ function CreateModal({ onClose, onCreated }) {
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <ModalField label="Restaurant name *">
-              <input value={form.restaurant_name} onChange={e => set('restaurant_name', e.target.value)} placeholder="Spice Garden" className={iCls} />
+            <ModalField label="Restaurant name *" htmlFor="cr-restaurant-name">
+              <input id="cr-restaurant-name" name="restaurant_name" autoComplete="organization" value={form.restaurant_name} onChange={e => set('restaurant_name', e.target.value)} placeholder="Spice Garden" className={iCls} />
             </ModalField>
-            <ModalField label="Owner name *">
-              <input value={form.owner_name} onChange={e => set('owner_name', e.target.value)} placeholder="Rajesh Kumar" className={iCls} />
+            <ModalField label="Owner name *" htmlFor="cr-owner-name">
+              <input id="cr-owner-name" name="owner_name" autoComplete="name" value={form.owner_name} onChange={e => set('owner_name', e.target.value)} placeholder="Rajesh Kumar" className={iCls} />
             </ModalField>
-            <ModalField label="Phone *">
-              <input value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="+91 98765 43210" className={iCls} />
+            <ModalField label="Phone *" htmlFor="cr-phone">
+              <input id="cr-phone" name="phone" autoComplete="tel" value={form.phone} onChange={e => set('phone', e.target.value)} placeholder="+91 98765 43210" className={iCls} />
             </ModalField>
-            <ModalField label="City">
-              <input value={form.city} onChange={e => set('city', e.target.value)} placeholder="Hyderabad" className={iCls} />
+            <ModalField label="City" htmlFor="cr-city">
+              <input id="cr-city" name="city" autoComplete="address-level2" value={form.city} onChange={e => set('city', e.target.value)} placeholder="Hyderabad" className={iCls} />
             </ModalField>
-            <ModalField label="Email">
-              <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="owner@spicegarden.com" className={iCls} />
+            <ModalField label="Email" htmlFor="cr-email">
+              <input id="cr-email" type="email" name="email" autoComplete="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="owner@spicegarden.com" className={iCls} />
             </ModalField>
-            <ModalField label="Trial days">
-              <input type="number" min={1} max={365} value={form.trial_days} onChange={e => set('trial_days', parseInt(e.target.value) || 30)} className={iCls} />
+            <ModalField label="Trial days" htmlFor="cr-trial-days">
+              <input id="cr-trial-days" type="number" name="trial_days" autoComplete="off" min={1} max={365} value={form.trial_days} onChange={e => set('trial_days', parseInt(e.target.value) || 30)} className={iCls} />
             </ModalField>
           </div>
 
           <div className="border-t border-[#1e293b] pt-4">
             <p className="text-xs text-[#64748b] mb-3 font-medium uppercase tracking-wider">Login credentials</p>
             <div className="grid grid-cols-2 gap-4">
-              <ModalField label="Username *">
-                <input value={form.username} onChange={e => set('username', e.target.value)} placeholder="spicegarden" className={iCls} />
+              <ModalField label="Username *" htmlFor="cr-username">
+                <input id="cr-username" name="username" autoComplete="username" value={form.username} onChange={e => set('username', e.target.value)} placeholder="spicegarden" className={iCls} />
               </ModalField>
-              <ModalField label="Password *">
-                <input type="password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="Min 8 chars" className={iCls} />
+              <ModalField label="Password *" htmlFor="cr-password">
+                <input id="cr-password" type="password" name="password" autoComplete="new-password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="Min 8 chars" className={iCls} />
               </ModalField>
             </div>
           </div>
@@ -250,7 +250,11 @@ export default function SuperAdminDashboard() {
         {/* Search */}
         <div className="relative mb-5">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#475569]" />
+          <label htmlFor="restaurant-search" className="sr-only">Search restaurants</label>
           <input
+            id="restaurant-search"
+            name="restaurant_search"
+            autoComplete="off"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search by restaurant name, owner, city or phone…"
@@ -389,10 +393,10 @@ export default function SuperAdminDashboard() {
 const iCls =
   'w-full px-3 py-2.5 bg-[#0a0f1a] border border-[#1e293b] rounded-xl text-white text-sm placeholder-[#475569] focus:outline-none focus:border-[#2563eb] transition-colors';
 
-function ModalField({ label, children }) {
+function ModalField({ label, htmlFor, children }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-[#64748b] mb-1.5">{label}</label>
+      <label htmlFor={htmlFor} className="block text-xs font-medium text-[#64748b] mb-1.5">{label}</label>
       {children}
     </div>
   );
