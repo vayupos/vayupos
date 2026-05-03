@@ -30,6 +30,10 @@ echo "      Done."
 # 2. Activate venv and install any new dependencies
 echo "[2/5] Installing dependencies..."
 cd "$APP_DIR"
+if [ ! -f "venv/bin/activate" ]; then
+    echo "      No venv found — creating one..."
+    python3 -m venv venv
+fi
 source venv/bin/activate
 pip install -q --upgrade pip
 pip install -q -r requirements.txt
