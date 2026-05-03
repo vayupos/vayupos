@@ -10,7 +10,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision: str = "d1e2f3a4b5c6"
-down_revision: Union[str, Sequence[str]] = ("add_superadmin_to_users", "9748d3cff40a")
+down_revision: Union[str, Sequence[str]] = "fd9576e59726"
 branch_labels = None
 depends_on = None
 

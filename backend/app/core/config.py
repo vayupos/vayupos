@@ -1,7 +1,7 @@
 from pydantic_settings import BaseSettings
 from pydantic import field_validator
 from dotenv import load_dotenv
-from typing import Optional
+from typing import Optional, Any
 
 load_dotenv()
 
@@ -12,19 +12,24 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRATION: int = 3600
+    JWT_EXPIRATION: int = 86400  # 24 hours — long enough for a full restaurant shift
 
-    # Comma-separated list of allowed CORS origins
-    # e.g. https://app.vayupos.com,https://admin.vayupos.com,http://localhost:8080
-    ALLOWED_ORIGINS: list = [
-        "http://localhost:8080",
-        "http://127.0.0.1:8080",
-    ]
+    # Use Any so newer pydantic-settings doesn't try to JSON-parse the raw string
+    # before our validator runs. Validator handles comma-separated and JSON formats.
+    ALLOWED_ORIGINS: Any = ["http://localhost:8080", "http://127.0.0.1:8080"]
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
-    def parse_origins(cls, v):
+    def parse_origins(cls, v: Any) -> list:
+        if isinstance(v, list):
+            return v
         if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                return ["http://localhost:8080", "http://127.0.0.1:8080"]
+            if v.startswith("["):
+                import json
+                return json.loads(v)
             return [o.strip() for o in v.split(",") if o.strip()]
         return v
 

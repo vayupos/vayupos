@@ -26,10 +26,9 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Add response interceptor to convert relative image URLs to absolute
+// Add response interceptor to convert relative image URLs to absolute and handle 401s
 api.interceptors.response.use(
   (response) => {
-    // If response contains image_url or url, convert to absolute
     if (response.data?.image_url && !response.data.image_url.startsWith('http')) {
       response.data.image_url = `${API_HOST}${response.data.image_url}`;
     }
@@ -39,7 +38,16 @@ api.interceptors.response.use(
     return response;
   },
   (error) => {
-    console.error("API Error:", error.response?.data || error.message);
+    if (error.response?.status === 401) {
+      // Token expired or invalid — clear session and redirect to login
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
+      localStorage.removeItem("isAuthenticated");
+      localStorage.removeItem("user");
+      if (!window.location.pathname.includes("/login")) {
+        window.location.href = "/login";
+      }
+    }
     return Promise.reject(error);
   }
 );

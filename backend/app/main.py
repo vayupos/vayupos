@@ -4,7 +4,9 @@ import os
 import subprocess
 import sys
 
-from fastapi import FastAPI, Depends
+import traceback
+
+from fastapi import FastAPI, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -67,6 +69,23 @@ app = FastAPI(
     redirect_slashes=True,
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    # Log the full traceback so it's visible in the backend terminal
+    traceback.print_exc()
+    origin = request.headers.get("origin", "")
+    allowed = settings.ALLOWED_ORIGINS if isinstance(settings.ALLOWED_ORIGINS, list) else []
+    cors_origin = origin if origin in allowed else (allowed[0] if allowed else "*")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "error": str(exc)},
+        headers={
+            "Access-Control-Allow-Origin": cors_origin,
+            "Access-Control-Allow-Credentials": "true",
+        },
+    )
 
 # -------------------- CORS --------------------
 app.add_middleware(
