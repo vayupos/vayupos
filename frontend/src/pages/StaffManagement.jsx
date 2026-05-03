@@ -104,11 +104,8 @@ const StaffManagement = () => {
                 params.status = statusFilter;
             }
 
-            console.log('📡 Fetching staff with params:', params);
-
             const response = await axios_api.get('/staff', { params });
             const data = response.data;
-            console.log('✅ Received staff data:', data);
 
             const staffArray = Array.isArray(data) ? data : (data.data || []);
 
@@ -137,7 +134,6 @@ const StaffManagement = () => {
                 aadhar: member.aadhar || '',
             }));
 
-            console.log('✅ Transformed staff:', transformedStaff.length, 'members');
             setStaff(transformedStaff);
         } catch (err) {
             console.error('❌ Error fetching staff:', err);
@@ -151,10 +147,8 @@ const StaffManagement = () => {
 
     const fetchUpcomingSalaries = async () => {
         try {
-            console.log('📡 Fetching upcoming salaries...');
             const response = await axios_api.get('/staff/upcoming-salaries');
             const data = response.data;
-            console.log('✅ Upcoming salaries data:', data);
 
             const transformedSalaries = data.map(entry => ({
                 id: entry.id,
@@ -302,11 +296,8 @@ const StaffManagement = () => {
                 aadhar: newStaff.aadhar.replace(/\s/g, '') || null,
             };
 
-            console.log('➕ Adding staff:', requestBody);
-
             const response = await axios_api.post('/staff', requestBody);
             const data = response.data;
-            console.log('✅ Staff added:', data);
 
             setNewStaff({
                 name: '',
@@ -370,8 +361,6 @@ const StaffManagement = () => {
                 status: editingStaff.status,
             };
 
-            console.log('✏️ Updating staff:', requestBody);
-
             const response = await axios_api.put(`/staff/${editingStaff.id}`, requestBody);
 
             setShowEditModal(false);
@@ -412,15 +401,12 @@ const StaffManagement = () => {
         const salary = upcomingSalaries.find(s => s.staffId === staffId);
         if (!salary) return;
 
-        console.log('🔄 Adding salary for staffId:', staffId);
-
         // ✅ Mark as removing to hide from UI immediately
         setRemovingIds(prev => new Set([...prev, staffId]));
 
         try {
             const response = await axios_api.post(`/staff/salaries/${staffId}/add`);
             const message = response.data;
-            console.log('✅ Salary added successfully');
             alert(typeof message === 'string' ? message : 'Salary entry added successfully!');
 
             // Refresh from server to get updated list

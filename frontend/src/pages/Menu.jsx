@@ -466,8 +466,6 @@ const Menu = () => {
         formData.append("dish_name", dishName);
       }
 
-      console.log("📤 Uploading image:", file.name);
-
       const res = await api.post("/upload/image", formData, {
         headers: {
           // Let the browser auto-set Content-Type with the correct boundary
@@ -477,12 +475,8 @@ const Menu = () => {
         timeout: 60000, // 60s timeout for large files
       });
 
-      console.log("✅ Upload response:", res.data);
-
       // Get the image URL (axios interceptor already made it absolute)
       const imageUrl = res.data.image_url || res.data.url;
-
-      console.log("🖼️ Final image URL:", imageUrl);
 
       if (isEditMode) {
         setEditingProductGroup((prev) => ({

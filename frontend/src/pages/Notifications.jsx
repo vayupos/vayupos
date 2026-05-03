@@ -15,8 +15,6 @@ const Notifications = () => {
     setError(null);
 
     try {
-      console.log('Fetching notifications...');
-
       const response = await api.get('/notifications', {
         params: {
           skip: 0,
@@ -25,7 +23,6 @@ const Notifications = () => {
       });
 
       const data = response.data;
-      console.log('Fetched notifications:', data);
 
       // Transform API data to match component structure
       const transformedNotifications = Array.isArray(data) ? data.map(notif => ({
@@ -72,7 +69,6 @@ const Notifications = () => {
 
     // POLLING: Check for new notifications every 5 seconds
     const interval = setInterval(() => {
-      console.log('🔄 Auto-polling for new notifications...');
       fetchNotifications(false); // Silent refresh (no loading spinner)
     }, 5000);
 

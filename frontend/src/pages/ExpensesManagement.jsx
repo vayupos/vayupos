@@ -344,8 +344,6 @@ const ExpensesManagement = () => {
         const payment = autoAddedPayments.find(p => p.staffId === staffId);
         if (!payment) return;
 
-        console.log('🔄 Triggering backend to add salary for staffId:', staffId);
-
         // ✅ Mark as removing to hide from UI immediately
         setRemovingIds(prev => new Set([...prev, staffId]));
 
@@ -353,7 +351,6 @@ const ExpensesManagement = () => {
             // Use shared axios instance which handles authentication automatically
             const response = await axios_api.post(`/staff/salaries/${staffId}/add`);
 
-            console.log('✅ Salary processed successfully on backend');
             alert('Salary entry added to expenses successfully!');
 
             // Refresh both lists from server

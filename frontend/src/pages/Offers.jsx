@@ -144,13 +144,9 @@ function Offers() {
   const loadCategories = async () => {
     try {
       setCategoriesLoading(true);
-      console.log('Loading categories...');
 
       // Try the main categories endpoint
       const response = await api.get('/categories/');
-
-      console.log('Categories API Response:', response);
-      console.log('Categories data:', response.data);
 
       let categoryData = response.data;
 
@@ -170,14 +166,8 @@ function Offers() {
         categoryData = [];
       }
 
-      console.log('Processed categories:', categoryData);
       setCategories(Array.isArray(categoryData) ? categoryData : []);
 
-      if (Array.isArray(categoryData) && categoryData.length > 0) {
-        console.log(`✓ Successfully loaded ${categoryData.length} categories`);
-      } else {
-        console.warn('⚠ No categories found in response');
-      }
     } catch (error) {
       console.error('LOAD CATEGORIES ERROR:', error);
       console.error('Error details:', {
@@ -191,7 +181,6 @@ function Offers() {
         console.warn('Categories endpoint not found. Trying alternative endpoint...');
         try {
           const altResponse = await api.get('/products/categories');
-          console.log('Alternative endpoint response:', altResponse.data);
           const altData = Array.isArray(altResponse.data) ? altResponse.data : [];
           setCategories(altData);
         } catch (altError) {
@@ -280,8 +269,6 @@ function Offers() {
       if (formData.description && formData.description.trim()) {
         payload.description = formData.description.trim();
       }
-
-      console.log('Sending payload:', payload);
 
       if (editingId !== null) {
         const response = await api.put(`/coupons/${editingId}`, {

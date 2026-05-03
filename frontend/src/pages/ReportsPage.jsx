@@ -91,7 +91,6 @@ const ReportsPage = () => {
       });
 
       const data = response.data;
-      console.log('🔍 RAW Sales API Response:', data);
 
       let salesArray = [];
       if (Array.isArray(data)) {
@@ -234,7 +233,6 @@ const ReportsPage = () => {
         params: { days: filters.days }
       });
       const data = response.data;
-      console.log('🔍 Payment methods data:', data);
 
       // Handle different response formats
       const paymentsArray = Array.isArray(data) ? data :
@@ -259,8 +257,6 @@ const ReportsPage = () => {
           };
         });
 
-        console.log('✅ Transformed payment data:', transformedData);
-
         setOrdersData(prev => ({
           ...prev,
           byPayment: transformedData
@@ -284,8 +280,6 @@ const ReportsPage = () => {
 
       const response = await axios_api.get('/orders', { params: { limit: 1000 } });
       const data = response.data;
-      console.log('🔍 RAW Orders API Response:', data);
-      console.log('🔍 Orders - Is Array?', Array.isArray(data));
 
       // Handle different response formats
       let ordersArray = [];
@@ -297,18 +291,13 @@ const ReportsPage = () => {
         ordersArray = data.results;
       }
 
-      console.log('🔍 Extracted Orders Array:', ordersArray.length, 'orders');
-
       if (ordersArray.length > 0) {
-        console.log('🔍 First Order Structure:', ordersArray[0]);
 
         // Filter orders within date range
         const filteredOrders = ordersArray.filter(order => {
           const orderDate = new Date(order.created_at || order.order_date);
           return orderDate >= startDate && orderDate <= endDate;
         });
-
-        console.log('🔍 Filtered Orders:', filteredOrders.length);
 
         // Group by payment method
         const ordersBySource = {};
@@ -333,8 +322,6 @@ const ReportsPage = () => {
 
         const totalOrders = filteredOrders.length;
 
-        console.log('🔍 Orders grouped by payment method:', ordersBySource);
-
         // Transform to array format
         const sourcesArray = Object.entries(ordersBySource)
           .map(([source, data]) => {
@@ -357,8 +344,6 @@ const ReportsPage = () => {
             rank: index + 1
           }));
 
-        console.log('✅ Final sources array:', sourcesArray);
-
         setOrdersData(prev => ({
           ...prev,
           bySource: sourcesArray
@@ -370,7 +355,6 @@ const ReportsPage = () => {
           value: item.orders
         }));
 
-        console.log('✅ Pie Chart Data:', pieData);
         setOrderDistributionData([...pieData]); // Force new array reference
 
         const paymentSummary = sourcesArray.map((item, index) => ({
@@ -381,7 +365,6 @@ const ReportsPage = () => {
           rank: item.rank
         }));
 
-        console.log('✅ Payment Summary Table:', paymentSummary);
         setOrdersData(prev => ({
           ...prev,
           byPayment: paymentSummary
@@ -414,16 +397,12 @@ const ReportsPage = () => {
 
       const response = await axios_api.get('/expenses/', { params: { limit: 1000 } });
       const data = response.data;
-      console.log('🔍 RAW Expenses data:', data);
 
       // Handle different response formats
       const expensesArray = Array.isArray(data) ? data :
         (data.data || data.results || data.items || []);
 
-      console.log('🔍 Expenses Array Length:', expensesArray.length);
-
       if (expensesArray && expensesArray.length > 0) {
-        console.log('🔍 First Expense Structure:', expensesArray[0]);
 
         // Filter expenses within date range
         const filteredExpenses = expensesArray.filter(expense => {
@@ -466,7 +445,6 @@ const ReportsPage = () => {
             rank: index + 1
           }));
 
-        console.log('✅ Transformed expenses:', expensesArrayTransformed);
         setExpensesData(expensesArrayTransformed);
 
         // Prepare chart data (top categories)
@@ -475,7 +453,6 @@ const ReportsPage = () => {
           amount: item.amountNum
         }));
 
-        console.log('✅ Expenses Chart Data:', chartData);
         setExpensesChartData([...chartData]); // Force new array reference
 
         // Update total expenses in key metrics
@@ -512,7 +489,6 @@ const ReportsPage = () => {
         params: { days: filters.days, limit: 50 }
       });
       const data = response.data;
-      console.log('Product sales data:', data);
 
       const productsArray = Array.isArray(data) ? data :
         (data.data || data.results || data.items || []);
@@ -541,7 +517,6 @@ const ReportsPage = () => {
         params: { date: today }
       });
       const data = response.data;
-      console.log('Daily summary data:', data);
 
       if (data && data.gross_margin) {
         setKeyMetrics(prev => ({

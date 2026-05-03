@@ -60,7 +60,6 @@ function POS() {
 
     // Check if we came from Customers page with a pre-selected customer
     if (location.state?.customer) {
-      console.log('👤 Pre-selecting customer from state:', location.state.customer);
       const { id, name } = location.state.customer;
       setSelectedCustomerId(id);
       setSelectedCustomer(name);
@@ -173,7 +172,6 @@ function POS() {
     try {
       const res = await api.get('/categories/', { params: { skip: 0, limit: 100 } });
       const data = res.data;
-      console.log('Categories fetched:', data);
 
       let categoriesArray = [];
 
@@ -197,7 +195,6 @@ function POS() {
         .filter((cat) => cat && cat.name);
 
       const finalCategories = [{ id: 0, name: 'All' }, ...validCategories];
-      console.log('Final categories for dropdown:', finalCategories);
       setCategories(finalCategories);
     } catch (error) {
       console.error('Error fetching categories:', error);
@@ -262,13 +259,11 @@ function POS() {
         const category = categories.find((cat) => cat.name === selectedCategory);
         if (category && category.id !== 0) {
           params.category_id = category.id;
-          console.log('Searching with category filter:', category.name, 'ID:', category.id);
         }
       }
 
       const res = await api.get('/products/search', { params });
       const data = res.data;
-      console.log('Search results:', data);
 
       let itemsArray = [];
       if (Array.isArray(data)) {
@@ -294,7 +289,6 @@ function POS() {
               item.category === selectedCategory
             );
           });
-          console.log('Client-side filtered items:', finalItems);
         }
       }
 
@@ -401,7 +395,6 @@ function POS() {
   const fetchAvailableCoupons = async (currentSubtotal = subtotal, customerId = selectedCustomerId) => {
     try {
       setLoadingCoupons(true);
-      console.log('🎫 Fetching coupons from backend for subtotal:', currentSubtotal, 'customer:', customerId);
 
       const res = await api.get('/coupons/available', {
         params: {
@@ -409,28 +402,18 @@ function POS() {
           customer_id: customerId || null
         }
       });
-      console.log('📦 Raw coupon response:', res);
-      console.log('📊 Coupon response data:', res.data);
-
       let couponsData = [];
 
       if (res.data.eligible && Array.isArray(res.data.eligible)) {
         couponsData = res.data.eligible;
-        console.log('✅ Coupons extracted from eligible property:', couponsData);
       } else if (Array.isArray(res.data)) {
         couponsData = res.data;
-        console.log('✅ Coupons extracted from array:', couponsData);
       } else if (res.data.data && Array.isArray(res.data.data)) {
         couponsData = res.data.data;
-        console.log('✅ Coupons extracted from data property:', couponsData);
       } else if (res.data.items && Array.isArray(res.data.items)) {
         couponsData = res.data.items;
-        console.log('✅ Coupons extracted from items property:', couponsData);
       } else if (res.data.coupons && Array.isArray(res.data.coupons)) {
         couponsData = res.data.coupons;
-        console.log('✅ Coupons extracted from coupons property:', couponsData);
-      } else {
-        console.warn('⚠️ Unexpected coupon response structure:', res.data);
       }
 
       const normalizedCoupons = couponsData.map(coupon => ({
@@ -445,16 +428,11 @@ function POS() {
         valid_to: coupon.valid_to
       }));
 
-      console.log('🔄 Normalized coupons:', normalizedCoupons);
-
       const activeCoupons = normalizedCoupons.filter(c => c.is_active && c.code);
-      console.log('✅ Active coupons:', activeCoupons);
 
       if (activeCoupons.length > 0) {
         setAvailableCoupons(activeCoupons);
-        console.log('🎉 Successfully loaded', activeCoupons.length, 'coupons from backend');
       } else {
-        console.warn('⚠️ No active coupons found in backend response');
         setAvailableCoupons([]);
       }
 
@@ -478,19 +456,7 @@ function POS() {
       }
 
     } catch (error) {
-      console.error('❌ Error fetching available coupons:', error);
-      console.error('📋 Error details:', error.response?.data);
-      console.error('🔢 Error status:', error.response?.status);
-
       setAvailableCoupons([]);
-
-      if (error.response?.status === 404) {
-        console.warn('⚠️ Coupon endpoint not found (404)');
-      } else if (error.response?.status === 401) {
-        console.warn('⚠️ Unauthorized (401)');
-      } else if (error.response?.status === 500) {
-        console.error('⚠️ Server error (500)');
-      }
     } finally {
       setLoadingCoupons(false);
     }
@@ -498,20 +464,13 @@ function POS() {
 
   const validateCoupon = async (couponCode) => {
     try {
-      console.log('🔍 Validating coupon:', couponCode);
-      console.log('💰 Current order subtotal:', subtotal);
-
       const requestBody = {
         coupon_code: couponCode,
         subtotal: subtotal,
         customer_id: selectedCustomerId || null
       };
 
-      console.log('📤 Sending validation request:', requestBody);
-
       const res = await api.post('/coupons/validate', requestBody);
-
-      console.log('✅ Coupon validation response:', res.data);
 
       let validatedCoupon = null;
 
@@ -545,15 +504,9 @@ function POS() {
         };
       }
 
-      console.log('✅ Validated coupon:', validatedCoupon);
       return validatedCoupon;
 
     } catch (error) {
-      console.error('❌ Coupon validation failed:', error);
-      console.error('📋 Validation error details:', error.response?.data);
-      console.error('🔗 Request URL:', error.config?.url);
-      console.error('📦 Request data:', error.config?.data);
-
       const errorData = error.response?.data;
       let errorMsg = 'Invalid or expired coupon code';
 
@@ -563,15 +516,12 @@ function POS() {
             `${err.loc?.join(' → ') || 'Field'}: ${err.msg}`
           ).join(', ');
           errorMsg = messages;
-          console.error('🔍 Validation errors:', errorData.detail);
         } else if (typeof errorData.detail === 'string') {
           errorMsg = errorData.detail;
         }
       } else if (errorData?.message) {
         errorMsg = errorData.message;
       }
-
-      console.log('📝 Final error message:', errorMsg);
 
       return null;
     }
@@ -584,7 +534,6 @@ function POS() {
     }
 
     const couponCodeUpper = inputCoupon.trim().toUpperCase();
-    console.log('🎫 Applying coupon:', couponCodeUpper, 'to order total:', subtotal);
 
     const validatedCoupon = await validateCoupon(couponCodeUpper);
 
@@ -608,18 +557,14 @@ function POS() {
         let discountAmount = 0;
         if (validatedCoupon.type === 'percentage' || validatedCoupon.type === 'percent') {
           discountAmount = (targetAmount * validatedCoupon.discount) / 100;
-          console.log(`📊 Percentage discount: ${validatedCoupon.discount}% of ₹${targetAmount} = ₹${discountAmount}`);
         } else if (validatedCoupon.type === 'fixed' || validatedCoupon.type === 'flat' || validatedCoupon.type === 'amount') {
           discountAmount = validatedCoupon.discount;
           // For fixed discount on specific product, ensure it doesn't exceed the product's total price
           discountAmount = Math.min(discountAmount, targetAmount);
-          console.log(`💰 Fixed discount: ₹${discountAmount}`);
         } else {
           discountAmount = (targetAmount * validatedCoupon.discount) / 100;
-          console.log(`📊 Default to percentage: ${validatedCoupon.discount}% = ₹${discountAmount}`);
         }
 
-        console.log('✅ Discount amount calculated:', discountAmount);
         setDiscount(discountAmount);
         setInputCoupon('');
         setShowCouponModal(false);
@@ -635,7 +580,6 @@ function POS() {
   const removeCoupon = () => {
     setCouponCode('');
     setDiscount(0);
-    console.log('🗑️ Coupon removed');
   };
 
   // ✅ FIXED: Create Order Function - Correctly sends payment_method in snake_case
@@ -647,10 +591,6 @@ function POS() {
 
     try {
       setLoading(true);
-      console.log('🛒 Creating order...');
-      console.log('📦 Cart items:', cartItems);
-      console.log('👤 Customer ID:', selectedCustomerId);
-      console.log('💳 Payment method:', paymentMethod);
 
       // Build order items array
       const orderItems = cartItems.map(item => ({
@@ -686,10 +626,6 @@ function POS() {
         order_type: orderType
       };
 
-      console.log('📤 Sending order payload:', orderPayload);
-      console.log('🔍 Payment method being sent:', orderPayload.payment_method);
-      console.log('🔄 Mode:', addToOrderId ? `Adding to order ${addToOrderId}` : 'Creating new order');
-
       // Make API request
       let res;
       if (addToOrderId) {
@@ -700,8 +636,6 @@ function POS() {
         res = await api.post('/orders/', orderPayload);
       }
 
-      console.log('✅ Order processed successfully:', res.data);
-
       // Extract order ID from response
       let orderId = null;
       if (res.data.id) {
@@ -711,8 +645,6 @@ function POS() {
       } else if (res.data.data?.id) {
         orderId = res.data.data.id;
       }
-
-      console.log('🆔 Order ID:', orderId);
 
       // Clear cart and reset state
       setCartItems([]);
@@ -730,12 +662,6 @@ function POS() {
       return { success: true, orderId, data: res.data };
 
     } catch (error) {
-      console.error('❌ Error creating order:', error);
-      console.error('📋 Error details:', error.response?.data);
-      console.error('🔢 Error status:', error.response?.status);
-      console.error('🔗 Request URL:', error.config?.url);
-      console.error('📦 Request payload:', error.config?.data);
-
       let errorMsg = 'Failed to create order';
 
       if (error.response?.data?.detail) {
@@ -759,7 +685,6 @@ function POS() {
 
   // ✅ Payment Handlers - All correctly pass payment method as string
   const handleUpiPayment = async () => {
-    console.log('💳 UPI Payment initiated');
     const result = await createOrder('upi');  // ✅ Lowercase string
 
     if (result && result.success) {
@@ -771,7 +696,6 @@ function POS() {
   };
 
   const handleCashPayment = async () => {
-    console.log('💵 Cash Payment initiated');
     const result = await createOrder('cash');  // ✅ Lowercase string
 
     if (result && result.success) {
@@ -783,7 +707,6 @@ function POS() {
   };
 
   const handleCardPayment = async () => {
-    console.log('💳 Card Payment initiated');
     const result = await createOrder('card');  // ✅ Lowercase string
 
     if (result && result.success) {
@@ -795,8 +718,6 @@ function POS() {
   };
 
   const handleSaveDraft = async () => {
-    console.log('💾 Saving order as draft');
-
     if (cartItems.length === 0) {
       alert('Cart is empty!');
       return;
@@ -835,11 +756,7 @@ function POS() {
         coupon_code: couponCode || null
       };
 
-      console.log('📤 Saving draft:', draftPayload);
-
       const res = await api.post('/orders/', draftPayload);
-
-      console.log('✅ Draft saved:', res.data);
 
       let orderId = res.data.id || res.data.order_id || res.data.data?.id;
 
@@ -862,8 +779,6 @@ function POS() {
   };
 
   const handlePrint = async () => {
-    console.log('🖨️ Printing bill');
-
     if (cartItems.length === 0) {
       alert('Cart is empty!');
       return;
@@ -1048,7 +963,6 @@ function POS() {
     setSelectedCustomerId(customer.id || 0);
     setSelectedCustomerObj(customer);
     setSearchCustomer(''); // Clear search after selection
-    console.log('✅ Customer selected:', fullName, 'ID:', customer.id);
   };
 
   const clearCustomer = () => {

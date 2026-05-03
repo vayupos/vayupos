@@ -54,9 +54,6 @@ const KOTPrinterSettings = () => {
     setTestPrintStatus('loading');
     
     try {
-      console.log('Sending test print to printer:', activePrinter.name);
-      console.log('Printer settings:', settings);
-      
       const kotData = {
         header: settings.headerText,
         orderNumber: '#1027',
@@ -70,8 +67,6 @@ const KOTPrinterSettings = () => {
         footer: settings.footerText,
         totalItems: 3
       };
-      
-      console.log('KOT Data to print:', kotData);
       
       await new Promise(resolve => setTimeout(resolve, 2000));
       
@@ -96,9 +91,6 @@ const KOTPrinterSettings = () => {
     setSaveStatus('loading');
     
     try {
-      console.log('Saving printer settings...');
-      console.log('Settings to save:', settings);
-      
       if (!settings.headerText.trim()) {
         throw new Error('Header text cannot be empty');
       }

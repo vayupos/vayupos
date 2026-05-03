@@ -1,8 +1,10 @@
 import axios from "axios";
 
-// Use environment variable or fallback to localhost for development
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api/v1";
-const API_HOST = import.meta.env.VITE_API_HOST || "http://127.0.0.1:8000";
+// In dev builds (npm run dev) use localhost; in production builds use the real API.
+const API_BASE_URL = import.meta.env.VITE_API_URL
+  || (import.meta.env.DEV ? "http://127.0.0.1:8000/api/v1" : "https://api.vayupos.com/api/v1");
+const API_HOST = import.meta.env.VITE_API_HOST
+  || (import.meta.env.DEV ? "http://127.0.0.1:8000" : "https://api.vayupos.com");
 
 const api = axios.create({
   baseURL: API_BASE_URL,

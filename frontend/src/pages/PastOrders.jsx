@@ -50,12 +50,9 @@ const PastOrders = () => {
         params.search = debouncedSearch;
       }
 
-      console.log('Fetching with params:', params);
-
       const response = await api.get('/orders', { params });
       
       const data = response.data;
-      console.log('Fetched orders:', data);
 
       const ordersArray = data.data || [];
       const transformedOrders = transformOrdersData(ordersArray);

@@ -59,8 +59,6 @@ const Login = () => {
         password: formData.password,
       });
 
-      console.log("Login response:", res.data); // check access_token here
-
       // backend returns { access_token, token_type }
       localStorage.setItem("access_token", res.data.access_token);
       localStorage.setItem("isAuthenticated", "true");
@@ -88,12 +86,14 @@ const Login = () => {
           <form onSubmit={handleSubmit}>
             {/* Identifier Field */}
             <div className="mb-6">
-              <label className="block text-white font-medium mb-2">
+              <label htmlFor="identifier" className="block text-white font-medium mb-2">
                 Username / Email / Phone
               </label>
               <input
+                id="identifier"
                 type="text"
                 name="identifier"
+                autoComplete="username"
                 value={formData.identifier}
                 onChange={handleInputChange}
                 placeholder="Enter username, email, or phone"
@@ -110,13 +110,15 @@ const Login = () => {
 
             {/* Password Field */}
             <div className="mb-3">
-              <label className="block text-white font-medium mb-2">
+              <label htmlFor="password" className="block text-white font-medium mb-2">
                 Password
               </label>
               <div className="relative">
                 <input
+                  id="password"
                   type={showPassword ? "text" : "password"}
                   name="password"
+                  autoComplete="current-password"
                   value={formData.password}
                   onChange={handleInputChange}
                   placeholder="Enter your password"
